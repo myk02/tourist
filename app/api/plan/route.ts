@@ -1,5 +1,10 @@
 import { generateText, Output } from 'ai'
+import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { z } from 'zod'
+
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY!,
+})
 
 const requestSchema = z.object({
   destinations: z.string().min(2).max(180),
@@ -29,7 +34,7 @@ export async function POST(request: Request) {
   try {
     const input = requestSchema.parse(await request.json())
     const { output } = await generateText({
-      model: 'openai/gpt-5.4-mini',
+      model: openrouter('openai/gpt-4o-mini'),
       output: Output.object({ schema: itinerarySchema }),
       system: 'You are KenyaTrace, an expert Kenya trip designer. Create realistic, geographically coherent itineraries using only real places in Kenya. Use KES costs, conservative travel times, practical daily pacing, and coordinates inside Kenya. Keep the total at or below the stated budget. Do not invent hotels or tour operators; generic stays and activities are acceptable.',
       prompt: `Plan a trip to ${input.destinations} from ${input.startDate} to ${input.endDate}. Budget: KES ${input.budget}. Interests and pace: ${input.interests}.`,
