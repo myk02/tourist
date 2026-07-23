@@ -50,6 +50,14 @@ export const replaceStops = mutation({ args: { tripId: v.id("trips"), stops: v.a
   await ctx.db.patch(tripId, { totalCost })
 }})
 
+export const createFromDraft = mutation({ args: { name: v.string(), destination: v.string(), startDate: v.string(), endDate: v.string(), budget: v.number(), totalCost: v.number(), stops: v.array(stop) }, handler: async (ctx, args) => {
+  const ownerId = await owner(ctx)
+  const { stops, ...trip } = args
+  const tripId = await ctx.db.insert("trips", { ...trip, ownerId, status: "planning", coverImage: "/kenya-hero.png" })
+  await Promise.all(stops.map(item => ctx.db.insert("tripStops", { ...item, tripId })))
+  return tripId
+}})
+
 export const remove = mutation({ args: { id: v.id("trips") }, handler: async (ctx, { id }) => {
   const ownerId = await owner(ctx)
   const trip = await ctx.db.get(id)

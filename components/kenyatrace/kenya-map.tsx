@@ -3,7 +3,8 @@
 import { useEffect, useRef } from 'react'
 import type { Listing } from '@/lib/kenya-data'
 
-type Point = Pick<Listing, 'id' | 'name' | 'location' | 'lat' | 'lng'>
+type Point = Pick<Listing, '_id' | 'name' | 'location' | 'lat' | 'lng'> & { id: string }
+export function toPoint(l: Listing): Point { return { id: l._id, name: l.name, location: l.location, lat: l.lat, lng: l.lng } }
 
 export function KenyaMap({ points = [], route = [], className = 'h-[640px]' }: { points?: Point[]; route?: [number, number][]; className?: string }) {
   const node = useRef<HTMLDivElement>(null)
