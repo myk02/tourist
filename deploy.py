@@ -36,6 +36,7 @@ import argparse
 import base64
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -79,6 +80,13 @@ class DeployError(RuntimeError):
 def run(cmd: list[str], cwd: str | None = None, env: dict | None = None,
         check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
     """Run a subprocess, streaming output live unless capture=True."""
+    if os.name == "nt":
+        # Windows ships `npx`/`vercel`/etc. as .cmd shims, which plain
+        # CreateProcess cannot execute. Resolve to the real path (e.g.
+        # npx.CMD) so subprocess can launch them via cmd.exe.
+        resolved = shutil.which(cmd[0]) if os.path.splitext(cmd[0])[1] == "" else cmd[0]
+        if resolved:
+            cmd = [resolved, *cmd[1:]]
     Step.info(f"$ {' '.join(cmd)}")
     result = subprocess.run(
         cmd,
