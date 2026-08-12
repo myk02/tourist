@@ -123,7 +123,7 @@ export async function scrapeAttractions(location: string): Promise<ScrapedAttrac
       unit: "person",
       rating: +(3.5 + Math.random() * 1.5).toFixed(1),
       reviews: Math.floor(Math.random() * 800) + 50,
-      image: page.image || `https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=800`,
+      image: page.image || "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Giraffe_Centre_August_2025_04.jpg/800px-Giraffe_Centre_August_2025_04.jpg",
       tags,
       description: description.slice(0, 300),
       lat: page.lat,

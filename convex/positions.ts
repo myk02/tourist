@@ -9,6 +9,14 @@ export const record = mutation({ args: { tripId: v.id("trips"), lat: v.number(),
   return ctx.db.insert("positions", { ...args, ownerId: identity.subject, recordedAt: Date.now() })
 }})
 
+export const forTrip = query({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) return []
+  const trip = await ctx.db.get(tripId)
+  if (!trip || trip.ownerId !== identity.subject) return []
+  return ctx.db.query("positions").withIndex("by_trip_time", q => q.eq("tripId", tripId)).order("asc").collect()
+}})
+
 export const latest = query({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) return null

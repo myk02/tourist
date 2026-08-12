@@ -1,0 +1,145 @@
+'use client'
+
+import Image from 'next/image'
+import { useState } from 'react'
+import { useMutation, useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import type { Id } from '@/convex/_generated/dataModel'
+import { ChevronLeft, ChevronRight, Globe, Lock, Share2, Star, Trash2, X } from 'lucide-react'
+import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
+
+type Moment = NonNullable<ReturnType<typeof useQuery<typeof api.moments.list>>>[number]
+
+function imagesOf(m: Moment): string[] {
+  const all = m.imageUrls?.length ? m.imageUrls : m.imageUrl ? [m.imageUrl] : []
+  return all.length ? all : ['/placeholder.jpg']
+}
+
+export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; onUploadClick?: () => void }) {
+  const moments = useQuery(api.moments.list, { tripId })
+  const setBest = useMutation(api.moments.setBest)
+  const setPublic = useMutation(api.moments.setPublic)
+  const removeMoment = useMutation(api.moments.remove)
+  const [lightbox, setLightbox] = useState<{ moment: number; image: number } | null>(null)
+
+  async function toggleBest(m: Moment) {
+    try {
+      await setBest({ id: m._id, best: !m.best })
+      toast.success(m.best ? 'Removed best moment' : 'Marked as best moment')
+    } catch {
+      toast.error('Could not update best moment')
+    }
+  }
+
+  async function togglePublic(m: Moment) {
+    try {
+      await setPublic({ id: m._id, public: !m.public })
+      toast.success(m.public ? 'Moment set to private' : 'Moment made public')
+    } catch {
+      toast.error('Could not update visibility')
+    }
+  }
+
+  async function handleRemove(m: Moment) {
+    try {
+      await removeMoment({ id: m._id })
+      toast.success('Moment deleted')
+      setLightbox(null)
+    } catch {
+      toast.error('Could not delete this moment')
+    }
+  }
+
+  if (moments === undefined) return <div className="grid grid-cols-2 gap-4 md:grid-cols-3"><div className="aspect-square animate-pulse rounded-lg bg-secondary" /><div className="aspect-square animate-pulse rounded-lg bg-secondary" /><div className="aspect-square animate-pulse rounded-lg bg-secondary" /></div>
+
+  const active = lightbox ? moments[lightbox.moment] : null
+  const activeImages = active ? imagesOf(active) : []
+  const activeImageIndex = active ? Math.min(lightbox!.image, activeImages.length - 1) : 0
+
+  async function share() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/moments/${tripId}`)
+      toast.success('Share link copied')
+    } catch {
+      toast.error('Could not copy share link')
+    }
+  }
+
+  return (
+    <div>
+      {moments.length === 0 ? (
+        <div className="flex min-h-44 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+          <p className="font-serif text-2xl">No moments yet</p>
+          {onUploadClick && <Button className="mt-4" variant="outline" onClick={onUploadClick}>Add your first memory</Button>}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">{moments.length} moment{moments.length === 1 ? '' : 's'}</p>
+            <Button variant="outline" size="sm" onClick={share}><Share2 data-icon="inline-start" />Share trip moments</Button>
+          </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+            {moments.map((m, mi) => {
+            const imgs = imagesOf(m)
+            return (
+              <div key={m._id} className="group relative aspect-square overflow-hidden rounded-lg">
+                <button className="block size-full" onClick={() => setLightbox({ moment: mi, image: 0 })} aria-label={`Open moment: ${m.caption}`}>
+                  <Image src={imgs[0]} fill className="object-cover transition-transform duration-300 group-hover:scale-105" alt={m.caption} sizes="(max-width: 768px) 50vw, 33vw" />
+                </button>
+                {imgs.length > 1 && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{imgs.length} photos</Badge>}
+                {m.best && <Badge className="absolute right-2 top-2 bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
+                <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+                  <p className="line-clamp-2 text-sm text-white">{m.caption}</p>
+                  <div className="flex shrink-0 gap-1">
+                    <button aria-label="Toggle best moment" onClick={() => toggleBest(m)} className={cn('flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground transition-colors', m.best && 'text-accent')}><Star className={cn('size-4', m.best && 'fill-current')} /></button>
+                    <button aria-label="Toggle visibility" onClick={() => togglePublic(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground">{m.public ? <Globe className="size-4" /> : <Lock className="size-4" />}</button>
+                    <button aria-label="Delete moment" onClick={() => handleRemove(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+          </div>
+        </div>
+      )}
+
+      <Dialog open={!!active} onOpenChange={open => { if (!open) setLightbox(null) }}>
+        <DialogContent className="max-w-3xl">
+          {active && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {active.caption}
+                  {active.best && <Badge className="bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-black/5">
+                <Image src={activeImages[activeImageIndex]} fill className="object-contain" alt={active.caption} sizes="(max-width: 768px) 100vw, 768px" />
+                {activeImages.length > 1 && (
+                  <>
+                    <button aria-label="Previous photo" onClick={() => setLightbox({ moment: lightbox!.moment, image: activeImageIndex === 0 ? activeImages.length - 1 : activeImageIndex - 1 })} className="absolute left-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronLeft className="size-5" /></button>
+                    <button aria-label="Next photo" onClick={() => setLightbox({ moment: lightbox!.moment, image: (activeImageIndex + 1) % activeImages.length })} className="absolute right-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronRight className="size-5" /></button>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>{new Date(active.createdAt).toLocaleDateString()} · {active.location || active.stopName || 'Somewhere in Kenya'}{active.public ? ' · Public' : ' · Private'}</span>
+                <span>{activeImages.length > 1 ? `${activeImageIndex + 1} / ${activeImages.length}` : ''}</span>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => toggleBest(active)}>{active.best ? 'Remove best' : 'Mark best'}</Button>
+                <Button variant="outline" size="sm" onClick={() => togglePublic(active)}>{active.public ? 'Make private' : 'Make public'}</Button>
+                <Button variant="destructive" size="sm" onClick={() => handleRemove(active)}>Delete</Button>
+                <DialogClose render={<Button variant="ghost" size="sm" />}><X className="size-4" /> Close</DialogClose>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

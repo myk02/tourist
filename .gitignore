@@ -15,3 +15,9 @@ node_modules
 .DS_Store
 .vercel
 .env*
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Logs
+error-log.txt

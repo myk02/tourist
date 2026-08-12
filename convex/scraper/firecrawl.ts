@@ -1,142 +1,153 @@
-"use node";
-import { internalAction } from "../_generated/server";
-import { v } from "convex/values";
-import { api } from "../_generated/api";
-import { VERTICAL_CONFIG } from "./verticalConfig";
-import { STALE_AFTER_MS } from "./constants";
+import { v } from "convex/values"
+import { internalAction } from "../_generated/server"
+import { api } from "../_generated/api"
+import { VERTICAL_CONFIG } from "./verticalConfig"
+import { wikimediaThumb } from "../../lib/kenya-data"
 
-const BASE = "https://api.firecrawl.dev/v1";
+const BASE = "https://api.firecrawl.dev/v1"
+const MAX_URLS = 50
+const EXTRACT_POLL_INTERVAL_MS = 5000
+const EXTRACT_POLL_LIMIT = 24 // ~2 minutes max
 
-async function geocodeLocation(location: string): Promise<{ lat: number; lng: number } | null> {
-  try {
-    const url =
-      "https://nominatim.openstreetmap.org/search?" +
-      new URLSearchParams({ q: location + ", Kenya", format: "json", limit: "1" }).toString();
-    const res = await fetch(url, { headers: { "User-Agent": "KenyaTrace/1.0" } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.length) return null;
-    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lng) };
-  } catch {
-    return null;
-  }
+interface ExtractData {
+  success?: boolean
+  id?: string
+  status?: string
+  error?: string
+  data?: unknown
 }
 
-function extractItems(data: unknown): any[] {
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === "object" && "data" in (data as any)) {
-    const nested = (data as any).data;
-    if (Array.isArray(nested)) return nested;
+/** POST helper against the Firecrawl API with bearer auth. */
+async function post<T>(path: string, body: Record<string, unknown>, apiKey: string): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "")
+    throw new Error(`Firecrawl ${path} failed (${response.status}): ${detail.slice(0, 200)}`)
   }
-  return [];
+  return (await response.json()) as T
+}
+
+/** GET helper against the Firecrawl API with bearer auth (used for job polling). */
+async function get<T>(path: string, apiKey: string): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "")
+    throw new Error(`Firecrawl ${path} failed (${response.status}): ${detail.slice(0, 200)}`)
+  }
+  return (await response.json()) as T
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Coerces LLM-extracted numeric fields to numbers. Firecrawl often returns
+ * prices as strings ("KES 4,500", "$120", "from 2,000") — parse those
+ * instead of silently defaulting to 0.
+ */
+function toNumber(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string") {
+    const parsed = parseFloat(value.replace(/[^0-9.]/g, ""))
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return fallback
+}
+
+/**
+ * Runs a Firecrawl extract job and waits for completion. Firecrawl's extract
+ * endpoint is async for larger URL batches — it returns a job id that must be
+ * polled until `status === "completed"`.
+ */
+async function runExtract(urls: string[], config: (typeof VERTICAL_CONFIG)[string], apiKey: string): Promise<any[]> {
+  const job = await post<ExtractData>("/extract", {
+    urls,
+    prompt: config.extractPrompt,
+    schema: config.schema,
+  }, apiKey)
+
+  if (job.id) {
+    for (let attempt = 0; attempt < EXTRACT_POLL_LIMIT; attempt++) {
+      await sleep(EXTRACT_POLL_INTERVAL_MS)
+      const result = await get<ExtractData>(`/extract/${job.id}`, apiKey)
+      if (result.status === "completed") return Array.isArray(result.data) ? result.data : result.data ? [result.data] : []
+      if (result.status === "failed") throw new Error(`Firecrawl extract failed: ${result.error || "unknown error"}`)
+    }
+    throw new Error("Firecrawl extract timed out")
+  }
+
+  // Synchronous completion — data may be an array or a single object.
+  return Array.isArray(job.data) ? job.data : job.data ? [job.data] : []
+}
+
+/** Normalizes raw Firecrawl extractions into the listings table shape. */
+function normalize(raw: any[], vertical: string, now: number): any[] {
+  return raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map(item => ({
+      vertical,
+      name: String(item.name ?? "Unknown").slice(0, 200),
+      location: String(item.location ?? "Kenya").slice(0, 200),
+      price: toNumber(item.price, 0),
+      unit: String(item.unit ?? "person").slice(0, 40),
+      rating: Math.min(Math.max(toNumber(item.rating, 4.5), 0), 5),
+      reviews: Math.max(toNumber(item.reviews, 0), 0),
+      image: wikimediaThumb(typeof item.image === "string" ? item.image : ""),
+      tags: Array.isArray(item.tags) ? item.tags.map(String).slice(0, 6) : [],
+      description: String(item.description ?? "").slice(0, 600),
+      lat: toNumber(item.lat, 0),
+      lng: toNumber(item.lng, 0),
+      scrapedAt: now,
+      source: "firecrawl",
+    }))
 }
 
 export const scrapeVertical = internalAction({
   args: { vertical: v.string() },
   handler: async (ctx, { vertical }) => {
-    const apiKey = process.env.FIRECRAWL_API_KEY;
-    if (!apiKey) throw new Error("FIRECRAWL_API_KEY not set");
+    const apiKey = process.env.FIRECRAWL_API_KEY
+    if (!apiKey) throw new Error("FIRECRAWL_API_KEY not set")
+    const config = VERTICAL_CONFIG[vertical]
+    if (!config) throw new Error(`No Firecrawl config for vertical: ${vertical}`)
 
-    const config = VERTICAL_CONFIG[vertical];
-    if (!config) throw new Error(`No Firecrawl config for vertical: ${vertical}`);
-
-    const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
-
-    const allUrls = new Set<string>();
-
+    // 1. Collect candidate URLs from the vertical's search queries.
+    const urls = new Set<string>()
     for (const query of config.searchQueries) {
       try {
-        const searchRes = await fetch(`${BASE}/search`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ query, limit: config.resultsPerQuery }),
-        });
-        if (!searchRes.ok) {
-          console.error(`[firecrawl] search failed for query "${query.slice(0, 60)}": ${searchRes.status}`);
-          continue;
+        const res = await post<{ data?: { url?: string }[] }>("/search", {
+          query,
+          limit: config.resultsPerQuery,
+          lang: "en",
+          country: "ke",
+        }, apiKey)
+        for (const item of res.data ?? []) {
+          if (item?.url) urls.add(item.url)
         }
-        const body = await searchRes.json();
-        const results: { url: string }[] = body.data || [];
-        for (const r of results) {
-          if (r.url) allUrls.add(r.url);
-        }
-      } catch (e) {
-        console.error(`[firecrawl] search error for query "${query.slice(0, 60)}":`, e);
+      } catch (error) {
+        console.error(`[firecrawl] search failed for query "${query.slice(0, 60)}": ${String(error)}`)
       }
     }
+    if (urls.size === 0) throw new Error("Firecrawl search returned no results across all queries")
 
-    if (!allUrls.size) throw new Error("Firecrawl search returned no results across all queries");
+    const urlList = [...urls].slice(0, MAX_URLS)
+    console.log(`[firecrawl] ${vertical}: collected ${urlList.length} unique URLs across ${config.searchQueries.length} queries`)
 
-    const urls = [...allUrls];
-    console.log(`[firecrawl] ${vertical}: collected ${urls.length} unique URLs across ${config.searchQueries.length} queries`);
+    // 2. Extract structured listings from those pages.
+    const extracted = await runExtract(urlList, config, apiKey)
+    const items = normalize(extracted, vertical, Date.now())
+    if (items.length === 0) throw new Error("Firecrawl extract returned no data")
 
-    let extracted: any[] = [];
-
-    const tryExtract = async (targetUrls: string[]): Promise<any[]> => {
-      const res = await fetch(`${BASE}/extract`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          urls: targetUrls,
-          schema: config.schema,
-          prompt: config.extractPrompt,
-        }),
-      });
-      if (!res.ok) {
-        console.error(`[firecrawl] extract failed (${res.status}) for ${targetUrls.length} URLs`);
-        return [];
-      }
-      const body = await res.json();
-      return extractItems(body.data || body);
-    };
-
-    extracted = await tryExtract(urls);
-
-    if (!extracted.length) {
-      for (const url of urls) {
-        const items = await tryExtract([url]);
-        if (items.length) {
-          extracted.push(...items);
-        }
-      }
-    }
-
-    if (!extracted.length) throw new Error("Firecrawl extract returned no data");
-
-    const now = Date.now();
-    const enriched = [];
-    for (const item of extracted) {
-      const hasCoords = item.lat && item.lng && item.lat !== 0 && item.lng !== 0;
-      let lat = item.lat || 0;
-      let lng = item.lng || 0;
-      if (!hasCoords && item.location) {
-        const coords = await geocodeLocation(item.location);
-        if (coords) {
-          lat = coords.lat;
-          lng = coords.lng;
-        }
-      }
-      enriched.push({
-        vertical,
-        name: String(item.name || ""),
-        location: String(item.location || ""),
-        price: Number(item.price) || 0,
-        unit: String(item.unit || "person"),
-        rating: Number(item.rating) || 0,
-        reviews: Number(item.reviews) || 0,
-        image: String(item.image || ""),
-        tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
-        description: String(item.description || ""),
-        lat,
-        lng,
-        scrapedAt: now,
-        source: "firecrawl",
-      });
-    }
-
-    if (enriched.length) {
-      console.log(`[firecrawl] ${vertical}: storing ${enriched.length} items`);
-      await ctx.runMutation(api.listings.upsertScraped, { vertical, items: enriched });
-    }
+    console.log(`[firecrawl] ${vertical}: storing ${items.length} items`)
+    const result = await ctx.runMutation(api.listings.upsertScraped, { vertical, items })
+    console.log(`[firecrawl] ${vertical}: ${result.inserted} rows upserted`)
+    return { status: "completed", stored: items.length }
   },
-});
+})

@@ -15,6 +15,17 @@ const SERVICE_RATES: Record<string, { perKm: number; base: number; perMin: numbe
   maramoja: { perKm: 125, base: 100, perMin: 3, name: "Maramoja" },
 }
 
+const TAXI_SKYLINE = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Nairobi_Skyline_Savannah_Kenya_May19_R1600687.jpg/960px-Nairobi_Skyline_Savannah_Kenya_May19_R1600687.jpg"
+const DIANI_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2d/Diani_Beach_Ukunda.jpg/960px-Diani_Beach_Ukunda.jpg"
+const NAIVASHA_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Naivasha_lake.jpg/960px-Naivasha_lake.jpg"
+
+function taxiImage(dropoffName: string): string {
+  const text = dropoffName.toLowerCase()
+  if (text.includes("diani")) return DIANI_IMAGE
+  if (text.includes("naivasha")) return NAIVASHA_IMAGE
+  return TAXI_SKYLINE
+}
+
 export type TaxiEstimate = {
   name: string
   location: string
@@ -57,7 +68,7 @@ export function estimateTaxiFares(
       unit: "ride",
       rating,
       reviews,
-      image: "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=800",
+      image: taxiImage(dropoffName),
       tags: [rate.name, `${distance.toFixed(0)} km`, `${estimatedMin} min`],
       description: `Estimated ${rate.name} fare from ${pickupName} to ${dropoffName}. ${distance.toFixed(1)} km, approximately ${estimatedMin} minutes. Price is an estimate and may vary due to traffic, surge pricing, and time of day.`,
       lat: pickupLat,

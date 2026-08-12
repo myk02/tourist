@@ -16,25 +16,25 @@
   --color-muted: var(--secondary); --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive); --color-border: var(--border); --color-input: var(--border); --color-ring: var(--primary);
-  --radius-sm: .5rem; --radius-md: .75rem; --radius-lg: 1rem; --radius-xl: 1.25rem; --radius-2xl: 1.5rem; --radius-3xl: 2rem;
+  --radius-sm: .125rem; --radius-md: .25rem; --radius-lg: .375rem; --radius-xl: .5rem; --radius-2xl: .625rem; --radius-3xl: .75rem;
 }
 
 :root {
   color-scheme: light;
-  --background: #f7f4ec;
-  --foreground: #1e2924;
-  --card: #fffdf7;
-  --card-foreground: #1e2924;
+  --background: #ffffff;
+  --foreground: #16231d;
+  --card: #ffffff;
+  --card-foreground: #16231d;
   --primary: #0b6e4f;
-  --primary-foreground: #fffdf7;
-  --secondary: #e8e5db;
-  --secondary-foreground: #1e2924;
-  --muted-foreground: #66736c;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f4f1;
+  --secondary-foreground: #16231d;
+  --muted-foreground: #5d6b64;
   --accent: #e8a317;
-  --accent-foreground: #1e2924;
+  --accent-foreground: #16231d;
   --destructive: #b74032;
-  --border: #d9d5ca;
-  --radius: 1rem;
+  --border: #e3e7e3;
+  --radius: .375rem;
 }
 
 @layer base {
@@ -53,11 +53,18 @@
   border-radius: 9999px;
   background: var(--primary);
   box-shadow: 0 4px 14px color-mix(in srgb, var(--foreground) 28%, transparent);
+  transition: transform 0.15s ease;
+}
+
+.kenya-map-marker-active {
+  background: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .maplibregl-popup-content {
   border-radius: var(--radius-lg);
   background: var(--card);
   color: var(--card-foreground);
-  box-shadow: 0 12px 36px color-mix(in srgb, var(--foreground) 18%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: none;
 }
