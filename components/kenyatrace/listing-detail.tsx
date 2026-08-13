@@ -1,23 +1,24 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SignInButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { Camera, LocateFixed, Star } from 'lucide-react'
+import { Check, MapPin, Star } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatKES } from '@/lib/kenya-data'
 import { ListingImage, SourceBadge, sourceToFilter } from './shared'
+import { PaywallDialog } from './paywall'
+import { KenyaMap } from './kenya-map'
 
 export function Detail({ id }: { id: string }) {
   const { isSignedIn } = useUser()
@@ -28,16 +29,21 @@ export function Detail({ id }: { id: string }) {
   const reserve = useMutation(api.bookings.create)
   const router = useRouter()
   const signInRef = useRef<HTMLDivElement>(null)
+  const subscriptionStatus = useQuery(api.subscriptions.getStatus)
+  const [paywallOpen, setPaywallOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
   const [selectedId, setSelectedId] = useState<Id<'trips'> | null>(null)
-  const [tab, setTab] = useState('details')
   const [reserveOpen, setReserveOpen] = useState(false)
   const [reserveTripId, setReserveTripId] = useState<Id<'trips'> | null>(null)
   const [checkIn, setCheckIn] = useState(() => new Date().toISOString().slice(0, 10))
   const [checkOut, setCheckOut] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10))
   const [guests, setGuests] = useState(2)
   const selectedTrip = useQuery(api.trips.getWithStops, selectedId ? { id: selectedId } : 'skip')
+  // Shared viewer trips can't be edited, and only owned trips can take
+  // reservations — keep them out of the pickers so users aren't misled.
+  const editableTrips = (trips ?? []).filter(t => t.role !== 'viewer')
+  const ownTrips = (trips ?? []).filter(t => t.role === 'owner')
 
   // The page itself is public — signing in is only required for the actions.
   // If a guest taps Reserve / Add to trip, run the action right after they
@@ -61,6 +67,18 @@ export function Detail({ id }: { id: string }) {
 
   function handleAddToTrip() {
     gate(() => setPickerOpen(true))
+  }
+
+  // If the signed-in user's access has run out, show the paywall dialog
+  // instead of the reserve form (the server also rejects the write).
+  function handleReserveClick() {
+    gate(() => {
+      if (subscriptionStatus && !subscriptionStatus.active) {
+        setPaywallOpen(true)
+        return
+      }
+      setReserveOpen(true)
+    })
   }
 
   async function confirmAdd() {
@@ -96,76 +114,156 @@ export function Detail({ id }: { id: string }) {
     }
   }
 
+  // Stable identities so the map isn't rebuilt on every dialog keystroke.
+  const mapPoint = useMemo(() =>
+    item?.lat && item?.lng
+      ? [{ id: item._id, name: item.name, location: item.location, lat: item.lat, lng: item.lng }]
+      : [],
+    [item],
+  )
+  const mapHighlight = useMemo(() => (item?.lat ? [item._id] : []), [item])
+  const mapFocus = useMemo(() =>
+    item?.lat && item?.lng ? { lat: item.lat, lng: item.lng, zoom: 10 } : undefined,
+    [item],
+  )
+
   return (
     <>
-      <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-8">
-          <div className="overflow-hidden rounded-lg bg-primary px-6 py-10 text-primary-foreground md:px-10">
-            <div className="flex items-center gap-2">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-6">
+        {/* Hero — one attractive picture with the essentials overlaid. */}
+        <div className="relative overflow-hidden rounded-xl">
+          <div className="relative h-64 md:h-80">
+            <ListingImage src={item?.image || '/kenya-hero.png'} alt={item?.name || 'Listing'} fill priority className="object-cover" sizes="100vw" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/30" />
+            <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2">
               <Badge className="bg-accent text-accent-foreground">{item?.vertical?.replace('-', ' ')?.toUpperCase()}</Badge>
               <SourceBadge source={item?.source} onClick={() => { const f = sourceToFilter(item?.source); if (f && item) router.push(`/discover/${item.vertical}?source=${f}`) }} />
             </div>
-            <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight">{item?.name}</h1>
-            <p className="mt-2 opacity-80">{item?.location}</p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button variant="secondary" onClick={() => setTab('itinerary')}><LocateFixed data-icon="inline-start" />Add to trip</Button>
-              <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" nativeButton={false} render={<Link href="/moments" />}><Camera data-icon="inline-start" />Moments</Button>
+            <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-4 p-5 md:p-7">
+              <div className="min-w-0">
+                <h1 className="font-serif text-3xl font-semibold tracking-tight text-white md:text-4xl">{item?.name}</h1>
+                <p className="mt-1 text-white/85"><MapPin className="mr-1 inline size-4 align-[-2px]" />{item?.location}</p>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <span className="rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-foreground shadow-sm">
+                  {formatKES(item?.price || 0)}
+                  <span className="font-medium text-muted-foreground"> / {item?.unit}</span>
+                </span>
+                {item?.rating ? (
+                  <span className="flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-sm font-semibold text-white backdrop-blur-sm">
+                    <Star className="size-4 fill-amber-400 text-amber-400" />{item.rating.toFixed(1)}{item.reviews ? ` (${item.reviews})` : ''}
+                  </span>
+                ) : null}
+              </div>
             </div>
           </div>
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList><TabsTrigger value="details">Details</TabsTrigger><TabsTrigger value="itinerary">Add to trip</TabsTrigger></TabsList>
-            <TabsContent value="details">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-4">
-                  <p className="text-lg">{item?.description}</p>
-                  <div className="flex items-center gap-4"><Badge>{item?.tags?.join(', ')}</Badge><span className="flex items-center gap-1 text-sm font-semibold"><Star className="size-4 fill-accent text-accent" />{item?.rating}</span></div>
-                  <div className="text-2xl font-semibold">{formatKES(item?.price || 0)}/{item?.unit}</div>
-                  <Button className="w-fit" onClick={() => gate(() => setReserveOpen(true))} disabled={!item}>Reserve</Button>
-                </div>
-                <div className="relative h-[300px]"><ListingImage src={item?.image || '/kenya-hero.png'} fill className="object-cover rounded-xl" alt={item?.name || 'Listing'} /></div>
-              </div>
-            </TabsContent>
-            <TabsContent value="itinerary">
-              {!item ? <div className="py-8 text-center">Loading...</div> : (
-                <div className="space-y-4">
-                  <p className="text-muted-foreground">Add this place to one of your trips, or start a new one around it.</p>
-                  <div className="flex flex-wrap gap-3"><Button onClick={handleAddToTrip}>Add to existing trip</Button><Button variant="outline" onClick={createNewTrip}>Create new trip</Button></div>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
         </div>
-        <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add to trip</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <Select value={selectedId?.toString() || ''} onValueChange={v => setSelectedId(v as Id<'trips'> | null)}>
-                <SelectTrigger><SelectValue placeholder="Select a trip" /></SelectTrigger>
-                <SelectContent>{trips?.map(t => <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>)}</SelectContent>
-              </Select>
-              <Button className="w-full" disabled={!selectedId} onClick={confirmAdd}>Add stop</Button>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="flex flex-col gap-7">
+            {item?.description && (
+              <section>
+                <h2 className="font-serif text-2xl font-semibold tracking-tight">About this place</h2>
+                <p className="mt-2 text-base leading-relaxed text-muted-foreground">{item.description}</p>
+              </section>
+            )}
+
+            {(item?.tags?.length || item?.freeCancellation || item?.instantConfirm) && (
+              <section>
+                <h2 className="font-serif text-2xl font-semibold tracking-tight">Good to know</h2>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {item?.tags?.map(tag => (
+                    <span key={tag} className="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-muted-foreground">{tag}</span>
+                  ))}
+                  {item?.freeCancellation && (
+                    <span className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium text-muted-foreground"><Check className="size-3.5 text-primary" />Free cancellation</span>
+                  )}
+                  {item?.instantConfirm && (
+                    <span className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium text-muted-foreground"><Check className="size-3.5 text-primary" />Instant confirmation</span>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {mapPoint.length > 0 && (
+              <section>
+                <h2 className="font-serif text-2xl font-semibold tracking-tight">Where it is</h2>
+                <KenyaMap
+                  points={mapPoint}
+                  highlight={mapHighlight}
+                  focus={mapFocus}
+                  className="mt-2 h-72"
+                />
+              </section>
+            )}
+          </div>
+
+          {/* Sticky booking card */}
+          <aside className="lg:sticky lg:top-20 lg:h-fit">
+            <Card className="shadow-sm">
+              <CardContent className="flex flex-col gap-4 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-2xl font-bold">{formatKES(item?.price || 0)}</span>
+                    <span className="text-sm text-muted-foreground"> / {item?.unit}</span>
+                  </div>
+                  {item?.rating ? (
+                    <span className="flex items-center gap-1 text-sm font-semibold">
+                      <Star className="size-4 fill-accent text-accent" />{item.rating.toFixed(1)}
+                    </span>
+                  ) : null}
+                </div>
+                <Button size="lg" className="w-full" onClick={handleReserveClick} disabled={!item}>
+                  Reserve
+                </Button>
+                <Button variant="outline" className="w-full" onClick={handleAddToTrip} disabled={!item}>
+                  Add to a trip
+                </Button>
+                <Button variant="ghost" className="w-full" onClick={createNewTrip} disabled={!item}>
+                  Start a new trip with this
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">Free to reserve — pay later from your bookings.</p>
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
+      </div>
+
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add to trip</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <Select value={selectedId?.toString() || ''} onValueChange={v => setSelectedId(v as Id<'trips'> | null)}>
+              <SelectTrigger><SelectValue placeholder="Select a trip" /></SelectTrigger>
+              <SelectContent>{editableTrips.map(t => <SelectItem key={t._id} value={t._id}>{t.name}{t.role !== 'owner' ? ' · Shared' : ''}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button className="w-full" disabled={!selectedId} onClick={confirmAdd}>Add stop</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reserveOpen} onOpenChange={setReserveOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Request reservation</DialogTitle><DialogDescription>No payment now — pay later from your bookings.</DialogDescription></DialogHeader>
+          <FieldGroup>
+            <div className="grid grid-cols-2 gap-4">
+              <Field><FieldLabel>Check-in</FieldLabel><Input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></Field>
+              <Field><FieldLabel>Check-out</FieldLabel><Input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} /></Field>
             </div>
-          </DialogContent>
-        </Dialog>
-        <Dialog open={reserveOpen} onOpenChange={setReserveOpen}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Request reservation</DialogTitle><DialogDescription>We hold your place and you can cancel anytime — no payment is collected yet.</DialogDescription></DialogHeader>
-            <FieldGroup>
-              <div className="grid grid-cols-2 gap-4">
-                <Field><FieldLabel>Check-in</FieldLabel><Input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></Field>
-                <Field><FieldLabel>Check-out</FieldLabel><Input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} /></Field>
-              </div>
-              <Field><FieldLabel>Guests</FieldLabel><Input type="number" min={1} max={20} value={guests} onChange={e => setGuests(parseInt(e.target.value, 10) || 1)} /></Field>
-              <Field>
-                <FieldLabel>Link to trip (optional)</FieldLabel>
-                <Select value={reserveTripId?.toString() || ''} onValueChange={v => setReserveTripId(v ? (v as Id<'trips'>) : null)}>
-                  <SelectTrigger><SelectValue placeholder="No trip — standalone request" /></SelectTrigger>
-                  <SelectContent>{trips?.map(t => <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </Field>
-            </FieldGroup>
-            <Button className="w-full" onClick={reserveThis} disabled={!item}>Request reservation</Button>
-          </DialogContent>
-        </Dialog>
+            <Field><FieldLabel>Guests</FieldLabel><Input type="number" min={1} max={20} value={guests} onChange={e => setGuests(parseInt(e.target.value, 10) || 1)} /></Field>
+            <Field>
+              <FieldLabel>Link to trip (optional)</FieldLabel>
+              <Select value={reserveTripId?.toString() || ''} onValueChange={v => setReserveTripId(v ? (v as Id<'trips'>) : null)}>
+                <SelectTrigger><SelectValue placeholder="No trip — standalone request" /></SelectTrigger>
+                <SelectContent>{ownTrips.map(t => <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+          </FieldGroup>
+          <Button className="w-full" onClick={reserveThis} disabled={!item}>Request reservation</Button>
+        </DialogContent>
+      </Dialog>
+
+      <PaywallDialog open={paywallOpen} onOpenChange={setPaywallOpen} />
       <SignInButton mode="modal"><div ref={signInRef} style={{ display: 'none' }} /></SignInButton>
     </>
   )

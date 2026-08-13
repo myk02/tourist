@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
+import { requireActiveAccess } from "./subscriptions"
 
 function idsOf(storageId: Id<'_storage'> | undefined, storageIds: Id<'_storage'>[] | undefined): Id<'_storage'>[] {
   return [storageId, ...(storageIds ?? [])].filter((x): x is Id<'_storage'> => !!x)
@@ -15,7 +16,8 @@ export const list = query({ args: { tripId: v.id("trips") }, handler: async (ctx
   return Promise.all(moments.map(async moment => {
     const ids = idsOf(moment.storageId, moment.storageIds)
     const imageUrls = await Promise.all(ids.map(id => ctx.storage.getUrl(id)))
-    return { ...moment, imageUrl: imageUrls[0] ?? null, imageUrls: imageUrls.filter((x): x is string => !!x) }
+    const videoUrls = await Promise.all((moment.videoStorageIds ?? []).map(id => ctx.storage.getUrl(id)))
+    return { ...moment, imageUrl: imageUrls[0] ?? null, imageUrls: imageUrls.filter((x): x is string => !!x), videoUrls: videoUrls.filter((x): x is string => !!x) }
   }))
 }})
 
@@ -27,9 +29,13 @@ export const publicForTrip = query({ args: { tripId: v.id("trips") }, handler: a
   const withUrls = await Promise.all(publicMoments.map(async moment => {
     const ids = idsOf(moment.storageId, moment.storageIds)
     const imageUrls = await Promise.all(ids.map(id => ctx.storage.getUrl(id)))
-    return { ...moment, imageUrl: imageUrls[0] ?? null, imageUrls: imageUrls.filter((x): x is string => !!x) }
+    const videoUrls = await Promise.all((moment.videoStorageIds ?? []).map(id => ctx.storage.getUrl(id)))
+    return { ...moment, imageUrl: imageUrls[0] ?? null, imageUrls: imageUrls.filter((x): x is string => !!x), videoUrls: videoUrls.filter((x): x is string => !!x) }
   }))
-  return { trip: { name: trip.name, destination: trip.destination, startDate: trip.startDate, endDate: trip.endDate }, moments: withUrls }
+  return {
+    trip: { name: trip.name, destination: trip.destination, origin: trip.origin, startDate: trip.startDate, endDate: trip.endDate, rating: trip.rating, review: trip.review },
+    moments: withUrls,
+  }
 }})
 
 export const allForOwner = query({ args: {}, handler: async (ctx) => {
@@ -43,18 +49,29 @@ export const allForOwner = query({ args: {}, handler: async (ctx) => {
 }})
 
 export const generateUploadUrl = mutation({ args: {}, handler: async ctx => {
-  if (!await ctx.auth.getUserIdentity()) throw new Error("Sign in required")
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Sign in required")
+  await requireActiveAccess(ctx.db, identity.subject)
   return ctx.storage.generateUploadUrl()
 }})
 
-export const create = mutation({ args: { tripId: v.id("trips"), caption: v.string(), storageId: v.optional(v.id("_storage")), storageIds: v.optional(v.array(v.id("_storage"))), stopName: v.optional(v.string()), location: v.optional(v.string()), lat: v.optional(v.number()), lng: v.optional(v.number()), public: v.boolean() }, handler: async (ctx, args) => {
+export const create = mutation({ args: { tripId: v.id("trips"), caption: v.string(), storageId: v.optional(v.id("_storage")), storageIds: v.optional(v.array(v.id("_storage"))), videoStorageIds: v.optional(v.array(v.id("_storage"))), stopName: v.optional(v.string()), location: v.optional(v.string()), lat: v.optional(v.number()), lng: v.optional(v.number()), public: v.boolean() }, handler: async (ctx, args) => {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) throw new Error("Sign in required")
+  await requireActiveAccess(ctx.db, identity.subject)
   const trip = await ctx.db.get(args.tripId)
   if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
-  const { storageId, storageIds, ...rest } = args
+  const { storageId, storageIds, videoStorageIds, ...rest } = args
   const ids = idsOf(storageId, storageIds)
-  return ctx.db.insert("moments", { ...rest, ownerId: identity.subject, storageId: ids[0], storageIds: ids.length > 1 ? ids : undefined, best: false, createdAt: Date.now() })
+  return ctx.db.insert("moments", {
+    ...rest,
+    ownerId: identity.subject,
+    storageId: ids[0],
+    storageIds: ids.length > 1 ? ids : undefined,
+    videoStorageIds: videoStorageIds && videoStorageIds.length > 0 ? videoStorageIds : undefined,
+    best: false,
+    createdAt: Date.now(),
+  })
 }})
 
 export const setBest = mutation({ args: { id: v.id("moments"), best: v.boolean() }, handler: async (ctx, { id, best }) => {
@@ -83,6 +100,7 @@ export const remove = mutation({ args: { id: v.id("moments") }, handler: async (
   const moment = await ctx.db.get(id)
   if (!moment || moment.ownerId !== identity.subject) throw new Error("Moment not found")
   const ids = idsOf(moment.storageId, moment.storageIds)
-  await Promise.all(ids.map(sid => ctx.storage.delete(sid)))
+  const videoIds = moment.videoStorageIds ?? []
+  await Promise.all([...ids, ...videoIds].map(sid => ctx.storage.delete(sid)))
   await ctx.db.delete(id)
 }})

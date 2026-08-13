@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatKES } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
 import { BookingRow, ListingImage, RequireAuth, SourceBadge, sourceToFilter, Stat } from './shared'
+import { SubscriptionSection } from './subscription-card'
 
 const STYLES = ['Safari', 'Adventure', 'Culture', 'Beach', 'Relax', 'Luxury', 'Family', 'Couples']
 const INTERESTS = ['Wildlife', 'Food', 'Culture', 'Beach', 'Adventure', 'Luxury', 'Local life']
@@ -145,13 +146,13 @@ export function Profile() {
   return (
     <RequireAuth>
       <div className="mx-auto flex max-w-5xl flex-col gap-8 px-5 py-10">
-        <div className="flex flex-wrap items-center gap-5 rounded-lg bg-primary px-6 py-6 text-primary-foreground md:px-8">
-          {user?.imageUrl ? <Image src={user.imageUrl} width={64} height={64} className="rounded-full" alt="Profile" /> : <span className="flex size-16 items-center justify-center rounded-full bg-accent text-accent-foreground"><Compass /></span>}
-          <div className="flex-1">
-            <h1 className="font-serif text-3xl tracking-tight">{user?.fullName || 'Kenya traveller'}</h1>
-            <p className="opacity-80">{user?.primaryEmailAddress?.emailAddress}</p>
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card px-5 py-4">
+          {user?.imageUrl ? <Image src={user.imageUrl} width={48} height={48} className="rounded-full" alt="Profile" /> : <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary"><Compass /></span>}
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-semibold tracking-tight">{user?.fullName || 'Kenya traveller'}</h1>
+            <p className="truncate text-sm text-muted-foreground">{user?.primaryEmailAddress?.emailAddress}</p>
           </div>
-          <UserButton showName />
+          <UserButton />
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
@@ -160,13 +161,14 @@ export function Profile() {
             <TabsTrigger value="bookings">Bookings</TabsTrigger>
             <TabsTrigger value="saved">Saved</TabsTrigger>
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
+            <TabsTrigger value="subscription">Subscription</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="flex flex-col gap-7">
             <div className="grid gap-5 md:grid-cols-3">
               <Stat label="Trips" value={trips?.length || 0} />
-              <Stat label="Saved places" value={saved?.length || 0} />
+              <Stat label="Saved" value={saved?.length || 0} />
               <Stat label="Moments" value={allMoments?.length || 0} />
             </div>
             {upcoming && (
@@ -178,7 +180,7 @@ export function Profile() {
                     <p className="text-sm text-muted-foreground">{upcoming.destination} · {upcoming.startDate} → {upcoming.endDate}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge className="bg-card text-card-foreground">{upcoming.status}</Badge>
+                    <Badge className="bg-card text-card-foreground">{upcoming.status.charAt(0).toUpperCase() + upcoming.status.slice(1)}</Badge>
                     <Button nativeButton={false} render={<Link href={`/trips/${upcoming._id}`} />}>Open trip</Button>
                   </div>
                 </CardContent>
@@ -197,8 +199,8 @@ export function Profile() {
             ) : (
               <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
                 <AlertCircle className="size-8 text-primary" />
-                <p className="mt-4 font-serif text-2xl">No reservation requests</p>
-                <p className="mt-2 max-w-md text-muted-foreground">Requests you send from place pages will be tracked here.</p>
+                <p className="mt-4 font-serif text-2xl">No bookings yet</p>
+                <p className="mt-2 text-muted-foreground">Reservations you make will appear here.</p>
                 <Button className="mt-4" variant="outline" nativeButton={false} render={<Link href="/discover" />}>Explore places</Button>
               </div>
             )}
@@ -236,7 +238,7 @@ export function Profile() {
               <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
                 <Heart className="size-8 text-primary" />
                 <p className="mt-4 font-serif text-2xl">Nothing saved yet</p>
-                <p className="mt-2 max-w-md text-muted-foreground">Tap the heart on any place in Discover to keep it here.</p>
+                <p className="mt-2 text-muted-foreground">Tap the heart on any place to keep it here.</p>
                 <Button className="mt-4" variant="outline" nativeButton={false} render={<Link href="/discover" />}>Discover places</Button>
               </div>
             )}
@@ -250,7 +252,6 @@ export function Profile() {
                   <span className="text-sm font-semibold text-primary">{completeness}%</span>
                 </div>
                 <Progress className="mt-2 h-2" value={completeness} />
-                <p className="mt-2 text-sm text-muted-foreground">Complete preferences and the AI planner will start from your style — better routes, less typing.</p>
               </CardContent>
             </Card>
 
@@ -295,12 +296,14 @@ export function Profile() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="subscription"><SubscriptionSection /></TabsContent>
+
           <TabsContent value="settings" className="flex flex-col gap-4">
             <Card>
               <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
                 <div>
                   <p className="font-semibold">Account</p>
-                  <p className="text-sm text-muted-foreground">Manage your profile photo, name and sign-in from Clerk.</p>
+                  <p className="text-sm text-muted-foreground">Photo, name and sign-in.</p>
                 </div>
                 <UserButton showName />
               </CardContent>
@@ -309,7 +312,7 @@ export function Profile() {
               <CardContent className="flex items-center justify-between gap-4 p-5">
                 <div>
                   <p className="font-semibold">Location tracing</p>
-                  <p className="text-sm text-muted-foreground">Allow live tracking to record your route on a trip. Only you can see it.</p>
+                  <p className="text-sm text-muted-foreground">Record your live route on trips. Only you can see it.</p>
                 </div>
                 <Switch checked={me?.trackingConsent === true} onCheckedChange={v => setConsent({ consent: v }).catch(() => toast.error('Could not update location consent'))} />
               </CardContent>
@@ -318,7 +321,7 @@ export function Profile() {
               <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
                 <div>
                   <p className="font-semibold">Your data</p>
-                  <p className="text-sm text-muted-foreground">Download a copy of your trips, reservations and moments as JSON.</p>
+                  <p className="text-sm text-muted-foreground">Download your trips, bookings and moments.</p>
                 </div>
                 <Button variant="outline" onClick={exportData}><Download data-icon="inline-start" />Export data</Button>
               </CardContent>

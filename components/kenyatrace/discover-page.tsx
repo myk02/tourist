@@ -1,25 +1,24 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery, useMutation, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { SignInButton, useUser } from '@clerk/nextjs'
 import { toast } from 'sonner'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Heart, Image as ImageIcon, LocateFixed, MapPin, RotateCcw, Search, Star, X } from 'lucide-react'
+import { Car, Check, Heart, LocateFixed, Map, RotateCcw, Search, SlidersHorizontal, Star, X } from 'lucide-react'
 import { categories, formatKES, type Vertical } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
 import { KenyaMap, toPoint } from './kenya-map'
-import { ListingImage, SourceBadge, sourceToFilter, type SourceFilterValue } from './shared'
+import { ListingImage, type SourceFilterValue } from './shared'
 
 const NEAR_KM = 100
 
@@ -33,14 +32,14 @@ function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   return 2 * R * Math.asin(Math.sqrt(a))
 }
 
-function formatUpdated(ts: number | null | undefined) {
-  if (!ts) return 'Refreshed automatically'
-  const mins = Math.round((Date.now() - ts) / 60000)
-  if (mins < 1) return 'Updated just now'
-  if (mins < 60) return `Updated ${mins} min ago`
-  const hours = Math.round(mins / 60)
-  if (hours < 24) return `Updated ${hours} h ago`
-  return `Updated ${Math.round(hours / 24)} d ago`
+/** Hero photo + one-line tagline per category. */
+const VERTICAL_HERO: Record<string, { image: string; tagline: string }> = {
+  stays: { image: 'https://upload.wikimedia.org/wikipedia/commons/7/72/PIC_0106.JPG', tagline: 'Wake up by the coast or in the wild' },
+  flights: { image: 'https://upload.wikimedia.org/wikipedia/commons/d/d4/Nairobi_Skyline_Savannah_Kenya_May19_R1600687.jpg', tagline: 'City to savannah in an hour' },
+  'things-to-do': { image: 'https://upload.wikimedia.org/wikipedia/commons/f/f7/Kilimanjaro_from_Amboseli.jpg', tagline: 'Game drives, water sports, culture' },
+  attractions: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'The places Kenya is famous for' },
+  cars: { image: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Lake_Naivasha%2C_Kenya_%2845636345554%29.jpg', tagline: 'Drive Kenya your own way' },
+  taxis: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'City rides and airport runs' },
 }
 
 const SORTS = [
@@ -59,7 +58,6 @@ const PAGE_SIZE = 12
 
 export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const router = useRouter()
-  const pathname = usePathname()
   const params = useSearchParams()
   const urlQ = params.get('q') || ''
   const urlFilter = (params.get('filter') || 'all') as QuickFilter
@@ -69,6 +67,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const urlMax = params.get('max')
   const urlNear = params.get('near') === '1'
   const urlSource = (params.get('source') || 'all') as SourceFilter
+  const urlAmenities = (params.get('amenity') || '').split(',').filter(Boolean)
 
   const [searchTerm, setSearchTerm] = useState(urlQ)
   const [debouncedSearch, setDebouncedSearch] = useState(urlQ)
@@ -81,16 +80,21 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const [nearMe, setNearMe] = useState(urlNear)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(urlSource)
+  const [amenities, setAmenities] = useState<string[]>(urlAmenities)
   const [locating, setLocating] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [mapOpen, setMapOpen] = useState(false)
+
+  // Lock body scroll while the full-screen mobile map is open.
+  useEffect(() => {
+    document.body.style.overflow = mapOpen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [mapOpen])
 
   const rawItems = useQuery(api.listings.search, { vertical, term: debouncedSearch || undefined })
-  const counts = useQuery(api.listings.countByVertical)
-  const lastScrapedAt = useQuery(api.listings.lastScraped, { vertical })
   const scrapeAction = useAction(api.scraper.index.searchWithScrape)
-  const backfillImages = useMutation(api.listings.backfillImages)
-  const [upgrading, setUpgrading] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300)
@@ -142,6 +146,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     if (sourceFilter === 'firecrawl') items = items.filter(i => i.source === 'firecrawl')
     if (sourceFilter === 'live') items = items.filter(i => i.source === 'scraper' || i.source === 'wikipedia')
     if (sourceFilter === 'curated') items = items.filter(i => !i.source)
+    if (amenities.includes('freeCancellation')) items = items.filter(i => i.freeCancellation)
+    if (amenities.includes('instantConfirm')) items = items.filter(i => i.instantConfirm)
     switch (sort) {
       case 'recent': items.sort((a, b) => (b.scrapedAt ?? b._creationTime) - (a.scrapedAt ?? a._creationTime)); break
       case 'price_asc': items.sort((a, b) => a.price - b.price); break
@@ -150,7 +156,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     }
     return items
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawItems, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, sourceFilter])
+  }, [rawItems, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, sourceFilter, amenities])
 
   useEffect(() => {
     const p = new URLSearchParams()
@@ -160,13 +166,14 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     if (priceNarrowed) { p.set('min', String(activePrice[0])); p.set('max', String(activePrice[1])) }
     if (nearMe) p.set('near', '1')
     if (sourceFilter !== 'all') p.set('source', sourceFilter)
+    if (amenities.length > 0) p.set('amenity', amenities.join(','))
     if (sort !== 'recommended') p.set('sort', sort)
     const qs = p.toString()
     const target = `/discover/${vertical}${qs ? `?${qs}` : ''}`
     if (target !== window.location.pathname + window.location.search) {
       router.replace(target, { scroll: false })
     }
-  }, [debouncedSearch, activeFilter, rating, sort, priceNarrowed, activePrice, nearMe, sourceFilter, vertical, router])
+  }, [debouncedSearch, activeFilter, rating, sort, priceNarrowed, activePrice, nearMe, sourceFilter, amenities, vertical, router])
 
   useEffect(() => {
     setSearchTerm(urlQ)
@@ -177,9 +184,10 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     setPriceRange(urlMin && urlMax ? [parseInt(urlMin, 10), parseInt(urlMax, 10)] : null)
     setNearMe(urlNear)
     setSourceFilter(urlSource)
-  }, [urlQ, urlFilter, urlRating, urlSort, urlMin, urlMax, urlNear, urlSource])
+    setAmenities((params.get('amenity') || '').split(',').filter(Boolean))
+  }, [urlQ, urlFilter, urlRating, urlSort, urlMin, urlMax, urlNear, urlSource, params])
 
-  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [debouncedSearch, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, sourceFilter])
+  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [debouncedSearch, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, sourceFilter, amenities])
 
   // Auto-refresh stale listings from the scraper — but only once per session
   // per vertical, so a page visit doesn't trigger a paid scrape every time.
@@ -199,21 +207,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     }
   }, [rawItems, vertical, scrapeAction])
 
-  async function upgradeImages() {
-    if (upgrading) return
-    setUpgrading(true)
-    try {
-      const result = await backfillImages()
-      const updated = result?.updated ?? 0
-      if (updated === 0) toast.success('Images are already up to date')
-      else toast.success(`Upgraded ${updated} listing${updated === 1 ? '' : 's'} to real photos`)
-    } catch {
-      toast.error('Could not upgrade images')
-    } finally {
-      setUpgrading(false)
-    }
-  }
-
   function resetAll() {
     setSearchTerm('')
     setActiveFilter('all')
@@ -223,6 +216,11 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     setNearMe(false)
     setCoords(null)
     setSourceFilter('all')
+    setAmenities([])
+  }
+
+  function toggleAmenity(value: string) {
+    setAmenities(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])
   }
 
   function toggleNearMe() {
@@ -244,12 +242,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     )
   }
 
-  function toggleSourceFilter(source?: string | null) {
-    const target = sourceToFilter(source)
-    if (!target) return
-    setSourceFilter(prev => (prev === target ? 'all' : target))
-  }
-
   async function toggleSave(listingId: string) {
     if (!isSignedIn) { setPendingSaveId(listingId); signInRef.current?.click(); return }
     try {
@@ -263,46 +255,49 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     document.getElementById(`listing-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
+  // From the full-screen mobile map: close it, then highlight the listing.
+  function handleMobileMarkerSelect(id: string) {
+    setMapOpen(false)
+    requestAnimationFrame(() => handleMarkerSelect(id))
+  }
+
   const mapPoints = (filteredItems ?? []).map(toPoint)
   const visible = filteredItems?.slice(0, visibleCount)
-  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || sourceFilter !== 'all'
+  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || sourceFilter !== 'all' || amenities.length > 0
+  const activeFilterCount = [activeFilter !== 'all', rating > 0, priceNarrowed, nearMe, sourceFilter !== 'all', amenities.length > 0].filter(Boolean).length
+  const hero = VERTICAL_HERO[vertical] ?? VERTICAL_HERO.attractions
+  const label = categories.find(c => c.id === vertical)?.label ?? vertical
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-8">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-primary">Explore Kenya</p>
-        <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight capitalize">
-          {categories.find(c => c.id === vertical)?.label}
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          {filteredItems
-            ? `${filteredItems.length} of ${counts?.[vertical] ?? 0} verified options${debouncedSearch ? ` matching "${debouncedSearch}"` : ''}`
-            : 'Loading...'}
-        </p>
-        <div className="mt-1 flex flex-wrap items-center gap-3">
-          <p className="text-xs text-muted-foreground">{formatUpdated(lastScrapedAt)}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={upgradeImages}
-            disabled={upgrading}
-            className="h-7 gap-1.5 px-2.5 text-xs"
-          >
-            <ImageIcon className="size-3.5" />
-            {upgrading ? 'Upgrading…' : 'Upgrade images'}
-          </Button>
+    <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6">
+      {/* Hero — one attractive picture, category name, nothing else. */}
+      <div className="relative overflow-hidden rounded-xl">
+        <div className="relative h-44 md:h-52">
+          <ListingImage src={hero.image} alt={label} fill priority className="object-cover" sizes="100vw" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/35" />
+          <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-5 md:p-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-amber-300">Discover Kenya</p>
+              <h1 className="mt-1 font-serif text-3xl font-semibold tracking-tight text-white md:text-4xl">{label}</h1>
+              <p className="mt-1 text-sm text-white/85">{hero.tagline}</p>
+            </div>
+            <span className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white backdrop-blur-sm">
+              {filteredItems ? `${filteredItems.length} place${filteredItems.length === 1 ? '' : 's'}` : '…'}
+            </span>
+          </div>
         </div>
       </div>
 
-      <Card>
-        <CardContent className="flex flex-col gap-5 p-4">
+      {/* Compact search bar — filters hide behind the toggle. */}
+      <Card className="shadow-none">
+        <CardContent className="flex flex-col gap-3 p-3.5">
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative flex-1">
-              <MapPin className="absolute left-3 top-3.5 size-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-3.5 size-4 text-muted-foreground" />
               <Input
                 className="h-11 pl-10"
                 aria-label="Search"
-                placeholder="Mara, Nairobi, Mombasa..."
+                placeholder="Mara, Nairobi, Diani..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
@@ -335,127 +330,135 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                 )
               })()}
             </div>
-            <Select value={sort} onValueChange={v => setSort(v as SortValue)}>
-              <SelectTrigger className="h-11 w-full sm:w-[190px]">
-                <SelectValue placeholder="Sort" />
-              </SelectTrigger>
-              <SelectContent>
-                {SORTS.map(option => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {searchTerm && (
-            <p className="text-xs text-muted-foreground">
-              Searching {categories.find(c => c.id === vertical)?.label} for &ldquo;{searchTerm}&rdquo;
-            </p>
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            {([{ value: 'all', label: 'All' }, { value: 'rated', label: 'Highly rated 4.7+' }, { value: 'budget', label: 'Budget under KES 15k' }] as { value: QuickFilter; label: string }[]).map(option => (
-              <button
-                key={option.value}
-                onClick={() => setActiveFilter(option.value)}
-                className={cn(
-                  'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
-                  activeFilter === option.value
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
+            <div className="flex gap-2">
+              <Select value={sort} onValueChange={v => setSort(v as SortValue)}>
+                <SelectTrigger className="h-11 w-full sm:w-[170px]">
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORTS.map(option => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" className="h-11 gap-2" onClick={() => setFiltersOpen(o => !o)}>
+                <SlidersHorizontal className="size-4" />
+                <span className="hidden sm:inline">Filters</span>
+                {activeFilterCount > 0 && (
+                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{activeFilterCount}</span>
                 )}
-              >
-                {option.label}
-              </button>
-            ))}
-            <button
-              onClick={toggleNearMe}
-              disabled={locating}
-              className={cn(
-                'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:opacity-60',
-                nearMe
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
-              )}
-            >
-              <LocateFixed className="size-3.5" />
-              {locating ? 'Finding you…' : nearMe ? `Near me (${NEAR_KM} km)` : 'Near me'}
-            </button>
-            <span className="hidden h-6 w-px bg-border sm:block" />
-            {([{ value: 'all', label: 'Any source' }, { value: 'firecrawl', label: 'Firecrawl' }, { value: 'live', label: 'Live web' }, { value: 'curated', label: 'Curated' }] as { value: SourceFilter; label: string }[]).map(option => (
-              <button
-                key={option.value}
-                onClick={() => setSourceFilter(option.value)}
-                className={cn(
-                  'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
-                  sourceFilter === option.value
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Price range</span>
-                <span className="text-muted-foreground">{formatKES(activePrice[0])} – {formatKES(activePrice[1])}</span>
-              </div>
-              <Slider
-                min={priceBounds.min}
-                max={priceBounds.max}
-                step={1000}
-                value={[activePrice[0], activePrice[1]]}
-                onValueChange={v => {
-                  const next = Array.isArray(v) ? v : [v, v]
-                  setPriceRange([next[0], next[1]])
-                }}
-                aria-label="Price range"
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Rating</span>
-                <span className="text-muted-foreground">{rating > 0 ? `${rating.toFixed(1)}+` : 'Any'}</span>
-              </div>
-              <Slider
-                min={3.5}
-                max={5}
-                step={0.1}
-                value={[rating > 0 ? rating : 3.5]}
-                onValueChange={v => setRating(Array.isArray(v) ? v[0] : v)}
-                aria-label="Minimum rating"
-              />
-            </div>
-          </div>
-
-          {hasActiveFilters && (
-            <div className="flex flex-wrap items-center gap-2">
-              {rating > 0 && (
-                <button onClick={() => setRating(0)} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
-                  Rating {rating.toFixed(1)}+ <X className="size-3.5" />
-                </button>
-              )}
-              {priceNarrowed && (
-                <button onClick={() => setPriceRange(null)} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
-                  {formatKES(activePrice[0])} – {formatKES(activePrice[1])} <X className="size-3.5" />
-                </button>
-              )}
-              {nearMe && (
-                <button onClick={() => { setNearMe(false); setCoords(null) }} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
-                  Near me {coords ? '' : '(locating)'} <X className="size-3.5" />
-                </button>
-              )}
-              {sourceFilter !== 'all' && (
-                <button onClick={() => setSourceFilter('all')} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
-                  {sourceFilter === 'firecrawl' ? 'Firecrawl' : sourceFilter === 'live' ? 'Live web' : 'Curated'} <X className="size-3.5" />
-                </button>
-              )}
-              <Button variant="ghost" size="sm" onClick={resetAll} className="gap-1.5">
-                <RotateCcw className="size-3.5" /> Reset
               </Button>
+            </div>
+          </div>
+
+          {filtersOpen && (
+            <div className="flex flex-col gap-4 border-t pt-3">
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { kind: 'filter', value: 'all', label: 'All' },
+                  { kind: 'filter', value: 'rated', label: 'Top rated' },
+                  { kind: 'filter', value: 'budget', label: 'Budget' },
+                  { kind: 'amenity', value: 'freeCancellation', label: 'Free cancellation' },
+                  { kind: 'amenity', value: 'instantConfirm', label: 'Instant confirmation' },
+                ] as { kind: 'filter' | 'amenity'; value: string; label: string }[]).map(option => {
+                  const active = option.kind === 'amenity' ? amenities.includes(option.value) : activeFilter === option.value
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => (option.kind === 'amenity' ? toggleAmenity(option.value) : setActiveFilter(option.value as QuickFilter))}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+                        active
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                      )}
+                    >
+                      {option.kind === 'amenity' && active && <Check className="size-3.5" />}
+                      {option.label}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={toggleNearMe}
+                  disabled={locating}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:opacity-60',
+                    nearMe
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                  )}
+                >
+                  <LocateFixed className="size-3.5" />
+                  {locating ? 'Finding…' : 'Near me'}
+                </button>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">Price</span>
+                    <span className="text-muted-foreground">{formatKES(activePrice[0])} – {formatKES(activePrice[1])}</span>
+                  </div>
+                  <Slider
+                    min={priceBounds.min}
+                    max={priceBounds.max}
+                    step={1000}
+                    value={[activePrice[0], activePrice[1]]}
+                    onValueChange={v => {
+                      const next = Array.isArray(v) ? v : [v, v]
+                      setPriceRange([next[0], next[1]])
+                    }}
+                    aria-label="Price range"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">Rating</span>
+                    <span className="text-muted-foreground">{rating > 0 ? `${rating.toFixed(1)}+` : 'Any'}</span>
+                  </div>
+                  <Slider
+                    min={3.5}
+                    max={5}
+                    step={0.1}
+                    value={[rating > 0 ? rating : 3.5]}
+                    onValueChange={v => setRating(Array.isArray(v) ? v[0] : v)}
+                    aria-label="Minimum rating"
+                  />
+                </div>
+              </div>
+
+              {hasActiveFilters && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {rating > 0 && (
+                    <button onClick={() => setRating(0)} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                      Rating {rating.toFixed(1)}+ <X className="size-3.5" />
+                    </button>
+                  )}
+                  {priceNarrowed && (
+                    <button onClick={() => setPriceRange(null)} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                      {formatKES(activePrice[0])} – {formatKES(activePrice[1])} <X className="size-3.5" />
+                    </button>
+                  )}
+                  {nearMe && (
+                    <button onClick={() => { setNearMe(false); setCoords(null) }} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                      Near me <X className="size-3.5" />
+                    </button>
+                  )}
+                  {sourceFilter !== 'all' && (
+                    <button onClick={() => setSourceFilter('all')} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                      {sourceFilter === 'firecrawl' ? 'Firecrawl' : sourceFilter === 'live' ? 'Live web' : 'Curated'} <X className="size-3.5" />
+                    </button>
+                  )}
+                  {amenities.map(value => (
+                    <button key={value} onClick={() => toggleAmenity(value)} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                      {value === 'freeCancellation' ? 'Free cancellation' : 'Instant confirmation'} <X className="size-3.5" />
+                    </button>
+                  ))}
+                  <Button variant="ghost" size="sm" onClick={resetAll} className="gap-1.5">
+                    <RotateCcw className="size-3.5" /> Reset
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -463,7 +466,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-5">
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visible ? (
               visible.map(item => {
                 const saved = savedIds.has(item._id)
@@ -474,79 +477,51 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                     id={`listing-${item._id}`}
                     onMouseEnter={() => setHoveredId(item._id)}
                     onMouseLeave={() => setHoveredId(null)}
-                    className={cn('group overflow-hidden p-0 transition-all hover:border-primary/40', active && 'border-primary ring-2 ring-primary/20')}
+                    className={cn(
+                      'group relative rounded-xl border-0 bg-transparent p-0 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl',
+                      active && 'ring-2 ring-primary/40',
+                    )}
                   >
-                    <div className="relative aspect-[4/3] overflow-hidden">
-                      <Link href={`/discover/${item.vertical}/${item._id}`}>
+                    <Link href={`/discover/${item.vertical}/${item._id}`} className="block">
+                      <div className="relative aspect-[3/2] overflow-hidden rounded-xl">
                         <ListingImage
                           src={item.image}
                           alt={item.name}
                           fill
-                          className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                          className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          sizes="(min-width: 1280px) 33vw, (min-width: 640px) 50vw, 100vw"
                         />
-                        <Badge className="absolute left-3 top-3 bg-card text-card-foreground">
-                          {item.tags[0]}
-                        </Badge>
-                      </Link>
-                      <SourceBadge
-                        source={item.source}
-                        className="absolute bottom-3 left-3"
-                        onClick={() => toggleSourceFilter(item.source)}
-                      />
-                      <button
-                        aria-label={saved ? 'Remove from saved' : 'Save to your list'}
-                        onClick={e => { e.preventDefault(); toggleSave(item._id) }}
-                        className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm transition-transform hover:scale-110"
-                      >
-                        <Heart className={cn('size-4', saved && 'fill-red-500 text-red-500')} />
-                      </button>
-                    </div>
-                    <Link href={`/discover/${item.vertical}/${item._id}`}>
-                      <CardHeader className="gap-2 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <CardTitle className="text-lg leading-tight">{item.name}</CardTitle>
-                            <p className="mt-1 truncate text-sm text-muted-foreground">{item.location}</p>
-                          </div>
-                          <span className="flex shrink-0 items-center gap-1 text-sm font-semibold">
-                            <Star className="size-4 fill-accent text-accent" />
-                            {item.rating}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/25" />
+                        <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-foreground shadow-sm">
+                          {formatKES(item.price)}
+                          <span className="font-medium text-muted-foreground"> / {item.unit}</span>
+                        </span>
+                        {item.rating > 0 && (
+                          <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
+                            <Star className="size-3 fill-amber-400 text-amber-400" />
+                            {item.rating.toFixed(1)}
                           </span>
-                        </div>
-                        {(item.rating >= 4.8 || item.reviews >= 500 || item.freeCancellation || item.instantConfirm) && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {item.rating >= 4.8 && (
-                              <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Top rated</span>
-                            )}
-                            {item.reviews >= 500 && (
-                              <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Loved by {item.reviews} travellers</span>
-                            )}
-                            {item.freeCancellation && (
-                              <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Free cancellation</span>
-                            )}
-                            {item.instantConfirm && (
-                              <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Instant confirmation</span>
-                            )}
-                          </div>
                         )}
-                        <div>
-                          <span className="font-semibold">{formatKES(item.price)}</span>
-                          <span className="text-sm text-muted-foreground"> / {item.unit}</span>
+                        <div className="absolute inset-x-0 bottom-0 p-3 pr-16">
+                          <p className="truncate text-sm font-semibold text-white">{item.name}</p>
+                          <p className="mt-0.5 truncate text-xs text-white/85">{item.location}</p>
                         </div>
-                      </CardHeader>
+                      </div>
                     </Link>
+                    <button
+                      aria-label={saved ? 'Remove from saved' : 'Save to your list'}
+                      onClick={e => { e.preventDefault(); toggleSave(item._id) }}
+                      className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/60"
+                    >
+                      <Heart className={cn('size-4 transition-colors', saved && 'fill-red-500 text-red-500')} />
+                    </button>
                   </Card>
                 )
               })
             ) : (
               Array(PAGE_SIZE).fill(null).map((_, i) => (
-                <Card key={i} className="overflow-hidden">
-                  <Skeleton className="aspect-[4/3] w-full rounded-none" />
-                  <CardContent className="space-y-2 p-4">
-                    <Skeleton className="h-5 w-3/4" />
-                    <Skeleton className="h-3 w-full" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </CardContent>
+                <Card key={i} className="rounded-xl border-0 bg-transparent p-0">
+                  <Skeleton className="aspect-[3/2] w-full rounded-xl" />
                 </Card>
               ))
             )}
@@ -559,12 +534,27 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
           )}
 
           {filteredItems && filteredItems.length === 0 && (
-            <div className="py-12 text-center">
-              <p className="text-muted-foreground">No results found for your search.</p>
-              <Button variant="link" onClick={resetAll}>
-                Clear filters
-              </Button>
-            </div>
+            vertical === 'taxis' ? (
+              <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed py-12 text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary"><Car className="size-6" /></span>
+                <div>
+                  <p className="font-serif text-2xl font-semibold tracking-tight">Coming soon</p>
+                  <p className="mx-auto mt-1 text-sm text-muted-foreground">Airport transfers and city rides.</p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button variant="outline" nativeButton={false} render={<Link href="/discover/cars" />}>Rent a car</Button>
+                  <Button variant="outline" nativeButton={false} render={<Link href="/discover/flights" />}>Domestic flights</Button>
+                  <Button variant="link" onClick={resetAll}>Clear filters</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <p className="text-muted-foreground">No results found for your search.</p>
+                <Button variant="link" onClick={resetAll}>
+                  Clear filters
+                </Button>
+              </div>
+            )
           )}
         </div>
 
@@ -572,6 +562,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
           <div className="sticky top-20">
             <KenyaMap
               points={mapPoints}
+              labelMode
               className="h-[calc(100vh-7rem)]"
               hoveredId={hoveredId}
               onMarkerEnter={setHoveredId}
@@ -581,6 +572,36 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
           </div>
         </aside>
       </div>
+
+      {/* Floating map button — mobile only, sits above the bottom nav. */}
+      <button
+        type="button"
+        onClick={() => setMapOpen(true)}
+        className="fixed bottom-24 right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-lg transition-transform active:scale-95 lg:hidden"
+      >
+        <Map className="size-4" /> Map
+      </button>
+
+      {/* Full-screen mobile map. */}
+      {mapOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b px-4">
+            <p className="font-semibold">Map · {label}</p>
+            <Button variant="ghost" size="icon" aria-label="Close map" onClick={() => setMapOpen(false)}>
+              <X className="size-5" />
+            </Button>
+          </div>
+          <KenyaMap
+            points={mapPoints}
+            labelMode
+            className="min-h-0 flex-1 rounded-none border-0"
+            hoveredId={hoveredId}
+            onMarkerEnter={setHoveredId}
+            onMarkerLeave={() => setHoveredId(null)}
+            onMarkerSelect={handleMobileMarkerSelect}
+          />
+        </div>
+      )}
 
       <SignInButton mode="modal"><div ref={signInRef} style={{ display: 'none' }} /></SignInButton>
     </div>

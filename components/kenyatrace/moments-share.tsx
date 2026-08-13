@@ -4,29 +4,72 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { ChevronLeft, ChevronRight, MapPin, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
+
+type Media = { type: 'video' | 'image'; url: string }
+
+function mediaOf(m: { imageUrl: string | null; imageUrls?: string[]; videoUrls?: string[] }): Media[] {
+  const images = m.imageUrls?.length ? m.imageUrls : m.imageUrl ? [m.imageUrl] : []
+  const videos = m.videoUrls ?? []
+  const media: Media[] = [
+    ...videos.map(url => ({ type: 'video' as const, url })),
+    ...images.map(url => ({ type: 'image' as const, url })),
+  ]
+  return media.length ? media : [{ type: 'image', url: '/placeholder.jpg' }]
+}
+
+function MediaTile({ media, className }: { media: Media; className?: string }) {
+  if (media.type === 'video') {
+    return <video src={media.url} controls muted playsInline preload="metadata" className={cn('size-full object-cover', className)} />
+  }
+  return <Image src={media.url} fill className={cn('object-cover', className)} alt="" sizes="(max-width: 768px) 50vw, 33vw" />
+}
 
 export function MomentsShare({ tripId }: { tripId: string }) {
   const data = useQuery(api.moments.publicForTrip, { tripId: tripId as any })
-  const [lightbox, setLightbox] = useState<{ moment: number; image: number } | null>(null)
+  const [lightbox, setLightbox] = useState<{ moment: number; media: number } | null>(null)
+  const [copied, setCopied] = useState(false)
 
   if (data === undefined) return <div className="mx-auto max-w-6xl px-5 py-10"><div className="h-64 animate-pulse rounded-lg bg-secondary" /></div>
   if (!data) return <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary" /><h1 className="font-serif text-4xl">Trip not found</h1><p className="text-muted-foreground">This share link is not available.</p></div>
 
   const { trip, moments } = data
   const active = lightbox ? moments[lightbox.moment] : null
-  const activeImages = active?.imageUrls?.length ? active.imageUrls : active?.imageUrl ? [active.imageUrl] : []
-  const activeImageIndex = active ? Math.min(lightbox!.image, activeImages.length - 1) : 0
+  const activeMedia = active ? mediaOf(active) : []
+  const activeIndex = active ? Math.min(lightbox!.media, activeMedia.length - 1) : 0
+  const shareLink = typeof window !== 'undefined' ? `${window.location.origin}/moments/${tripId}` : ''
+  const shareText = `I just explored ${trip.destination} with KenyaTrace${trip.rating ? ` and rated it ${trip.rating}/5` : ''}. Plan your own trip: ${shareLink}`
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(shareLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error('Could not copy link')
+    }
+  }
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-10">
       <div className="overflow-hidden rounded-lg bg-primary px-6 py-10 text-primary-foreground md:px-10">
         <Badge className="bg-accent text-accent-foreground">Shared with you</Badge>
         <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight">{trip.name}</h1>
-        <p className="mt-2 opacity-80">{trip.destination} · {trip.startDate} → {trip.endDate}</p>
+        <p className="mt-2 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {trip.startDate} → {trip.endDate}</p>
+        {trip.rating ? (
+          <div className="mt-4 flex items-center gap-3">
+            <span className="flex gap-0.5">
+              {[1, 2, 3, 4, 5].map(n => <Star key={n} className={cn('size-5', n <= trip.rating! ? 'fill-amber-400 text-amber-400' : 'text-primary-foreground/30')} />)}
+            </span>
+            <span className="text-sm font-medium">{trip.rating}/5</span>
+          </div>
+        ) : null}
+        {trip.review ? <p className="mt-3 max-w-2xl italic opacity-90">“{trip.review}”</p> : null}
       </div>
 
       {moments.length === 0 ? (
@@ -36,34 +79,54 @@ export function MomentsShare({ tripId }: { tripId: string }) {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-          {moments.map((m, mi) => (
-            <div key={m._id} className="group relative aspect-square overflow-hidden rounded-lg">
-              <button className="block size-full" onClick={() => setLightbox({ moment: mi, image: 0 })} aria-label={`View moment: ${m.caption}`}>
-                <Image src={m.imageUrl || '/placeholder.jpg'} fill className="object-cover transition-transform duration-300 group-hover:scale-105" alt={m.caption} sizes="(max-width: 768px) 50vw, 33vw" />
-              </button>
-              {m.best && <Badge className="absolute left-2 top-2 bg-accent text-accent-foreground">Best moment</Badge>}
-              {m.location && <span className="absolute bottom-2 left-2 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white">{m.location}</span>}
-            </div>
-          ))}
+          {moments.map((m, mi) => {
+            const media = mediaOf(m)
+            return (
+              <div key={m._id} className="group relative aspect-square overflow-hidden rounded-lg">
+                <button className="block size-full" onClick={() => setLightbox({ moment: mi, media: 0 })} aria-label={`View moment: ${m.caption}`}>
+                  <MediaTile media={media[0]} className="transition-transform duration-300 group-hover:scale-105" />
+                </button>
+                {media.length > 1 && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{media.length} media</Badge>}
+                {m.best && <Badge className="absolute left-2 top-2 bg-accent text-accent-foreground">Best moment</Badge>}
+                {m.location && <span className="absolute bottom-2 left-2 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white">{m.location}</span>}
+              </div>
+            )
+          })}
         </div>
       )}
 
+      {/* Recommend KenyaTrace */}
+      <div className="rounded-lg border p-5">
+        <p className="flex items-center gap-2 font-semibold"><Share2 className="size-4 text-primary" /> Love this? Recommend KenyaTrace</p>
+        <p className="mt-1 text-sm text-muted-foreground">Share this trip — it works without an account.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant="outline" onClick={copy} className="gap-1.5">{copied ? <Star className="size-4 text-primary" /> : <Copy className="size-4" />}{copied ? 'Copied' : 'Copy link'}</Button>
+          <Button variant="outline" nativeButton={false} render={<a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><MessageCircle className="size-4" />WhatsApp</Button>
+          <Button variant="outline" nativeButton={false} render={<a href={`https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Send className="size-4" />Telegram</Button>
+          <Button variant="outline" nativeButton={false} render={<a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareLink)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Share2 className="size-4" />Post</Button>
+        </div>
+      </div>
+
       <Dialog open={!!active} onOpenChange={open => { if (!open) setLightbox(null) }}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="sm:max-w-3xl">
           {active && (
             <>
               <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-black/5">
-                <Image src={activeImages[activeImageIndex]} fill className="object-contain" alt={active.caption} sizes="(max-width: 768px) 100vw, 768px" />
-                {activeImages.length > 1 && (
+                {activeMedia[activeIndex].type === 'video' ? (
+                  <video src={activeMedia[activeIndex].url} controls autoPlay playsInline className="max-h-full w-full object-contain" />
+                ) : (
+                  <Image src={activeMedia[activeIndex].url} fill className="object-contain" alt={active.caption} sizes="(max-width: 768px) 100vw, 768px" />
+                )}
+                {activeMedia.length > 1 && (
                   <>
-                    <button aria-label="Previous photo" onClick={() => setLightbox({ moment: lightbox!.moment, image: activeImageIndex === 0 ? activeImages.length - 1 : activeImageIndex - 1 })} className="absolute left-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronLeft className="size-5" /></button>
-                    <button aria-label="Next photo" onClick={() => setLightbox({ moment: lightbox!.moment, image: (activeImageIndex + 1) % activeImages.length })} className="absolute right-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronRight className="size-5" /></button>
+                    <button aria-label="Previous media" onClick={() => setLightbox({ moment: lightbox!.moment, media: activeIndex === 0 ? activeMedia.length - 1 : activeIndex - 1 })} className="absolute left-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronLeft className="size-5" /></button>
+                    <button aria-label="Next media" onClick={() => setLightbox({ moment: lightbox!.moment, media: (activeIndex + 1) % activeMedia.length })} className="absolute right-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronRight className="size-5" /></button>
                   </>
                 )}
               </div>
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>{active.caption}</span>
-                <span>{new Date(active.createdAt).toLocaleDateString()}{active.location ? ` · ${active.location}` : ''}{activeImages.length > 1 ? ` · ${activeImageIndex + 1} / ${activeImages.length}` : ''}</span>
+                <span>{new Date(active.createdAt).toLocaleDateString()}{active.location ? ` · ${active.location}` : ''}{activeMedia.length > 1 ? ` · ${activeIndex + 1} / ${activeMedia.length}` : ''}</span>
               </div>
               <div className="flex justify-end">
                 <DialogClose render={<Button variant="ghost" size="sm" />}><X className="size-4" /> Close</DialogClose>

@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { Compass, Copy, CopyPlus, Plus, Trash2 } from 'lucide-react'
+import { Compass, Copy, CopyPlus, LogOut, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Progress } from '@/components/ui/progress'
 import { formatKES } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
-import { RequireAuth } from './shared'
+import { RequireSubscription } from './paywall'
 
 const STATUS_LABEL: Record<string, string> = {
   planning: 'Planning',
@@ -51,15 +51,17 @@ function countdown(trip: Trip) {
   return `Plan due — ${ago} day${ago === 1 ? '' : 's'} past start`
 }
 
-function TripCard({ trip, onDuplicate, onCopyLink, onDelete }: { trip: Trip; onDuplicate: (t: Trip) => void; onCopyLink: (t: Trip) => void; onDelete: (t: Trip) => void }) {
+function TripCard({ trip, onDuplicate, onCopyLink, onDelete, onLeave }: { trip: Trip; onDuplicate: (t: Trip) => void; onCopyLink: (t: Trip) => void; onDelete: (t: Trip) => void; onLeave: (t: Trip) => void }) {
   const spend = trip.budget > 0 ? Math.min((trip.totalCost / trip.budget) * 100, 100) : 0
+  const isOwner = trip.role === 'owner'
   return (
     <Card className="group overflow-hidden p-0 transition-colors hover:border-primary/40">
       <Link href={`/trips/${trip._id}`}>
         <div className="relative h-40 overflow-hidden">
           <Image src={trip.coverImage || '/kenya-hero.png'} fill className="object-cover transition-transform duration-300 group-hover:scale-[1.03]" alt="" sizes="(max-width: 768px) 100vw, 50vw" />
-          <div className="absolute left-3 top-3">
+          <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
             <Badge className={cn(trip.status === 'completed' && 'bg-card text-card-foreground')}>{STATUS_LABEL[trip.status] ?? trip.status}</Badge>
+            {!isOwner && <Badge className="bg-accent text-accent-foreground">Shared · {trip.role === 'editor' ? 'Editor' : 'Viewer'}</Badge>}
           </div>
           <div className="absolute right-3 top-3 rounded-md bg-card/90 px-2 py-1 text-xs font-semibold shadow-sm">{formatKES(trip.totalCost)}</div>
         </div>
@@ -93,9 +95,15 @@ function TripCard({ trip, onDuplicate, onCopyLink, onDelete }: { trip: Trip; onD
         <Button variant="outline" size="icon" aria-label="Copy trip link" onClick={() => onCopyLink(trip)}>
           <Copy className="size-4" />
         </Button>
-        <Button variant="outline" size="icon" aria-label="Delete trip" onClick={() => onDelete(trip)} className="hover:bg-destructive/10 hover:text-destructive">
-          <Trash2 className="size-4" />
-        </Button>
+        {isOwner ? (
+          <Button variant="outline" size="icon" aria-label="Delete trip" onClick={() => onDelete(trip)} className="hover:bg-destructive/10 hover:text-destructive">
+            <Trash2 className="size-4" />
+          </Button>
+        ) : (
+          <Button variant="outline" size="icon" aria-label="Leave shared trip" onClick={() => onLeave(trip)} className="hover:bg-destructive/10 hover:text-destructive">
+            <LogOut className="size-4" />
+          </Button>
+        )}
       </CardFooter>
     </Card>
   )
@@ -106,7 +114,8 @@ export function Trips({ compact = false }: { compact?: boolean }) {
   const trips = useQuery(api.trips.list)
   const duplicateMutation = useMutation(api.trips.duplicate)
   const removeMutation = useMutation(api.trips.remove)
-  const [confirmDelete, setConfirmDelete] = useState<Trip | null>(null)
+  const leaveMutation = useMutation(api.trips.leaveTrip)
+  const [confirmAction, setConfirmAction] = useState<{ trip: Trip; mode: 'delete' | 'leave' } | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   async function duplicate(trip: Trip) {
@@ -128,15 +137,20 @@ export function Trips({ compact = false }: { compact?: boolean }) {
     }
   }
 
-  async function confirmRemove() {
-    if (!confirmDelete) return
+  async function confirmActionRun() {
+    if (!confirmAction) return
     setDeleting(true)
     try {
-      await removeMutation({ id: confirmDelete._id })
-      toast.success('Trip deleted')
-      setConfirmDelete(null)
+      if (confirmAction.mode === 'delete') {
+        await removeMutation({ id: confirmAction.trip._id })
+        toast.success('Trip deleted')
+      } else {
+        await leaveMutation({ tripId: confirmAction.trip._id })
+        toast.success('You left the shared trip')
+      }
+      setConfirmAction(null)
     } catch {
-      toast.error('Could not delete this trip')
+      toast.error(confirmAction.mode === 'delete' ? 'Could not delete this trip' : 'Could not leave this trip')
     } finally {
       setDeleting(false)
     }
@@ -161,20 +175,28 @@ export function Trips({ compact = false }: { compact?: boolean }) {
   const planningTrips = trips.filter(t => t.status === 'planning')
   const mostUrgentPlanning = planningTrips.sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
 
-  const card = (trip: Trip) => <TripCard key={trip._id} trip={trip} onDuplicate={duplicate} onCopyLink={copyLink} onDelete={setConfirmDelete} />
+  // Collaborators ride the owner's subscription — never paywall a user who only
+  // has shared trips. Everyone else (new users, or owners) still goes through
+  // the gate so the trial/subscription wall behaves as before.
+  const hasOwned = trips.some(t => t.role === 'owner')
+  const gateEnabled = hasOwned || trips.length === 0
+
+  const card = (trip: Trip) => <TripCard key={trip._id} trip={trip} onDuplicate={duplicate} onCopyLink={copyLink} onDelete={t => setConfirmAction({ trip: t, mode: 'delete' })} onLeave={t => setConfirmAction({ trip: t, mode: 'leave' })} />
 
   const confirmDialog = (
-    <Dialog open={confirmDelete !== null} onOpenChange={open => { if (!open) setConfirmDelete(null) }}>
+    <Dialog open={confirmAction !== null} onOpenChange={open => { if (!open) setConfirmAction(null) }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete this trip?</DialogTitle>
+          <DialogTitle>{confirmAction?.mode === 'leave' ? 'Leave this shared trip?' : 'Delete this trip?'}</DialogTitle>
           <DialogDescription>
-            {confirmDelete ? `"${confirmDelete.name}" and its stops will be permanently removed. This can't be undone.` : 'This will permanently remove the trip.'}
+            {confirmAction?.mode === 'leave'
+              ? `You'll lose access to "${confirmAction.trip.name}". The owner can re-invite you any time.`
+              : confirmAction ? `"${confirmAction.trip.name}" and its stops will be permanently removed. This can't be undone.` : 'This will permanently remove the trip.'}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <Button variant="destructive" disabled={deleting} onClick={confirmRemove}>{deleting ? 'Deleting…' : 'Delete trip'}</Button>
+          <Button variant="destructive" disabled={deleting} onClick={confirmActionRun}>{deleting ? 'Working…' : confirmAction?.mode === 'leave' ? 'Leave trip' : 'Delete trip'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -186,7 +208,7 @@ export function Trips({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <RequireAuth>
+    <RequireSubscription enabled={gateEnabled}>
       <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-10">
         <div className="flex items-end justify-between">
           <div>
@@ -219,6 +241,6 @@ export function Trips({ compact = false }: { compact?: boolean }) {
         )}
         {confirmDialog}
       </div>
-    </RequireAuth>
+    </RequireSubscription>
   )
 }

@@ -14,13 +14,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatKES, wikimediaThumb } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
+import { PayNowButton } from './pay-now'
 
 /**
  * next/image wrapper for listing photos. Normalizes Wikimedia URLs to a fast,
  * valid 960px thumbnail and falls back to a local asset if the image fails to
  * load — so a listing card never renders blank or broken.
  */
-export function ListingImage({ src, alt, ...props }: React.ComponentProps<typeof Image>) {
+export function ListingImage({ src, alt, ...props }: Omit<React.ComponentProps<typeof Image>, 'src' | 'alt'> & { src: string; alt: string }) {
   const [failed, setFailed] = useState(false)
   useEffect(() => setFailed(false), [src])
   const effectiveSrc = failed ? '/kenya-hero.png' : wikimediaThumb(src)
@@ -80,7 +81,9 @@ export function RequireAuth({children}:{children:React.ReactNode}){const {isAuth
  * bookings tab and the trip detail Bookings tab.
  */
 export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; onCancel: (id: Id<'bookings'>) => void }) {
-  const listing = useQuery(api.listings.get, { id: booking.listingId as Id<'listings'> })
+  // Email-forwarded bookings have no marketplace listing (empty listingId) —
+  // skip the lookup so Convex doesn't reject the empty id.
+  const listing = useQuery(api.listings.get, booking.listingId ? { id: booking.listingId as Id<'listings'> } : 'skip')
   const item = listing
   return (
     <Card>
@@ -89,10 +92,16 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
           <p className="font-semibold">{item?.name || 'Reserved place'}</p>
           <p className="text-sm text-muted-foreground">{booking.reference} · {item ? `${item.location} · ` : ''}{booking.checkIn ? `${booking.checkIn} → ${booking.checkOut}` : ''}{booking.guests ? ` · ${booking.guests} guest${booking.guests === 1 ? '' : 's'}` : ''}</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <strong>{formatKES(booking.amount)}</strong>
-          <Badge className={cn(booking.status === 'cancelled' && 'bg-card text-card-foreground')}>{booking.status}</Badge>
-          {booking.status !== 'cancelled' && <Button variant="outline" size="sm" onClick={() => onCancel(booking._id)}>Cancel</Button>}
+          <Badge className={cn(
+            booking.status === 'cancelled' && 'bg-card text-card-foreground',
+            booking.status === 'paid' && 'bg-emerald-600 text-white',
+          )}>
+            {booking.status === 'paid' ? 'Paid' : booking.status}
+          </Badge>
+          {booking.status === 'requested' && booking.amount > 0 && <PayNowButton booking={booking} />}
+          {booking.status !== 'cancelled' && booking.status !== 'paid' && <Button variant="outline" size="sm" onClick={() => onCancel(booking._id)}>Cancel</Button>}
         </div>
       </CardContent>
     </Card>
@@ -100,6 +109,52 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
 }
 
 export function Stat({label,value}:{label:string;value:number}){return <Card><CardHeader><CardDescription>{label}</CardDescription><CardTitle className="text-3xl">{value}</CardTitle></CardHeader></Card>}
+
+const KIND_COLORS: Record<string, string> = { Stay: '#0b6e4f', Transport: '#e8a317', Experience: '#2563eb', Food: '#8b5cf6' }
+
+/**
+ * Compact trip-cost card: total vs budget progress bar, plus a stacked
+ * breakdown by spend category. Reused on the plan journey and trip detail.
+ */
+export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost: number; kind: string }[]; budget: number; perDay?: number; className?: string }) {
+  const total = stops.reduce((s, x) => s + x.cost, 0)
+  const pct = Math.min(100, Math.round((total / Math.max(budget, 1)) * 100))
+  const over = total > budget
+  const kinds = (['Stay', 'Transport', 'Experience', 'Food'] as const)
+    .map(kind => ({ kind, total: stops.filter(s => s.kind === kind).reduce((a, s) => a + s.cost, 0) }))
+    .filter(k => k.total > 0)
+  return (
+    <div className={cn('rounded-lg border p-4', className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <span className="font-medium">Trip cost</span>
+        <span className="font-semibold">
+          {formatKES(total)}
+          <span className="text-muted-foreground"> of {formatKES(budget)}</span>
+          {over && <span className="ml-2 text-xs font-semibold text-destructive">over budget</span>}
+        </span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary">
+        <div className={cn('h-full rounded-full transition-all', over ? 'bg-destructive' : 'bg-primary')} style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{pct}% of your budget used{perDay != null ? ` · ≈ ${formatKES(perDay)} per day` : ''}</p>
+      {kinds.length > 0 && (
+        <div className="mt-3 border-t pt-3">
+          <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
+            {kinds.map(k => <div key={k.kind} style={{ width: `${(k.total / Math.max(total, 1)) * 100}%`, backgroundColor: KIND_COLORS[k.kind] }} />)}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {kinds.map(k => (
+              <span key={k.kind} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="size-2.5 rounded-full" style={{ backgroundColor: KIND_COLORS[k.kind] }} />
+                {k.kind} · {formatKES(k.total)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function Empty({title,text,action}:{title:string;text:string;action?:()=>void}){return <div className="col-span-full flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center"><Compass className="size-8 text-primary"/><h2 className="mt-4 font-serif text-2xl">{title}</h2><p className="mt-2 max-w-md text-muted-foreground">{text}</p>{action&&<Button className="mt-4" variant="outline" onClick={action}>Clear filters</Button>}</div>}
 

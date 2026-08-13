@@ -17,7 +17,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { KenyaMap } from './kenya-map'
 import { MomentAlbum } from './moment-album'
-import { ListingImage, RequireAuth } from './shared'
+import { ListingImage } from './shared'
+import { RequireSubscription } from './paywall'
 
 function fileToDataUrl(file: File, maxSize = 1100): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -69,8 +70,8 @@ export function Moments() {
   const tripStops = selectedTrip?.stops ?? []
 
   async function suggest() {
-    if (!files.length) {
-      toast.error('Add a photo first')
+    if (!files.length || files[0].type.startsWith('video/')) {
+      toast.error('Add a photo first to suggest a caption')
       return
     }
     setSuggesting(true)
@@ -100,12 +101,14 @@ export function Moments() {
     }
     try {
       const storageIds: Id<'_storage'>[] = []
+      const videoIds: Id<'_storage'>[] = []
       for (const file of files) {
         const url = await uploadUrl()
         const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': file.type }, body: file })
         const json = await response.json()
         if (!json.storageId) throw new Error('Upload failed')
-        storageIds.push(json.storageId)
+        if (file.type.startsWith('video/')) videoIds.push(json.storageId)
+        else storageIds.push(json.storageId)
       }
       // If the moment is pinned to a trip stop, use the stop's coordinates;
       // otherwise fall back to the device location.
@@ -113,7 +116,7 @@ export function Moments() {
       const coords = stop?.lat && stop?.lng
         ? { lat: stop.lat, lng: stop.lng }
         : await getCoords()
-      await create({ tripId: selected, caption: caption.trim(), location: location.trim() || stop?.place || undefined, stopName: stop?.name, storageIds, public: false, lat: coords?.lat, lng: coords?.lng })
+      await create({ tripId: selected, caption: caption.trim(), location: location.trim() || stop?.place || undefined, stopName: stop?.name, storageIds: storageIds.length ? storageIds : undefined, videoStorageIds: videoIds.length ? videoIds : undefined, public: false, lat: coords?.lat, lng: coords?.lng })
       setFiles([])
       setCaption('')
       setLocation('')
@@ -134,7 +137,7 @@ export function Moments() {
   }, {})
 
   return (
-    <RequireAuth>
+    <RequireSubscription>
       <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -207,9 +210,9 @@ export function Moments() {
             <DialogHeader><DialogTitle>Add a moment</DialogTitle><DialogDescription>Photos, a caption, and optionally a location — kept private until you share them.</DialogDescription></DialogHeader>
             <FieldGroup>
               <Field>
-                <FieldLabel>Photos</FieldLabel>
-                <Input type="file" accept="image/*" multiple onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 6))} />
-                {files.length > 0 && <p className="mt-1 text-xs text-muted-foreground">{files.length} photo{files.length === 1 ? '' : 's'} selected (up to 6)</p>}
+                <FieldLabel>Photos & videos</FieldLabel>
+                <Input type="file" accept="image/*,video/*" multiple onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 6))} />
+                {files.length > 0 && <p className="mt-1 text-xs text-muted-foreground">{files.length} file{files.length === 1 ? '' : 's'} selected (up to 6)</p>}
               </Field>
               <Field>
                 <FieldLabel>Caption</FieldLabel>
@@ -218,7 +221,7 @@ export function Moments() {
               {tripStops.length > 0 && (
                 <Field>
                   <FieldLabel>Pin to itinerary stop</FieldLabel>
-                  <Select value={stopId} onValueChange={setStopId}>
+                  <Select value={stopId} onValueChange={v => setStopId(v ?? '')}>
                     <SelectTrigger><SelectValue placeholder="Not pinned to a stop" /></SelectTrigger>
                     <SelectContent>
                       {tripStops.map(s => <SelectItem key={s._id} value={s._id}>{`Day ${s.day} · ${s.name}`}</SelectItem>)}
@@ -240,6 +243,6 @@ export function Moments() {
           </DialogContent>
         </Dialog>
       </div>
-    </RequireAuth>
+    </RequireSubscription>
   )
 }

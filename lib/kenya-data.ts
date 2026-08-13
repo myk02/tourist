@@ -33,7 +33,12 @@ export const itinerary = [
   { day: 3, time: "06:00", title: "Sunrise over the savannah", place: "Mara River", cost: 4800, kind: "Experience" },
 ]
 
-export function formatKES(value: number) { return new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(value) }
+// Canonical KES formatter. The currency symbol prefix is pinned (en-KE's ICU
+// renders "Ksh" with locale-dependent spacing, which drifts between runtimes);
+// only the numeric portion uses the locale so grouping stays correct.
+export function formatKES(value: number) {
+  return `KSh ${new Intl.NumberFormat("en-KE", { maximumFractionDigits: 0 }).format(value)}`
+}
 
 /**
  * Normalizes any upload.wikimedia.org URL to a valid thumbnail URL.

@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -24,7 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Car, Clock, GripVertical, List, Lock, LockOpen, Map as MapIcon, Pencil, Plus, RefreshCw, Search, Utensils, Wallet, X } from 'lucide-react'
+import { Car, Clock, GripVertical, List, Lock, LockOpen, Map as MapIcon, Pencil, Plus, RefreshCw, Route, Search, Utensils, Wallet, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatKES } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
@@ -63,11 +63,12 @@ function kindFromVertical(vertical: string) {
   return 'Experience'
 }
 
-function SortableStopRow({ stop, position, active, editing, onEditingChange, onUpdate, onRemove }: {
+function SortableStopRow({ stop, position, active, editing, readOnly, onEditingChange, onUpdate, onRemove }: {
   stop: Stop
   position: number
   active?: boolean
   editing: boolean
+  readOnly?: boolean
   onEditingChange: (editing: boolean) => void
   onUpdate: (patch: Partial<Stop>) => void
   onRemove: () => void
@@ -79,14 +80,16 @@ function SortableStopRow({ stop, position, active, editing, onEditingChange, onU
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn('flex items-center gap-3 rounded-md border bg-card p-3 transition-colors', isDragging && 'z-10 opacity-80 shadow-lg', active && 'border-primary ring-2 ring-primary/20')}
     >
-      <button
-        {...attributes}
-        {...listeners}
-        aria-label="Drag to reorder"
-        className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
-      >
-        <GripVertical className="size-4" />
-      </button>
+      {!readOnly && (
+        <button
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+          className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
+        >
+          <GripVertical className="size-4" />
+        </button>
+      )}
       <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-xs font-bold text-primary">{stop.time}</span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -133,17 +136,19 @@ function SortableStopRow({ stop, position, active, editing, onEditingChange, onU
           </>
         )}
       </div>
-      <div className="flex items-center gap-0.5">
-        <Button size="icon" variant="ghost" className="size-8" aria-label={stop.locked ? 'Unlock this stop' : 'Lock this stop'} onClick={() => onUpdate({ locked: !stop.locked })}>
-          {stop.locked ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
-        </Button>
-        <Button size="icon" variant="ghost" className="size-8" aria-label="Edit time and cost" onClick={() => onEditingChange(!editing)}>
-          {editing ? <X className="size-4" /> : <Pencil className="size-4" />}
-        </Button>
-        <Button size="icon" variant="ghost" className="size-8 text-destructive" aria-label={`Remove ${stop.title}`} onClick={onRemove}>
-          <X className="size-4" />
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-0.5">
+          <Button size="icon" variant="ghost" className="size-8" aria-label={stop.locked ? 'Unlock this stop' : 'Lock this stop'} onClick={() => onUpdate({ locked: !stop.locked })}>
+            {stop.locked ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+          </Button>
+          <Button size="icon" variant="ghost" className="size-8" aria-label="Edit time and cost" onClick={() => onEditingChange(!editing)}>
+            {editing ? <X className="size-4" /> : <Pencil className="size-4" />}
+          </Button>
+          <Button size="icon" variant="ghost" className="size-8 text-destructive" aria-label={`Remove ${stop.title}`} onClick={onRemove}>
+            <X className="size-4" />
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -166,17 +171,18 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
   initial?: Stop[]
   budget?: number
   title?: string
-  storageKey?: string
   defaultMobileView?: 'list' | 'map'
   onSave?: (stops: Stop[]) => void
   onReplanDay?: (day: number, stops: Stop[]) => Promise<Stop[]>
-}>(function ItineraryEditor({ initial = [], budget = 80000, title = 'Kenya Highlights', storageKey, defaultMobileView = 'list', onSave, onReplanDay }, ref) {
-  // Initialize from the prop only — reading sessionStorage here would make the
+  onChange?: (stops: Stop[]) => void
+  readOnly?: boolean
+}>(function ItineraryEditor({ initial = [], budget = 80000, title = 'Kenya Highlights', defaultMobileView = 'list', onSave, onReplanDay, onChange, readOnly = false }, ref) {
+  // Initialize from the prop only — reading storage here would make the
   // client's first render differ from the server's (SSR hydration mismatch).
   const [stops, setStops] = useState<Stop[]>(initial)
-  // Set once the saved draft has been restored (or confirmed absent), so the
-  // write-back effect never clobbers it on first render.
-  const [hydrated, setHydrated] = useState(false)
+  // True once the component has mounted, so `onChange` is only surfaced to the
+  // parent after the first paint (avoids a setState-during-render warning).
+  const [mounted, setMounted] = useState(false)
   const [activeDay, setActiveDay] = useState<string>('all')
   // Editing is keyed by the row's stable sortable id (title + position within
   // the day), not a raw index, so deleting a row can't point edits at the
@@ -197,21 +203,18 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
 
   const results = useQuery(api.listings.searchAll, { term: addTerm || undefined })
 
-  // Restore a previously-saved draft after mount, so SSR HTML and the client's
-  // first paint agree (same empty/initial state), then swap in the draft.
+  // Surface every change to the parent (e.g. the journey's draft), but only
+  // after the component has mounted so the first onChange doesn't fire during
+  // the initial render.
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
   useEffect(() => {
-    if (!storageKey) return
-    try {
-      const saved = sessionStorage.getItem(storageKey)
-      if (saved) setStops(JSON.parse(saved) as Stop[])
-    } catch { /* ignore corrupt draft */ }
-    setHydrated(true)
-  }, [storageKey])
-
+    setMounted(true)
+  }, [])
   useEffect(() => {
-    if (!storageKey || !hydrated) return
-    try { sessionStorage.setItem(storageKey, JSON.stringify(stops)) } catch { /* ignore */ }
-  }, [storageKey, hydrated, stops])
+    if (!mounted) return
+    onChangeRef.current?.(stops)
+  }, [mounted, stops])
 
   const total = stops.reduce((s, x) => s + x.cost, 0)
   const days = useMemo(() => {
@@ -302,6 +305,45 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     })
   }
 
+  /**
+   * Reorders stops within each day by a greedy nearest-neighbour walk over
+   * their coordinates, cutting backtracking between consecutive stops while
+   * keeping every day's route and day boundaries intact.
+   */
+  function optimizeRoute() {
+    if (stops.length < 2) return
+    setStops(prev => {
+      const byDay = new Map<number, Stop[]>()
+      for (const s of prev) {
+        const arr = byDay.get(s.day) ?? []
+        arr.push(s)
+        byDay.set(s.day, arr)
+      }
+      const result: Stop[] = []
+      for (const [day, dayStops] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
+        const withCoords = dayStops.filter(s => s.lat && s.lng)
+        const withoutCoords = dayStops.filter(s => !s.lat || !s.lng)
+        const ordered: Stop[] = []
+        const remaining = [...withCoords]
+        while (remaining.length) {
+          if (ordered.length === 0) { ordered.push(remaining.shift()!); continue }
+          const last = ordered[ordered.length - 1]
+          let best = 0
+          let bestDist = Infinity
+          for (let i = 0; i < remaining.length; i++) {
+            const d = distanceKm(last.lat!, last.lng!, remaining[i].lat!, remaining[i].lng!)
+            if (d < bestDist) { bestDist = d; best = i }
+          }
+          ordered.push(remaining.splice(best, 1)[0])
+        }
+        result.push(...ordered, ...withoutCoords)
+        void day
+      }
+      return result
+    })
+    toast.success('Route optimized — shortest path per day')
+  }
+
   function handleDragEnd(day: number, event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -388,6 +430,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
                   position={i}
                   active={hoveredStop === `${stop.title}-${i}`}
                   editing={editingKey === `${stop.title}-${i}`}
+                  readOnly={readOnly}
                   onEditingChange={editing => setEditingKey(editing ? `${stop.title}-${i}` : null)}
                   onUpdate={patch => patchStop(day, i, patch)}
                   onRemove={() => removeStop(day, i)}
@@ -407,9 +450,18 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
           <p className="text-xs font-semibold uppercase tracking-widest text-primary">{days.length}-day route</p>
           <h2 className="mt-2 font-serif text-3xl font-semibold tracking-tight">{title}</h2>
         </div>
-        <Badge variant={total > budget ? 'destructive' : 'secondary'}>
-          {total > budget ? `${formatKES(total - budget)} over` : `${formatKES(budget - total)} remaining`}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          {!readOnly && (
+            <Button variant="outline" size="sm" className="gap-1.5" disabled={stops.length < 2} onClick={optimizeRoute} title="Reorder stops in each day to minimize backtracking">
+              <Route className="size-3.5" />
+              Optimize route
+            </Button>
+          )}
+          <Badge variant={total > budget ? 'destructive' : 'secondary'}>
+            {total > budget ? `${formatKES(total - budget)} over` : `${formatKES(budget - total)} remaining`}
+          </Badge>
+          {readOnly && <Badge variant="outline" className="border-primary/40 text-primary">View-only</Badge>}
+        </div>
       </div>
 
       <Tabs value={activeDay} onValueChange={v => { setActiveDay(v); setHoveredStop(null) }}>
@@ -419,10 +471,15 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
             {days.map(([day]) => <TabsTrigger key={day} value={String(day)}>Day {day}</TabsTrigger>)}
           </TabsList>
           {onReplanDay && activeDay !== 'all' && (
-            <Button variant="outline" size="sm" className="gap-1.5" disabled={replanningDay !== null} onClick={() => replanDay(parseInt(activeDay, 10))}>
-              <RefreshCw className={cn('size-3.5', replanningDay === parseInt(activeDay, 10) && 'animate-spin')} />
-              Re-plan this day
-            </Button>
+            <>
+              <Button variant="outline" size="sm" className="gap-1.5" disabled={replanningDay !== null} onClick={() => replanDay(parseInt(activeDay, 10))}>
+                <RefreshCw className={cn('size-3.5', replanningDay === parseInt(activeDay, 10) && 'animate-spin')} />
+                Re-plan this day
+              </Button>
+              <p className="w-full text-xs text-muted-foreground md:w-auto">
+                Lock any stops you want to keep — re-planning replaces only the unlocked ones.
+              </p>
+            </>
           )}
         </div>
         <div className="mt-3 flex w-fit items-center gap-1 rounded-lg border p-1 lg:hidden">
@@ -518,7 +575,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
         </CardContent>
       </Card>
 
-      <Card>
+      {!readOnly && <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><Search className="size-4" /> Add a stop</CardTitle>
         </CardHeader>
@@ -548,9 +605,9 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
-      {onSave && (
+      {onSave && !readOnly && (
         <Button size="lg" disabled={!stops.length} onClick={() => onSave(stops)}>Save this trip</Button>
       )}
     </div>

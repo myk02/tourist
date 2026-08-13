@@ -1,25 +1,11 @@
 'use client'
 
-import Image from 'next/image'
-import Link from 'next/link'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useQuery } from 'convex/react'
-import { api } from '@/convex/_generated/api'
-import { ChevronRight, MapPin, Search, Sparkles, Star } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { categories, formatKES, type Listing, type Vertical } from '@/lib/kenya-data'
-import { ListingImage, SourceBadge, sourceToFilter } from './shared'
+import { GuidedJourney } from './guided-journey'
 
-export function Home(){const items=useQuery(api.listings.list,{});return <><section className="relative min-h-[560px] overflow-hidden"><Image src="/kenya-hero.png" fill priority className="object-cover" alt="Safari landscape in the Maasai Mara"/><div className="absolute inset-0 bg-gradient-to-b from-foreground/55 via-foreground/40 to-foreground/70"/><div className="relative mx-auto flex max-w-6xl flex-col gap-8 px-5 py-20 text-primary-foreground md:py-28"><Badge className="w-fit bg-accent text-accent-foreground uppercase tracking-wider">Travel Kenya with confidence</Badge><div className="max-w-3xl"><h1 className="font-serif text-4xl font-semibold leading-tight text-balance tracking-tight md:text-6xl">Your whole Kenya trip, in one trace.</h1><p className="mt-4 max-w-xl text-lg leading-relaxed text-primary-foreground/85">Discover trusted places, build a practical route and keep every memory together.</p></div><div className="max-w-3xl"><SearchPanel/></div></div></section><section className="mx-auto flex max-w-6xl flex-col gap-12 px-5 py-16"><div className="grid gap-5 md:grid-cols-2"><EntryCard href="/discover/stays" icon={Search} title="Explore Kenya" text="Compare stays, routes and experiences with a real map of every place."/><EntryCard href="/plan" icon={Sparkles} title="Plan a whole trip" text="Turn your budget, dates and travel style into a practical day-by-day route."/></div><Rail title="Places worth the detour" items={(items||[]).slice(0,3)}/></section></>}
-
-export function EntryCard({href,icon:Icon,title,text}:{href:string;icon:typeof Search;title:string;text:string}){return <Card className="group transition-colors hover:border-primary/40"><CardHeader><span className="flex size-11 items-center justify-center rounded-md bg-secondary text-primary"><Icon/></span><CardTitle className="font-serif text-2xl tracking-tight">{title}</CardTitle><CardDescription>{text}</CardDescription></CardHeader><CardFooter><Button variant="link" nativeButton={false} render={<Link href={href}/>}>Explore <ChevronRight data-icon="inline-end"/></Button></CardFooter></Card>}
-
-function Rail({title,items}:{title:string;items:Listing[]}){return <div className="flex flex-col gap-5"><div><p className="text-xs font-semibold uppercase tracking-widest text-primary">Handpicked in Kenya</p><h2 className="mt-2 font-serif text-3xl font-semibold tracking-tight">{title}</h2></div><div className="grid gap-5 md:grid-cols-3">{items.map(item=><ListingCard key={item._id} item={item}/>)}</div></div>}
-
-function ListingCard({item}:{item:Listing}){const router=useRouter();const filter=sourceToFilter(item.source);return <Card className="group overflow-hidden p-0"><div className="relative aspect-[4/3] overflow-hidden"><Link href={`/discover/${item.vertical}/${item._id}`}><ListingImage src={item.image} fill className="object-cover transition-transform duration-300 group-hover:scale-[1.03]" alt={item.name}/><Badge className="absolute left-3 top-3 bg-card text-card-foreground">{item.tags[0]}</Badge></Link>{filter&&<SourceBadge source={item.source} className="absolute bottom-3 left-3" onClick={()=>router.push(`/discover/${item.vertical}?source=${filter}`)}/>}</div><Link href={`/discover/${item.vertical}/${item._id}`}><CardHeader className="gap-2 p-4"><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-lg">{item.name}</CardTitle><CardDescription>{item.location}</CardDescription></div><span className="flex items-center gap-1 text-sm font-semibold"><Star className="size-4 fill-accent text-accent"/>{item.rating}</span></div><div><span className="font-semibold">{formatKES(item.price)}</span><span className="text-sm text-muted-foreground"> / {item.unit}</span></div></CardHeader></Link></Card>}
-
-export function SearchPanel({compact=false}:{compact?:boolean}){const router=useRouter();const [category,setCategory]=useState<Vertical>('stays');const [where,setWhere]=useState('');const counts=useQuery(api.listings.countByVertical);return <Card className={compact?'border-border':'border-border'}><CardContent className="flex flex-col gap-4 p-4 md:p-5"><div className="flex gap-1 overflow-x-auto">{categories.map(c=><Button key={c.id} variant={category===c.id?'default':'ghost'} size="sm" onClick={()=>setCategory(c.id)} className="gap-1.5">{c.label}{counts?.[c.id]?<span className="text-xs opacity-60">({counts[c.id]})</span>:null}</Button>)}</div><div className="flex flex-col gap-3 md:flex-row"><div className="relative flex-1"><MapPin className="absolute left-3 top-3.5 size-4 text-muted-foreground"/><Input className="h-11 pl-10" aria-label="Destination" placeholder="Mara, Diani, Naivasha…" value={where} onChange={e=>setWhere(e.target.value)}/></div><Button className="h-11" onClick={()=>router.push(`/discover/${category}?q=${encodeURIComponent(where)}`)}><Search data-icon="inline-start"/>Search Kenya</Button></div></CardContent></Card>}
+/**
+ * The home page IS the journey: location → budget → plan & how to get there
+ * → live tracking → share & rate → session complete.
+ */
+export function Home() {
+  return <GuidedJourney />
+}

@@ -1,110 +1,107 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { MapPin, Navigation, Square } from 'lucide-react'
+import { Compass, MapPin, Navigation, Share2, Square } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { geocodeArea } from '@/lib/geocode'
 import { KenyaMap } from './kenya-map'
-import { RequireAuth, useTripId } from './shared'
-
-function metersBetween(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const R = 6371000
-  const dLat = (lat2 - lat1) * (Math.PI / 180)
-  const dLng = (lng2 - lng1) * (Math.PI / 180)
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLng / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(a))
-}
+import { useTripId } from './shared'
+import { useTracking } from './tracking-provider'
+import { RequireSubscription } from './paywall'
 
 export function Track() {
   const id = useTripId()
+  const router = useRouter()
   const trip = useQuery(api.trips.getWithStops, { id })
   const me = useQuery(api.users.me)
   const recorded = useQuery(api.positions.forTrip, { tripId: id })
-  const record = useMutation(api.positions.record)
   const setConsent = useMutation(api.users.setTrackingConsent)
+  const { session, start, stop } = useTracking()
 
-  const watchId = useRef<number | null>(null)
-  const lastRecordedRef = useRef<{ lat: number; lng: number; at: number } | null>(null)
-  const [tracking, setTracking] = useState(false)
-  const [livePath, setLivePath] = useState<[number, number][]>([])
-  const [lastPoint, setLastPoint] = useState<{ lat: number; lng: number; accuracy: number } | null>(null)
-
-  // Stop the geolocation watch when leaving the page — otherwise it keeps
-  // recording the traveller's location in the background forever.
-  useEffect(() => () => {
-    if (watchId.current !== null) {
-      navigator.geolocation.clearWatch(watchId.current)
-      watchId.current = null
-    }
-  }, [])
-
-  const consent = me?.trackingConsent === true
-
-  const route = trip?.stops.filter(s => s.lat && s.lng).map(s => [s.lng!, s.lat!] as [number, number]) || []
-  const mapPoints = trip?.stops.filter(s => s.lat && s.lng).map(s => ({ id: s._id, name: s.name, location: s.place, lat: s.lat!, lng: s.lng! })) || []
-  const recordedPath = recorded?.map(p => [p.lng, p.lat] as [number, number]) || []
-  const livePoints = lastPoint ? [{ id: 'live', name: 'You are here', location: `Live · ±${Math.round(lastPoint.accuracy)} m`, lat: lastPoint.lat, lng: lastPoint.lng }] : []
-  const paths = [
-    ...(recordedPath.length >= 2 ? [recordedPath] : []),
-    ...(livePath.length >= 2 ? [livePath] : []),
-  ]
-
-  function stop() {
-    if (watchId.current !== null) {
-      navigator.geolocation.clearWatch(watchId.current)
-      watchId.current = null
-    }
-    setTracking(false)
-    toast.success('Tracking stopped')
-  }
-
-  function start() {
-    if (!navigator.geolocation) {
-      toast.error('Location is not supported')
+  // Resolve the saved origin label to coordinates so the map can show the
+  // trip's starting point (lat 0 is the equator — null-check, not truthiness).
+  const [originPoint, setOriginPoint] = useState<{ id: string; name: string; location: string; lat: number; lng: number } | null>(null)
+  useEffect(() => {
+    const originLabel = trip?.origin
+    if (!originLabel || originLabel.trim().length < 2) {
+      setOriginPoint(null)
       return
     }
-    if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current)
-    setLivePath([])
-    setLastPoint(null)
-    lastRecordedRef.current = null
-    watchId.current = navigator.geolocation.watchPosition(
-      async position => {
-        const p = { lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy }
-        setLastPoint(p)
-        setLivePath(prev => (prev.length && prev[prev.length - 1][0] === p.lng && prev[prev.length - 1][1] === p.lat ? prev : [...prev, [p.lng, p.lat]]))
-        // Only persist a point when it actually moved, and at most once per
-        // 5s — the browser can fire updates much faster than that.
-        const last = lastRecordedRef.current
-        const now = Date.now()
-        const movedEnough = !last || metersBetween(last.lat, last.lng, p.lat, p.lng) > 30
-        const beenAWhile = !last || now - last.at > 5000
-        if (movedEnough && beenAWhile) {
-          lastRecordedRef.current = { lat: p.lat, lng: p.lng, at: now }
-          try {
-            await record({ tripId: id, lat: p.lat, lng: p.lng, accuracy: p.accuracy })
-          } catch {
-            // transient write failures shouldn't stop the trace
-          }
-        }
-      },
-      () => toast.error('Could not access location'),
-      { enableHighAccuracy: true, maximumAge: 1500, timeout: 20000 }
-    )
-    setTracking(true)
+    let cancelled = false
+    geocodeArea(originLabel).then(coords => {
+      if (cancelled || !coords) return
+      setOriginPoint({ id: 'origin', name: originLabel, location: 'Starting point', lat: coords.lat, lng: coords.lng })
+    })
+    return () => { cancelled = true }
+  }, [trip?.origin])
+
+  const route = useMemo(() => (trip?.stops ?? []).filter(s => s.lat != null && s.lng != null).map(s => [s.lng!, s.lat!] as [number, number]), [trip])
+  const mapPoints = useMemo(() => (trip?.stops ?? []).filter(s => s.lat != null && s.lng != null).map(s => ({ id: s._id, name: s.name, location: s.place, lat: s.lat!, lng: s.lng! })), [trip])
+  const trackPoints = useMemo(() => [...(originPoint ? [originPoint] : []), ...mapPoints], [originPoint, mapPoints])
+  const trackHighlight = useMemo(() => (originPoint ? ['origin'] : []), [originPoint])
+  const trackDestIds = useMemo(() => (mapPoints.length ? [mapPoints[mapPoints.length - 1].id] : []), [mapPoints])
+
+  const consent = me?.trackingConsent === true
+  const active = session && session.tripId === id ? session : null
+  const tracking = active?.status === 'tracking'
+  const arrived = active?.status === 'arrived'
+
+  const destinationStop = trip?.stops.filter(s => s.lat != null && s.lng != null).slice(-1)[0]
+  const dest = destinationStop ? { name: destinationStop.name, lat: destinationStop.lat!, lng: destinationStop.lng! } : null
+
+  const recordedPath = useMemo(() => recorded?.map(p => [p.lng, p.lat] as [number, number]) || [], [recorded])
+  // The DB trail already includes every point persisted during the current
+  // session (record() writes as we move), so appending the full session path
+  // would redraw the whole route and "jump back" to session start. Draw the
+  // persisted trail plus just the latest live fix as a short tail.
+  const trace = useMemo(() => {
+    const hasDb = recordedPath.length >= 2
+    if (!active) return hasDb ? recordedPath : []
+    if (!hasDb) return active.path.length >= 2 ? active.path : []
+    const live = active.lastPoint ? [[active.lastPoint.lng, active.lastPoint.lat] as [number, number]] : []
+    return [...recordedPath, ...live]
+  }, [recordedPath, active])
+
+  function handleStart() {
+    if (!dest) { toast.error('This trip has no destination coordinates'); return }
+    start({
+      tripId: id,
+      tripName: trip?.name ?? 'Trip',
+      destinationName: trip?.destination || dest.name,
+      destLat: dest.lat,
+      destLng: dest.lng,
+      originLabel: trip?.origin,
+    })
     toast.success('Live tracking started')
+  }
+
+  function handleStop() {
+    stop()
+    toast.success('Tracking stopped')
   }
 
   if (trip === undefined || me === undefined) return <div className="min-h-screen animate-pulse bg-secondary" />
   if (!trip) return null
 
   return (
-    <RequireAuth>
+    <RequireSubscription>
       <div className="relative min-h-[calc(100vh-4rem)]">
-        <KenyaMap points={[...mapPoints, ...livePoints]} route={route} paths={paths} className="h-[calc(100vh-4rem)] rounded-none" />
+        <KenyaMap
+          points={trackPoints}
+          highlight={trackHighlight}
+          destIds={trackDestIds}
+          route={route}
+          live={active?.lastPoint ?? null}
+          livePath={trace.length >= 2 ? trace : undefined}
+          followLive={tracking}
+          className="h-[calc(100vh-4rem)] rounded-none"
+        />
         <Card className="absolute bottom-6 left-1/2 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2">
           <CardContent className="p-4">
             {!consent ? (
@@ -121,27 +118,53 @@ export function Track() {
                   <Switch checked={false} onCheckedChange={() => setConsent({ consent: true }).catch(() => toast.error('Could not update location consent'))} />
                 </label>
               </div>
+            ) : arrived ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-4">
+                  <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white"><Navigation /></span>
+                  <div className="flex-1">
+                    <p className="font-semibold">You&apos;ve arrived at {trip.destination}</p>
+                    <p className="text-sm text-muted-foreground">Live tracking detected your arrival — 100% of the way there.</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" className="gap-2" nativeButton={false} render={<a href={`/moments?trip=${id}`} />}><Share2 className="size-4" />Share your experience (optional)</Button>
+                  <Button variant="outline" nativeButton={false} render={<a href={`/trips/${id}`} />}>View trip</Button>
+                  <Button variant="ghost" className="gap-2" onClick={() => router.push('/')}><Compass className="size-4" />Back to discover</Button>
+                </div>
+              </div>
+            ) : active ? (
+              <div className="flex items-center gap-4">
+                <span className="flex size-12 shrink-0 animate-pulse items-center justify-center rounded-md bg-red-500 text-white"><Square className="size-4" /></span>
+                <div className="flex-1">
+                  <p className="font-semibold">Live tracking in progress</p>
+                  <p className="text-sm text-muted-foreground">
+                    {active.distanceKm != null
+                      ? `${active.distanceKm.toFixed(1)} km to ${trip.destination} · ${active.path.length} point${active.path.length === 1 ? '' : 's'} recorded`
+                      : `${active.path.length} point${active.path.length === 1 ? '' : 's'} recorded`}
+                  </p>
+                  <div className="mt-2 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-secondary">
+                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${active.progressPct}%` }} />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{active.progressPct}% of the way there</p>
+                </div>
+                <Button variant="destructive" onClick={handleStop}>End</Button>
+              </div>
             ) : (
               <div className="flex items-center gap-4">
-                <span className={`flex size-12 shrink-0 items-center justify-center rounded-md text-white ${tracking ? 'animate-pulse bg-red-500' : 'bg-primary'}`}>
-                  {tracking ? <Square className="size-4" /> : <Navigation />}
-                </span>
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-primary text-white"><Navigation /></span>
                 <div className="flex-1">
-                  <p className="font-semibold">{tracking ? 'Live tracking in progress' : 'Ready to trace your journey?'}</p>
+                  <p className="font-semibold">Ready to trace your journey?</p>
                   <p className="text-sm text-muted-foreground">
-                    {tracking
-                      ? `${livePath.length} point${livePath.length === 1 ? '' : 's'} recorded${lastPoint ? ` · ±${Math.round(lastPoint.accuracy)} m` : ''}`
-                      : `Only you can see this trip location${recordedPath.length ? ` · ${recordedPath.length} points saved earlier` : ''}.`}
+                    Only you can see this trip location{recordedPath.length ? ` · ${recordedPath.length} points saved earlier` : ''}. Tracking keeps running in a small widget while you explore the app.
                   </p>
                 </div>
-                <Button variant={tracking ? 'destructive' : 'default'} onClick={tracking ? stop : start}>
-                  {tracking ? 'End' : 'Start'}
-                </Button>
+                <Button onClick={handleStart}>Start</Button>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
-    </RequireAuth>
+    </RequireSubscription>
   )
 }

@@ -1,0 +1,311 @@
+'use client'
+
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
+import { SignInButton, useUser } from '@clerk/nextjs'
+import { useAction, useConvexAuth, useMutation, useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import { CalendarClock, Check, CircleUserRound, Loader2, Sparkles, Wallet } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { formatKES } from '@/lib/kenya-data'
+import { loadPaystackScript } from '@/lib/paystack-inline'
+import { PLAN_PRICES } from '@/lib/plans'
+import { cn } from '@/lib/utils'
+
+type Status = NonNullable<ReturnType<typeof useQuery<typeof api.subscriptions.getStatus>>>
+
+// Prices come from lib/plans.ts (single source of truth shared with the
+// Convex backend), so what the UI shows is always what gets charged.
+export const PLANS = [
+  {
+    days: 7,
+    name: 'Weekly pack',
+    price: PLAN_PRICES[7],
+    suffix: '7 days',
+    perDay: '≈ KES 14/day',
+    duration: '7 days of full access',
+    benefits: ['Plan unlimited Kenya trips', 'Live tracking & share traces', 'Save spots & moments'],
+    popular: false,
+  },
+  {
+    days: 30,
+    name: 'Monthly pack',
+    price: PLAN_PRICES[30],
+    suffix: 'month',
+    perDay: '≈ KES 13/day',
+    savings: 'Save KES 70',
+    duration: '30 days of full access',
+    benefits: ['Everything in Weekly', 'More than 4× the days', 'Best per-day value', 'No auto-renewal'],
+    popular: true,
+  },
+] as const
+
+/**
+ * Shared, self-contained pricing card. `footer` lets callers swap the CTA —
+ * signed-in users get the Paystack "buy" button, signed-out users get a
+ * sign-up prompt instead. The card visuals stay identical in both places.
+ */
+export function PlanCard({
+  plan,
+  footer,
+}: {
+  plan: (typeof PLANS)[number]
+  footer: React.ReactNode
+}) {
+  const isHero = plan.popular
+  return (
+    <div
+      className={cn(
+        'relative flex h-full flex-col items-center rounded-2xl border p-5 text-center transition-all duration-200',
+        isHero
+          ? 'border-primary bg-primary/[0.06] shadow-lg shadow-primary/10 ring-1 ring-primary/40'
+          : 'border-border bg-card hover:border-primary/30 hover:shadow-md',
+      )}
+    >
+      {isHero && (
+        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground shadow-sm">
+          Best value
+        </span>
+      )}
+
+      <span
+        className={cn(
+          'flex size-10 items-center justify-center rounded-full',
+          isHero ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary',
+        )}
+      >
+        {isHero ? <Sparkles className="size-5" /> : <CalendarClock className="size-5" />}
+      </span>
+
+      <p className="mt-2.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{plan.name}</p>
+
+      <div className="mt-1.5 flex items-end gap-1.5">
+        <span className="font-serif text-3xl font-semibold tracking-tight">{formatKES(plan.price)}</span>
+        <span className="pb-1 text-sm font-medium text-muted-foreground">/ {plan.suffix}</span>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
+        <p className="text-xs font-semibold text-primary">{plan.perDay}</p>
+        {'savings' in plan && plan.savings && (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">{plan.savings}</span>
+        )}
+      </div>
+
+      <ul className="mt-4 flex w-full grow flex-col gap-2 border-t border-border pt-4 text-left">
+        {plan.benefits.map(benefit => (
+          <li key={benefit} className="flex items-start gap-2 text-sm text-foreground/90">
+            <span
+              className={cn(
+                'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full',
+                isHero ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary',
+              )}
+            >
+              <Check className="size-3" />
+            </span>
+            {benefit}
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-5 w-full">{footer}</div>
+    </div>
+  )
+}
+
+/**
+ * Buy-days flow shared by the paywall and the profile page. Renders the pack
+ * buttons and runs the Paystack checkout (public key + reference in the
+ * popup, server-side verify — the secret key never leaves Convex).
+ */
+export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) => void }) {
+  const { user } = useUser()
+  const initialize = useMutation(api.subscriptions.initializeDayPack)
+  const verifyAndConfirm = useAction(api.subscriptions.verifyAndConfirmDayPack)
+  const [busy, setBusy] = useState<number | null>(null)
+  const busyRef = useRef(false)
+
+  async function buy(days: number) {
+    if (busyRef.current) return
+    const email = user?.primaryEmailAddress?.emailAddress
+    if (!email) {
+      toast.error('Add an email to your account to pay')
+      return
+    }
+    if (!process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY) {
+      toast.error('Payment provider is not configured')
+      return
+    }
+    busyRef.current = true
+    setBusy(days)
+    try {
+      const { purchaseId, reference, amount } = await initialize({ days, email })
+      await loadPaystackScript()
+      if (!window.PaystackPop) throw new Error('Payment provider unavailable')
+
+      // Paystack's inline script validates that `callback` is a plain
+      // function (Object.prototype.toString must be "[object Function]"), so
+      // it can't be an async arrow — the async confirmation runs inside a
+      // synchronous wrapper instead.
+      const confirm = async () => {
+        try {
+          const result = await verifyAndConfirm({ purchaseId })
+          if (result.verified) {
+            toast.success(`${result.days} days added — welcome aboard!`)
+            onPurchased?.(result.days)
+          } else {
+            toast.error('Payment could not be confirmed. If you were charged, contact support.')
+          }
+        } catch {
+          toast.error('Could not confirm the payment — try again in a moment')
+        } finally {
+          busyRef.current = false
+          setBusy(null)
+        }
+      }
+      const handler = window.PaystackPop.setup({
+        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+        email,
+        amount: amount * 100, // KES → minor units
+        currency: 'KES',
+        ref: reference,
+        callback: () => { void confirm() },
+        onClose: () => {
+          busyRef.current = false
+          setBusy(null)
+        },
+      })
+      handler.openIframe()
+    } catch (error) {
+      busyRef.current = false
+      setBusy(null)
+      toast.error(error instanceof Error ? error.message : 'Could not start payment')
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {PLANS.map(plan => (
+          <PlanCard
+            key={plan.days}
+            plan={plan}
+            footer={
+              <Button
+                className="w-full gap-2"
+                variant={plan.popular ? 'default' : 'outline'}
+                disabled={busy !== null}
+                onClick={() => buy(plan.days)}
+              >
+                {busy === plan.days ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
+                {busy === plan.days ? 'Starting…' : `Get ${plan.days} days`}
+              </Button>
+            }
+          />
+        ))}
+      </div>
+      <p className="text-center text-xs text-muted-foreground">One-time payment · Card or M-Pesa · No auto-renewal</p>
+    </div>
+  )
+}
+
+/** The full-screen paywall shown when access has run out. */
+function PaywallScreen({ status, compact = false }: { status: Status; compact?: boolean }) {
+  return (
+    <div className={cn('mx-auto flex w-full flex-col', compact ? 'gap-4 max-w-3xl' : 'max-w-3xl gap-6 px-5 py-16')}>
+      <div className="flex flex-col items-center gap-2.5 text-center">
+        <span className={cn('flex items-center justify-center rounded-xl bg-primary text-primary-foreground', compact ? 'size-10' : 'size-14')}>
+          <Sparkles className={compact ? 'size-5' : 'size-7'} />
+        </span>
+        <h1 className={cn('font-serif font-semibold tracking-tight text-balance', compact ? 'text-xl' : 'text-4xl')}>Pick a plan</h1>
+        <p className="max-w-md text-muted-foreground">
+          {status.mode === 'none' ? 'Your 30-day free trial has ended.' : 'Your access has ended.'} One-time packs — no auto-renewal.
+        </p>
+      </div>
+      <DayPackCheckout />
+    </div>
+  )
+}
+
+/**
+ * Modal version of the paywall — used for actions like reserving a place
+ * when the signed-in user's access has run out. Auto-opens when access is
+ * inactive.
+ */
+export function PaywallDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const status = useQuery(api.subscriptions.getStatus)
+  if (!status) return null
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[86svh] overflow-y-auto p-5 sm:max-w-xl">
+        <PaywallScreen status={status} compact />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * Gates a page (or section) behind an active subscription. Signed-out users
+ * see the sign-in prompt; signed-in users without active access see the
+ * paywall; everyone else sees the content.
+ */
+export function RequireSubscription({ children, enabled = true }: { children: React.ReactNode; enabled?: boolean }) {
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const status = useQuery(api.subscriptions.getStatus)
+  const ensureTrial = useMutation(api.subscriptions.ensureTrial)
+  // True only while the lazy trial-start mutation is actually in flight.
+  const [trialPending, setTrialPending] = useState(false)
+
+  // Lazily start the 30-day trial on first gated visit (idempotent). For a
+  // brand-new user `ensureTrial` returns `{ started: true }` and status flips
+  // to `trial`; for an existing-but-expired user it returns `{ started: false }`
+  // with no error — so clear the pending flag there or the skeleton shows
+  // forever and the paywall is unreachable.
+  useEffect(() => {
+    if (isAuthenticated && status && status.mode === 'none' && !trialPending) {
+      setTrialPending(true)
+      ensureTrial()
+        .then(result => {
+          if (!result.started) setTrialPending(false)
+        })
+        .catch(() => setTrialPending(false))
+    }
+  }, [isAuthenticated, status, trialPending, ensureTrial])
+
+  if (!enabled) return <>{children}</>
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
+        <span className="flex size-16 items-center justify-center rounded-lg bg-secondary text-primary"><CircleUserRound className="size-8" /></span>
+        <h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1>
+        <p className="text-muted-foreground">Sign in to plan routes, save reservations, live traces and moments.</p>
+        <SignInButton mode="modal"><Button size="lg">Sign in to continue</Button></SignInButton>
+      </div>
+    )
+  }
+  if (isLoading || status === undefined || status === null) {
+    return <div className="mx-auto max-w-6xl p-8"><div className="h-48 animate-pulse rounded-lg bg-secondary" /></div>
+  }
+  // A brand-new signed-in user has no row yet — the trial-start mutation is
+  // in flight, so keep showing the skeleton instead of flashing the paywall.
+  if (status.mode === 'none' && trialPending) {
+    return <div className="mx-auto max-w-6xl p-8"><div className="h-48 animate-pulse rounded-lg bg-secondary" /></div>
+  }
+  if (!status.active) return <PaywallScreen status={status} />
+  return (
+    <div className="flex flex-col">
+      {status.mode === 'trial' && (
+        <div className="border-b bg-primary/5">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-sm">
+            <p className="flex items-center gap-2 text-muted-foreground">
+              <CalendarClock className="size-4 text-primary" />
+              <span className="font-medium text-foreground">Free trial</span> — {status.daysRemaining} day{status.daysRemaining === 1 ? '' : 's'} left
+            </p>
+            <Button variant="link" size="sm" className="h-auto px-0 text-primary" nativeButton={false} render={<Link href="/profile?tab=subscription" />}>Buy days</Button>
+          </div>
+        </div>
+      )}
+      {children}
+    </div>
+  )
+}

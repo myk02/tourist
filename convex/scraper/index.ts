@@ -1,14 +1,28 @@
 import { v } from "convex/values"
 import { action, query } from "../_generated/server"
 import { api, internal } from "../_generated/api"
+import { makeFunctionReference } from "convex/server"
 import { STALE_AFTER_MS } from "./constants"
 
 const VERTICALS = ["stays", "flights", "things-to-do", "attractions", "cars", "taxis"] as const
 type Vertical = (typeof VERTICALS)[number]
 
+// Real reference to this module's own public action, built by path so that
+// `scrapeAll`/`clearAndRescrape` don't create a type-inference cycle (the
+// `internal.*` proxy would also resolve it at runtime, but the self-reference
+// breaks TS inference here).
+const searchWithScrapeRef = makeFunctionReference<
+  "action",
+  { vertical: string },
+  Record<string, unknown>
+>("scraper/index/searchWithScrape")
+
 export const searchWithScrape = action({
   args: { vertical: v.string() },
-  handler: async (ctx, { vertical }) => {
+  // Explicit return type breaks the self-reference cycle: the handler calls
+  // searchWithScrapeRef (itself), so without the annotation TS can't infer
+  // this type without recursing and gives up with `any`/TS7022.
+  handler: async (ctx, { vertical }): Promise<Record<string, unknown>> => {
     const items: any[] = await ctx.runQuery(api.listings.list, { vertical })
     const now = Date.now()
     const hasFresh = items?.some(
@@ -24,7 +38,7 @@ export const searchWithScrape = action({
     if (process.env.FIRECRAWL_API_KEY) {
       try {
         console.log(`[scraper] ${vertical}: starting Firecrawl scrape`)
-        const result = await ctx.runAction(internal.scraper.firecrawl.scrapeVertical, { vertical })
+        const result: Record<string, unknown> = await ctx.runAction(internal.scraper.firecrawl.scrapeVertical, { vertical })
         return { status: "completed", source: "firecrawl", ...result }
       } catch (error) {
         console.error(`[scraper] ${vertical}: Firecrawl failed (${String(error)}), falling back to http scraper`)
@@ -38,11 +52,11 @@ export const searchWithScrape = action({
 
 export const scrapeAll = action({
   args: {},
-  handler: async (ctx) => {
-    const results: Record<string, any> = {}
+  handler: async (ctx): Promise<Record<string, unknown>> => {
+    const results: Record<string, unknown> = {}
     for (const vertical of VERTICALS) {
       try {
-        const result = await ctx.runAction(internal.scraper.index.searchWithScrape, { vertical })
+        const result: Record<string, unknown> = await ctx.runAction(searchWithScrapeRef, { vertical })
         results[vertical] = result
       } catch (error) {
         console.error(`[scrapeAll] ${vertical} failed:`, error)
@@ -55,7 +69,7 @@ export const scrapeAll = action({
 
 export const clearAndRescrape = action({
   args: { vertical: v.string() },
-  handler: async (ctx, { vertical }) => {
+  handler: async (ctx, { vertical }): Promise<Record<string, unknown>> => {
     if (!VERTICALS.includes(vertical as Vertical)) {
       return { status: "skipped", reason: "invalid_vertical" }
     }
@@ -65,7 +79,7 @@ export const clearAndRescrape = action({
 
     if (process.env.FIRECRAWL_API_KEY) {
       try {
-        const result = await ctx.runAction(internal.scraper.firecrawl.scrapeVertical, { vertical })
+        const result: Record<string, unknown> = await ctx.runAction(internal.scraper.firecrawl.scrapeVertical, { vertical })
         return { status: "completed", source: "firecrawl", ...result }
       } catch (error) {
         console.error(`[scraper] ${vertical}: Firecrawl failed (${String(error)}), falling back to http scraper`)

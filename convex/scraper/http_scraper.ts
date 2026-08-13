@@ -26,7 +26,7 @@ async function fetchHTML(url: string, retry = 0): Promise<string | null> {
   try {
     const response = await fetch(url, {
       headers: { "User-Agent": USER_AGENT },
-      timeout: 30000,
+      signal: AbortSignal.timeout(30000),
     })
     if (!response.ok) {
       if (retry < MAX_RETRIES) {
@@ -153,7 +153,7 @@ function parseFlightResults(html: string, now: number, route: any): any[] {
 async function scrapeThingsToDo(ctx: any, now: number): Promise<any[]> {
   const results: any[] = []
   const activities = [
-    { name: "Safari", location: "Maasai Mara", url: "https://www.getyourguide.com&s" },
+    { name: "Safari", location: "Maasai Mara", url: "https://www.getyourguide.com" },
     { name: "Tours", location: "Nairobi", url: "https://www.getyourguide.com" },
   ]
 

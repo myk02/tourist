@@ -100,6 +100,10 @@ export const upsertScraped = mutation({
   args: {
     vertical: v.string(),
     items: v.array(v.object({
+      // `vertical` is set by the scrapers but not stored on listings rows
+      // (the vertical is the index), so it must be tolerated here or Convex
+      // rejects the whole batch.
+      vertical: v.optional(v.string()),
       name: v.string(),
       location: v.string(),
       price: v.number(),

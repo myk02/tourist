@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import { useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -13,10 +12,16 @@ import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@
 import { cn } from '@/lib/utils'
 
 type Moment = NonNullable<ReturnType<typeof useQuery<typeof api.moments.list>>>[number]
+type Media = { type: 'video' | 'image'; url: string }
 
-function imagesOf(m: Moment): string[] {
-  const all = m.imageUrls?.length ? m.imageUrls : m.imageUrl ? [m.imageUrl] : []
-  return all.length ? all : ['/placeholder.jpg']
+function mediaOf(m: Moment): Media[] {
+  const images = m.imageUrls?.length ? m.imageUrls : m.imageUrl ? [m.imageUrl] : []
+  const videos = m.videoUrls ?? []
+  const media: Media[] = [
+    ...videos.map(url => ({ type: 'video' as const, url })),
+    ...images.map(url => ({ type: 'image' as const, url })),
+  ]
+  return media.length ? media : [{ type: 'image', url: '/placeholder.jpg' }]
 }
 
 export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; onUploadClick?: () => void }) {
@@ -24,7 +29,7 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
   const setBest = useMutation(api.moments.setBest)
   const setPublic = useMutation(api.moments.setPublic)
   const removeMoment = useMutation(api.moments.remove)
-  const [lightbox, setLightbox] = useState<{ moment: number; image: number } | null>(null)
+  const [lightbox, setLightbox] = useState<{ moment: number; media: number } | null>(null)
 
   async function toggleBest(m: Moment) {
     try {
@@ -57,8 +62,8 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
   if (moments === undefined) return <div className="grid grid-cols-2 gap-4 md:grid-cols-3"><div className="aspect-square animate-pulse rounded-lg bg-secondary" /><div className="aspect-square animate-pulse rounded-lg bg-secondary" /><div className="aspect-square animate-pulse rounded-lg bg-secondary" /></div>
 
   const active = lightbox ? moments[lightbox.moment] : null
-  const activeImages = active ? imagesOf(active) : []
-  const activeImageIndex = active ? Math.min(lightbox!.image, activeImages.length - 1) : 0
+  const activeMedia = active ? mediaOf(active) : []
+  const activeIndex = active ? Math.min(lightbox!.media, activeMedia.length - 1) : 0
 
   async function share() {
     try {
@@ -84,31 +89,36 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
           </div>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             {moments.map((m, mi) => {
-            const imgs = imagesOf(m)
-            return (
-              <div key={m._id} className="group relative aspect-square overflow-hidden rounded-lg">
-                <button className="block size-full" onClick={() => setLightbox({ moment: mi, image: 0 })} aria-label={`Open moment: ${m.caption}`}>
-                  <Image src={imgs[0]} fill className="object-cover transition-transform duration-300 group-hover:scale-105" alt={m.caption} sizes="(max-width: 768px) 50vw, 33vw" />
-                </button>
-                {imgs.length > 1 && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{imgs.length} photos</Badge>}
-                {m.best && <Badge className="absolute right-2 top-2 bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
-                <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
-                  <p className="line-clamp-2 text-sm text-white">{m.caption}</p>
-                  <div className="flex shrink-0 gap-1">
-                    <button aria-label="Toggle best moment" onClick={() => toggleBest(m)} className={cn('flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground transition-colors', m.best && 'text-accent')}><Star className={cn('size-4', m.best && 'fill-current')} /></button>
-                    <button aria-label="Toggle visibility" onClick={() => togglePublic(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground">{m.public ? <Globe className="size-4" /> : <Lock className="size-4" />}</button>
-                    <button aria-label="Delete moment" onClick={() => handleRemove(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+              const media = mediaOf(m)
+              return (
+                <div key={m._id} className="group relative aspect-square overflow-hidden rounded-lg">
+                  <button className="block size-full" onClick={() => setLightbox({ moment: mi, media: 0 })} aria-label={`Open moment: ${m.caption}`}>
+                    {media[0].type === 'video' ? (
+                      <video src={media[0].url} muted playsInline preload="metadata" className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={media[0].url} alt={m.caption} className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    )}
+                  </button>
+                  {media.length > 1 && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{media.length} media</Badge>}
+                  {m.best && <Badge className="absolute right-2 top-2 bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
+                  <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+                    <p className="line-clamp-2 text-sm text-white">{m.caption}</p>
+                    <div className="flex shrink-0 gap-1">
+                      <button aria-label="Toggle best moment" onClick={() => toggleBest(m)} className={cn('flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground transition-colors', m.best && 'text-accent')}><Star className={cn('size-4', m.best && 'fill-current')} /></button>
+                      <button aria-label="Toggle visibility" onClick={() => togglePublic(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground">{m.public ? <Globe className="size-4" /> : <Lock className="size-4" />}</button>
+                      <button aria-label="Delete moment" onClick={() => handleRemove(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
           </div>
         </div>
       )}
 
       <Dialog open={!!active} onOpenChange={open => { if (!open) setLightbox(null) }}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="sm:max-w-3xl">
           {active && (
             <>
               <DialogHeader>
@@ -118,17 +128,22 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                 </DialogTitle>
               </DialogHeader>
               <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-black/5">
-                <Image src={activeImages[activeImageIndex]} fill className="object-contain" alt={active.caption} sizes="(max-width: 768px) 100vw, 768px" />
-                {activeImages.length > 1 && (
+                {activeMedia[activeIndex].type === 'video' ? (
+                  <video src={activeMedia[activeIndex].url} controls autoPlay playsInline className="max-h-full w-full object-contain" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={activeMedia[activeIndex].url} alt={active.caption} className="max-h-full w-full object-contain" />
+                )}
+                {activeMedia.length > 1 && (
                   <>
-                    <button aria-label="Previous photo" onClick={() => setLightbox({ moment: lightbox!.moment, image: activeImageIndex === 0 ? activeImages.length - 1 : activeImageIndex - 1 })} className="absolute left-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronLeft className="size-5" /></button>
-                    <button aria-label="Next photo" onClick={() => setLightbox({ moment: lightbox!.moment, image: (activeImageIndex + 1) % activeImages.length })} className="absolute right-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronRight className="size-5" /></button>
+                    <button aria-label="Previous media" onClick={() => setLightbox({ moment: lightbox!.moment, media: activeIndex === 0 ? activeMedia.length - 1 : activeIndex - 1 })} className="absolute left-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronLeft className="size-5" /></button>
+                    <button aria-label="Next media" onClick={() => setLightbox({ moment: lightbox!.moment, media: (activeIndex + 1) % activeMedia.length })} className="absolute right-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronRight className="size-5" /></button>
                   </>
                 )}
               </div>
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>{new Date(active.createdAt).toLocaleDateString()} · {active.location || active.stopName || 'Somewhere in Kenya'}{active.public ? ' · Public' : ' · Private'}</span>
-                <span>{activeImages.length > 1 ? `${activeImageIndex + 1} / ${activeImages.length}` : ''}</span>
+                <span>{activeMedia.length > 1 ? `${activeIndex + 1} / ${activeMedia.length}` : ''}</span>
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={() => toggleBest(active)}>{active.best ? 'Remove best' : 'Mark best'}</Button>
