@@ -4,11 +4,13 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { ChevronLeft, ChevronRight, Copy, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
+import type { Id } from '@/convex/_generated/dataModel'
+import { ChevronLeft, ChevronRight, Copy, LayoutGrid, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
+import { isValidConvexId } from '@/lib/id'
 import { cn } from '@/lib/utils'
 
 type Media = { type: 'video' | 'image'; url: string }
@@ -31,12 +33,17 @@ function MediaTile({ media, className }: { media: Media; className?: string }) {
 }
 
 export function MomentsShare({ tripId }: { tripId: string }) {
-  const data = useQuery(api.moments.publicForTrip, { tripId: tripId as any })
+  // A malformed /moments/<garbage> route must show the not-found state, not
+  // make Convex throw on an invalid id.
+  const validTripId = isValidConvexId(tripId)
+  const data = useQuery(api.moments.publicForTrip, validTripId ? { tripId: tripId as Id<'trips'> } : 'skip')
   const [lightbox, setLightbox] = useState<{ moment: number; media: number } | null>(null)
   const [copied, setCopied] = useState(false)
 
-  if (data === undefined) return <div className="mx-auto max-w-6xl px-5 py-10"><div className="h-64 animate-pulse rounded-lg bg-secondary" /></div>
-  if (!data) return <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary" /><h1 className="font-serif text-4xl">Trip not found</h1><p className="text-muted-foreground">This share link is not available.</p></div>
+  const notFound = <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary" /><h1 className="font-serif text-4xl">Trip not found</h1><p className="text-muted-foreground">This share link is not available.</p></div>
+  if (!validTripId) return notFound
+  if (data === undefined) return <div className="mx-auto max-w-6xl px-5 py-10"><div className="kt-shimmer h-64 rounded-2xl" /></div>
+  if (!data) return notFound
 
   const { trip, moments } = data
   const active = lightbox ? moments[lightbox.moment] : null
@@ -57,7 +64,7 @@ export function MomentsShare({ tripId }: { tripId: string }) {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-10">
-      <div className="overflow-hidden rounded-lg bg-primary px-6 py-10 text-primary-foreground md:px-10">
+      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-[color-mix(in_oklch,var(--primary),#000_28%)] px-6 py-10 text-primary-foreground shadow-lift ring-1 ring-primary/20 md:px-10">
         <Badge className="bg-accent text-accent-foreground">Shared with you</Badge>
         <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight">{trip.name}</h1>
         <p className="mt-2 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {trip.startDate} → {trip.endDate}</p>
@@ -73,7 +80,7 @@ export function MomentsShare({ tripId }: { tripId: string }) {
       </div>
 
       {moments.length === 0 ? (
-        <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+        <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
           <p className="font-serif text-2xl">No shared moments yet</p>
           <p className="mt-2 max-w-md text-muted-foreground">The traveller hasn&apos;t made any moments public on this trip.</p>
         </div>
@@ -82,7 +89,7 @@ export function MomentsShare({ tripId }: { tripId: string }) {
           {moments.map((m, mi) => {
             const media = mediaOf(m)
             return (
-              <div key={m._id} className="group relative aspect-square overflow-hidden rounded-lg">
+              <div key={m._id} className="group relative aspect-square overflow-hidden rounded-xl">
                 <button className="block size-full" onClick={() => setLightbox({ moment: mi, media: 0 })} aria-label={`View moment: ${m.caption}`}>
                   <MediaTile media={media[0]} className="transition-transform duration-300 group-hover:scale-105" />
                 </button>
@@ -96,7 +103,7 @@ export function MomentsShare({ tripId }: { tripId: string }) {
       )}
 
       {/* Recommend KenyaTrace */}
-      <div className="rounded-lg border p-5">
+      <div className="rounded-2xl border bg-card p-5 shadow-soft">
         <p className="flex items-center gap-2 font-semibold"><Share2 className="size-4 text-primary" /> Love this? Recommend KenyaTrace</p>
         <p className="mt-1 text-sm text-muted-foreground">Share this trip — it works without an account.</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -104,6 +111,7 @@ export function MomentsShare({ tripId }: { tripId: string }) {
           <Button variant="outline" nativeButton={false} render={<a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><MessageCircle className="size-4" />WhatsApp</Button>
           <Button variant="outline" nativeButton={false} render={<a href={`https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Send className="size-4" />Telegram</Button>
           <Button variant="outline" nativeButton={false} render={<a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareLink)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Share2 className="size-4" />Post</Button>
+          <Button variant="outline" nativeButton={false} render={<a href={`/recap/${tripId}`} />} className="gap-1.5"><LayoutGrid className="size-4" />Open the 9-grid recap</Button>
         </div>
       </div>
 
@@ -111,7 +119,7 @@ export function MomentsShare({ tripId }: { tripId: string }) {
         <DialogContent className="sm:max-w-3xl">
           {active && (
             <>
-              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-black/5">
+              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-muted">
                 {activeMedia[activeIndex].type === 'video' ? (
                   <video src={activeMedia[activeIndex].url} controls autoPlay playsInline className="max-h-full w-full object-contain" />
                 ) : (

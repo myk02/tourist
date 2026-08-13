@@ -2,6 +2,7 @@
 
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { Gift } from 'lucide-react'
 import { CalendarClock, Check, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,6 +18,7 @@ function formatDate(ts: number | null) {
 export function SubscriptionSection() {
   const status = useQuery(api.subscriptions.getStatus)
   const purchases = useQuery(api.subscriptions.listPurchases)
+  const credit = useQuery(api.moments.credit)
 
   return (
     <div className="flex flex-col gap-5">
@@ -29,10 +31,10 @@ export function SubscriptionSection() {
         </CardHeader>
         <CardContent>
           {status === undefined || status === null ? (
-            <div className="h-20 animate-pulse rounded-lg bg-secondary" />
+            <div className="kt-shimmer h-20 rounded-xl" />
           ) : status.active ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-primary/5 p-4">
-              <span className="flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground"><Check className="size-5" /></span>
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><Check className="size-5" /></span>
               <div className="flex-1">
                 <p className="font-semibold">
                   {status.daysRemaining} day{status.daysRemaining === 1 ? '' : 's'} left
@@ -40,11 +42,14 @@ export function SubscriptionSection() {
                 <p className="text-sm text-muted-foreground">
                   {status.mode === 'trial' ? `Trial ends ${formatDate(status.trialEndsAt)}` : `Access until ${formatDate(status.paidUntil)}`}
                 </p>
+                {credit && credit.earnedDays > 0 && (
+                  <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-primary"><Gift className="size-3.5" />Includes {credit.earnedDays} free day{credit.earnedDays === 1 ? '' : 's'} earned from your moments</p>
+                )}
               </div>
               <Badge className="bg-primary text-primary-foreground">Active</Badge>
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Your access has ended.</p>
+            <p className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">Your access has ended.</p>
           )}
         </CardContent>
       </Card>
@@ -64,12 +69,12 @@ export function SubscriptionSection() {
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {purchases === undefined ? (
-            <div className="h-16 animate-pulse rounded-lg bg-secondary" />
+            <div className="kt-shimmer h-16 rounded-xl" />
           ) : purchases.length === 0 ? (
             <p className="text-sm text-muted-foreground">No successful purchases yet.</p>
           ) : (
             purchases.map(p => (
-              <div key={p._id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
+              <div key={p._id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-3 text-sm">
                 <div className="flex items-center gap-2">
                   <CalendarClock className="size-4 text-primary" />
                   <span className="font-medium">{p.days} days</span>

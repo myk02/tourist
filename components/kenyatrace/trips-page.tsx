@@ -63,7 +63,7 @@ function TripCard({ trip, onDuplicate, onCopyLink, onDelete, onLeave }: { trip: 
             <Badge className={cn(trip.status === 'completed' && 'bg-card text-card-foreground')}>{STATUS_LABEL[trip.status] ?? trip.status}</Badge>
             {!isOwner && <Badge className="bg-accent text-accent-foreground">Shared · {trip.role === 'editor' ? 'Editor' : 'Viewer'}</Badge>}
           </div>
-          <div className="absolute right-3 top-3 rounded-md bg-card/90 px-2 py-1 text-xs font-semibold shadow-sm">{formatKES(trip.totalCost)}</div>
+          <div className="absolute right-3 top-3 rounded-full bg-card/95 px-2.5 py-1 text-xs font-semibold shadow-soft backdrop-blur-sm">{formatKES(trip.totalCost)}</div>
         </div>
       </Link>
       <CardHeader>
@@ -156,10 +156,10 @@ export function Trips({ compact = false }: { compact?: boolean }) {
     }
   }
 
-  if (trips === undefined) return <div className="h-52 animate-pulse rounded-lg bg-secondary" />
+  if (trips === undefined) return <div className="kt-shimmer h-52 rounded-2xl" />
 
   const empty = (
-    <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+    <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
       <Compass className="size-8 text-primary" />
       <p className="mt-4 font-serif text-2xl">No saved trips yet</p>
       <p className="mt-2 max-w-md text-muted-foreground">Plan with AI or build your first route yourself.</p>
@@ -218,9 +218,9 @@ export function Trips({ compact = false }: { compact?: boolean }) {
           <Button nativeButton={false} render={<Link href="/plan" />}><Plus data-icon="inline-start" />New trip</Button>
         </div>
         {planningTrips.length > 0 && mostUrgentPlanning && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
             <div className="flex items-center gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"><Compass /></span>
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><Compass /></span>
               <div>
                 <p className="font-semibold">Plan fast — {planningTrips.length} trip{planningTrips.length === 1 ? '' : 's'} still need{planningTrips.length === 1 ? 's' : ''} planning</p>
                 <p className="text-sm text-muted-foreground">Finish your itinerary before you head out, and your trip will be ready to book, track and share.</p>

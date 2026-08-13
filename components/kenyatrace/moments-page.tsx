@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useMutation, useQuery } from 'convex/react'
@@ -14,6 +14,7 @@ import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { haversineKm } from '@/lib/travel'
 import { cn } from '@/lib/utils'
 import { KenyaMap } from './kenya-map'
 import { MomentAlbum } from './moment-album'
@@ -51,14 +52,20 @@ function getCoords(): Promise<{ lat: number; lng: number } | null> {
 export function Moments() {
   const params = useSearchParams()
   const trips = useQuery(api.trips.list)
+  // Moments can only be added on trips the traveller owns — shared trips are
+  // read-only here (the owner's album is private to them), so the dropdown
+  // only offers owned trips and shared selections get a notice instead.
+  const ownedTrips = (trips ?? []).filter(t => t.role === 'owner')
   const urlTrip = params.get('trip')
   const [selectedId, setSelectedId] = useState<Id<'trips'> | undefined>(undefined)
   const selected = selectedId ?? (urlTrip as Id<'trips'> | undefined) ?? trips?.[0]?._id
+  const selectedOwned = ownedTrips.some(t => t._id === selected)
   const moments = useQuery(api.moments.list, selected ? { tripId: selected } : 'skip')
 
   const uploadUrl = useMutation(api.moments.generateUploadUrl)
   const create = useMutation(api.moments.create)
   const selectedTrip = useQuery(api.trips.getWithStops, selected ? { id: selected } : 'skip')
+  const credit = useQuery(api.moments.credit)
 
   const [addOpen, setAddOpen] = useState(false)
   const [files, setFiles] = useState<File[]>([])
@@ -68,6 +75,36 @@ export function Moments() {
   const [suggesting, setSuggesting] = useState(false)
   const [view, setView] = useState<'grid' | 'map' | 'timeline'>('grid')
   const tripStops = selectedTrip?.stops ?? []
+
+  // ── Auto stop-association ──────────────────────────────────────────────────
+  // When the upload dialog opens, quietly grab the device location and pin
+  // the moment to the nearest itinerary stop within 60 km (a long day's
+  // reach) — so photos land on the right stop without any manual picking.
+  const [autoCoords, setAutoCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const autoPinnedRef = useRef(false)
+
+  useEffect(() => {
+    if (!addOpen || autoCoords) return
+    let cancelled = false
+    getCoords().then(c => { if (!cancelled && c) setAutoCoords(c) })
+    return () => { cancelled = true }
+  }, [addOpen, autoCoords])
+
+  useEffect(() => {
+    if (!autoCoords || autoPinnedRef.current || stopId || !tripStops.length) return
+    let best: (typeof tripStops)[number] | null = null
+    let bestD = Infinity
+    for (const s of tripStops) {
+      if (s.lat == null || s.lng == null) continue
+      const d = haversineKm(autoCoords.lat, autoCoords.lng, s.lat, s.lng)
+      if (d < bestD) { bestD = d; best = s }
+    }
+    if (best && bestD <= 60) {
+      autoPinnedRef.current = true
+      setStopId(best._id)
+      setLocation(prev => prev || best.place)
+    }
+  }, [autoCoords, tripStops, stopId])
 
   async function suggest() {
     if (!files.length || files[0].type.startsWith('video/')) {
@@ -111,24 +148,27 @@ export function Moments() {
         else storageIds.push(json.storageId)
       }
       // If the moment is pinned to a trip stop, use the stop's coordinates;
-      // otherwise fall back to the device location.
+      // otherwise use the device location captured when the dialog opened
+      // (the uploads above already took time, so re-asking would be stale).
       const stop = tripStops.find(s => s._id === stopId)
-      const coords = stop?.lat && stop?.lng
+      const coords = stop?.lat != null && stop?.lng != null
         ? { lat: stop.lat, lng: stop.lng }
-        : await getCoords()
-      await create({ tripId: selected, caption: caption.trim(), location: location.trim() || stop?.place || undefined, stopName: stop?.name, storageIds: storageIds.length ? storageIds : undefined, videoStorageIds: videoIds.length ? videoIds : undefined, public: false, lat: coords?.lat, lng: coords?.lng })
+        : autoCoords ?? await getCoords()
+      const { earnedDays } = await create({ tripId: selected, caption: caption.trim(), location: location.trim() || stop?.place || undefined, stopName: stop?.name, storageIds: storageIds.length ? storageIds : undefined, videoStorageIds: videoIds.length ? videoIds : undefined, public: false, lat: coords?.lat, lng: coords?.lng })
       setFiles([])
       setCaption('')
       setLocation('')
       setStopId('')
+      autoPinnedRef.current = false
       setAddOpen(false)
-      toast.success(stopId ? `Moment pinned to ${stop?.name}` : coords ? 'Moment saved with location' : 'Moment saved')
+      toast.success(earnedDays > 0 ? 'Moment saved — you earned a free day!' : stopId ? `Moment pinned to ${stop?.name}` : coords ? 'Moment saved with location' : 'Moment saved')
     } catch {
       toast.error('Could not save this moment')
     }
   }
 
-  const mapPoints = (moments ?? []).filter(m => m.lat && m.lng).map(m => ({ id: m._id, name: m.caption, location: m.location || m.stopName || 'Somewhere in Kenya', lat: m.lat!, lng: m.lng! }))
+  // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
+  const mapPoints = (moments ?? []).filter(m => m.lat != null && m.lng != null).map(m => ({ id: m._id, name: m.caption, location: m.location || m.stopName || 'Somewhere in Kenya', lat: m.lat!, lng: m.lng! }))
 
   const timelineGroups = (moments ?? []).reduce<Record<string, typeof moments>>((acc, m) => {
     const key = new Date(m.createdAt).toLocaleDateString()
@@ -145,23 +185,45 @@ export function Moments() {
             <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight">Moments</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {trips?.length ? (
+            {ownedTrips.length ? (
               <Select value={selected} onValueChange={v => setSelectedId(v as Id<'trips'>)}>
                 <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
-                <SelectContent>{trips.map(t => <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{ownedTrips.map(t => <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>)}</SelectContent>
               </Select>
             ) : null}
-            <Button onClick={() => setAddOpen(true)} disabled={!trips?.length}><Camera data-icon="inline-start" />Add a moment</Button>
+            <Button onClick={() => setAddOpen(true)} disabled={!ownedTrips.length || !selectedOwned}><Camera data-icon="inline-start" />Add a moment</Button>
           </div>
         </div>
+
+        {selected && !selectedOwned && (
+          <div className="rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
+            This is a trip shared with you — moments can only be added on trips you own.
+          </div>
+        )}
+
+        {credit && (
+          <div className="flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-4 shadow-soft">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><Sparkles className="size-5" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">Your moments earn free days</p>
+              <p className="text-sm text-muted-foreground">
+                {credit.earnedDays > 0 && <>You&apos;ve earned {credit.earnedDays} free day{credit.earnedDays === 1 ? '' : 's'} so far. </>}
+                {credit.mediaForNextDay} more photo{credit.mediaForNextDay === 1 ? '' : 's'} = +1 free day of access.
+              </p>
+              <div className="mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${((credit.mediaTotal % 3) / 3) * 100}%` }} />
+              </div>
+            </div>
+          </div>
+        )}
 
         {trips?.length ? (
           <>
             {moments?.length ? (
-              <div className="flex items-center gap-1 rounded-lg border p-1 w-fit">
-                <button onClick={() => setView('grid')} className={cn('flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors', view === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}><LayoutGrid className="size-4" />Album</button>
-                <button onClick={() => setView('map')} className={cn('flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors', view === 'map' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}><MapIcon className="size-4" />Map</button>
-                <button onClick={() => setView('timeline')} className={cn('flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors', view === 'timeline' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}><Timeline className="size-4" />Timeline</button>
+              <div className="flex w-fit items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1">
+                <button onClick={() => setView('grid')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'grid' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><LayoutGrid className="size-4" />Album</button>
+                <button onClick={() => setView('map')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'map' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><MapIcon className="size-4" />Map</button>
+                <button onClick={() => setView('timeline')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'timeline' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><Timeline className="size-4" />Timeline</button>
               </div>
             ) : null}
 
@@ -171,7 +233,7 @@ export function Moments() {
               mapPoints.length ? (
                 <KenyaMap points={mapPoints} className="h-[560px]" />
               ) : (
-                <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+                <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
                   <p className="font-serif text-2xl">No geotagged moments</p>
                   <p className="mt-2 max-w-md text-muted-foreground">Moments saved with your location will appear on the map. Allow location access when you upload.</p>
                 </div>
@@ -186,7 +248,7 @@ export function Moments() {
                       <h2 className="mb-3 font-serif text-xl font-semibold tracking-tight">{date}</h2>
                       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                         {group!.map(m => (
-                          <div key={m._id} className="relative aspect-square overflow-hidden rounded-lg">
+                          <div key={m._id} className="relative aspect-square overflow-hidden rounded-xl">
                             <ListingImage src={m.imageUrl || '/placeholder.jpg'} fill alt={m.caption} className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
                           </div>
                         ))}
@@ -198,7 +260,7 @@ export function Moments() {
             )}
           </>
         ) : (
-          <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+          <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
             <p className="font-serif text-2xl">Moments belong to trips</p>
             <p className="mt-2 max-w-md text-muted-foreground">Plan your first trip and photos you add here will be tied to it.</p>
             <Button className="mt-4" variant="outline" nativeButton={false} render={<Link href="/plan" />}>Plan a trip</Button>

@@ -13,10 +13,18 @@ import { SAMPLE_TRACE, sampleTraceCosts } from '@/lib/sample-trace'
 import { KenyaMap } from './kenya-map'
 
 const KIND_STYLE: Record<string, string> = {
-  Stay: 'bg-blue-100 text-blue-800',
-  Transport: 'bg-amber-100 text-amber-800',
-  Experience: 'bg-emerald-100 text-emerald-800',
-  Food: 'bg-rose-100 text-rose-800',
+  Stay: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  Transport: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  Experience: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  Food: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
+}
+
+/** Solid dot colors for the budget legend (text colors don't paint backgrounds). */
+const KIND_DOT: Record<string, string> = {
+  Stay: 'bg-blue-500',
+  Transport: 'bg-amber-500',
+  Experience: 'bg-emerald-500',
+  Food: 'bg-rose-500',
 }
 
 /**
@@ -53,8 +61,9 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
   const mapData = useMemo(() => {
     const day = activeDay === 'all' ? null : parseInt(activeDay, 10)
     const filtered = day === null ? stops : stops.filter(s => s.day === day)
-    const points = filtered.filter(s => s.lat && s.lng).map(s => ({ id: `${s.title}-${s.day}`, name: s.title, location: s.place, lat: s.lat!, lng: s.lng! }))
-    const route = filtered.filter(s => s.lat && s.lng).map(s => [s.lng!, s.lat!] as [number, number])
+    // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
+    const points = filtered.filter(s => s.lat != null && s.lng != null).map(s => ({ id: `${s.title}-${s.day}`, name: s.title, location: s.place, lat: s.lat!, lng: s.lng! }))
+    const route = filtered.filter(s => s.lat != null && s.lng != null).map(s => [s.lng!, s.lat!] as [number, number])
     return { points, route }
   }, [stops, activeDay])
 
@@ -77,7 +86,7 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
         <p className="text-sm text-muted-foreground">{summary}</p>
       </DialogHeader>
 
-      <KenyaMap points={mapData.points} route={mapData.route} className="h-[46vh] min-h-[300px] rounded-md" />
+      <KenyaMap points={mapData.points} route={mapData.route} className="h-[46vh] min-h-[300px] rounded-2xl" />
 
       <Tabs value={activeDay} onValueChange={setActiveDay}>
         <div className="flex flex-wrap items-center gap-2">
@@ -93,14 +102,14 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
           {days.map(([day, dayStops]) => (
             <div key={day} className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <span className="flex size-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">{day}</span>
+                <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground shadow-xs">{day}</span>
                 <h3 className="font-semibold">Day {day}</h3>
                 <span className="text-sm text-muted-foreground">· {formatKES(costs.byDay.find(([d]) => d === day)?.[1] ?? 0)}</span>
               </div>
               {dayStops.map((stop, i) => (
                 <Card key={`${stop.title}-${i}`} className="p-3">
                   <div className="flex items-start gap-3">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-xs font-bold text-primary">{stop.time}</span>
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">{stop.time}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold">{stop.title}</p>
@@ -122,7 +131,7 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
             {dayStops.map((stop, i) => (
               <Card key={`${stop.title}-${i}`} className="p-3">
                 <div className="flex items-start gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-xs font-bold text-primary">{stop.time}</span>
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">{stop.time}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{stop.title}</p>
@@ -150,7 +159,7 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
             {costs.byKind.map(([kind, value]) => (
               <div key={kind} className="flex items-center gap-2 text-xs">
                 <span className="flex w-28 shrink-0 items-center gap-1.5">
-                  <span className={cn('size-2 rounded-full', KIND_STYLE[kind]?.split(' ')[1])} />
+                  <span className={cn('size-2 rounded-full', KIND_DOT[kind] ?? 'bg-secondary')} />
                   {kind}
                 </span>
                 <Progress className="h-1.5 flex-1" value={Math.min((value / Math.max(costs.total, 1)) * 100, 100)} />

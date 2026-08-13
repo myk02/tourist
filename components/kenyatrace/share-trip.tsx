@@ -64,11 +64,15 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
     setEmailError(null)
     setSending(true)
     try {
-      // Owners create the link on demand; editors email the existing one.
+      // The email must promise exactly what the link grants. Owners align the
+      // link (createShareLink patches an existing link's role) to the role
+      // chosen in the dialog; editors send the existing link as it is.
       let token = shares?.link?.token ?? null
-      if (!token && isOwner) {
+      let effectiveRole = isOwner ? linkRole : (shares?.link?.role as 'editor' | 'viewer' | undefined) ?? linkRole
+      if (isOwner) {
         const res = await createLink({ tripId, role: linkRole })
         token = res.token
+        effectiveRole = linkRole
       }
       if (!token) throw new Error('No invite link available yet')
       const res = await fetch('/api/send-invite', {
@@ -79,7 +83,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
           tripId,
           token,
           tripName,
-          role: linkRole,
+          role: effectiveRole,
           senderName: me?.name ?? 'A traveller',
           message: emailMessage.trim() || undefined,
         }),
@@ -139,13 +143,13 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
         </DialogHeader>
 
         <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-2.5 rounded-lg border bg-card p-4">
+          <div className="flex flex-col gap-2.5 rounded-xl border bg-card p-4 shadow-soft">
             <div className="flex items-center justify-between gap-3">
               <p className="flex items-center gap-2 text-sm font-semibold"><Link2 className="size-4 text-primary" /> Invite link</p>
               {!isOwner && <Badge variant="outline" className="text-[10px] text-muted-foreground">Visible to editors</Badge>}
             </div>
             {link && (
-              <p className="truncate rounded-md bg-secondary px-3 py-2 font-mono text-xs text-muted-foreground">
+              <p className="truncate rounded-lg bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">
                 {window.location.origin}/trips/{tripId}?invite={link.token}
               </p>
             )}
@@ -181,7 +185,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
             </p>
           </div>
 
-          <div className="flex flex-col gap-2.5 rounded-lg border bg-card p-4">
+          <div className="flex flex-col gap-2.5 rounded-xl border bg-card p-4 shadow-soft">
             <p className="flex items-center gap-2 text-sm font-semibold"><Mail className="size-4 text-primary" /> Invite by email</p>
             <Input
               type="email"
@@ -218,7 +222,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
               <p className="text-sm text-muted-foreground">No one yet — share the invite link to add travel companions.</p>
             )}
             {shares?.collaborators.map(c => (
-              <div key={c.shareId} className={cn('flex items-center gap-3 rounded-md border p-2.5', busy === c.shareId && 'opacity-60')}>
+              <div key={c.shareId} className={cn('flex items-center gap-3 rounded-xl border p-2.5', busy === c.shareId && 'opacity-60')}>
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold text-primary">
                   {c.image ? <img src={c.image} alt="" className="size-9 rounded-full object-cover" /> : <UserRound className="size-4" />}
                 </span>

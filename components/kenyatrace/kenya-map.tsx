@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { useTheme } from '@/components/theme-provider'
 import type { Listing } from '@/lib/kenya-data'
 
 type Point = Pick<Listing, 'name' | 'location' | 'lat' | 'lng'> & { id: string; price?: number; rating?: number }
@@ -63,6 +64,8 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
   onMarkerLeave?: () => void
   onMarkerSelect?: (id: string) => void
 }) {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const node = useRef<HTMLDivElement>(null)
   const markerEls = useRef(new Map<string, HTMLButtonElement>())
   const hoveredRef = useRef<string | null>(null)
@@ -107,9 +110,11 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
 
     import('maplibre-gl').then(({ default: maplibregl }) => {
       if (disposed || !node.current) return
+      // Follow the app theme: dark basemap at night, light during the day.
+      const style = isDark ? 'https://tiles.openfreemap.org/styles/dark' : 'https://tiles.openfreemap.org/styles/liberty'
       map = new maplibregl.Map({
         container: node.current,
-        style: 'https://tiles.openfreemap.org/styles/liberty',
+        style,
         center: [37.4, -0.6],
         zoom: 5.4,
         attributionControl: false,
@@ -170,18 +175,21 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
         if (!map) return
         // Persistent live-trace line: source created once, redrawn via setData.
         map.addSource('live-path', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: liveTraceRef.current } } })
-        map.addLayer({ id: 'live-path', type: 'line', source: 'live-path', paint: { 'line-color': '#f59e0b', 'line-width': 4, 'line-opacity': 0.85, 'line-dasharray': [1.5, 2] } })
+        map.addLayer({ id: 'live-path', type: 'line', source: 'live-path', paint: { 'line-color': isDark ? '#fbbf24' : '#f59e0b', 'line-width': 4, 'line-opacity': 0.85, 'line-dasharray': [1.5, 2] } })
         livePathSourceRef.current = map.getSource('live-path') as unknown as { setData: (data: unknown) => void }
 
         const trace = liveTraceRef.current
 
         if (route.length >= 2) {
-          // The main origin→destination route: a soft white casing underneath
-          // a smooth green line, so it reads like a real drawn route.
+          // The main origin→destination route: a soft casing underneath a
+          // smooth primary-green line, so it reads like a real drawn route
+          // against both the light and dark basemaps.
           const smooth = smoothRoute(route)
+          const casingColor = isDark ? '#0a100d' : '#ffffff'
+          const routeColor = isDark ? '#35c992' : '#0e7a55'
           map.addSource('route-main', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: smooth } } })
-          map.addLayer({ id: 'route-casing', type: 'line', source: 'route-main', paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.9 } })
-          map.addLayer({ id: 'route-main', type: 'line', source: 'route-main', paint: { 'line-color': '#0b6e4f', 'line-width': 4.5, 'line-opacity': 0.9 } })
+          map.addLayer({ id: 'route-casing', type: 'line', source: 'route-main', paint: { 'line-color': casingColor, 'line-width': 9, 'line-opacity': isDark ? 0.85 : 0.9 } })
+          map.addLayer({ id: 'route-main', type: 'line', source: 'route-main', paint: { 'line-color': routeColor, 'line-width': 4.5, 'line-opacity': 0.9 } })
           const bounds = new maplibregl.LngLatBounds()
           smooth.forEach(coord => bounds.extend(coord))
           trace.forEach(coord => bounds.extend(coord))
@@ -211,7 +219,7 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
       livePopupRef.current = null
       livePathSourceRef.current = null
     }
-  }, [points, route, highlight, destIds, focus, labelMode])
+  }, [points, route, highlight, destIds, focus, labelMode, isDark])
 
   // Move the live marker (and follow the camera) — in place, no map rebuild.
   useEffect(() => {
@@ -249,5 +257,5 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
     })
   }, [livePath])
 
-  return <div ref={node} className={`overflow-hidden rounded-lg border bg-secondary ${className}`} aria-label="Interactive map of Kenya" />
+  return <div ref={node} className={`overflow-hidden rounded-2xl border border-border/80 bg-card ring-1 ring-border/40 ${className}`} aria-label="Interactive map of Kenya" />
 }

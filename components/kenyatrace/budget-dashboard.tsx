@@ -47,7 +47,10 @@ export function BudgetDashboard({ stops, budget, totalCost }: { stops: Stop[]; b
 
   const pctOfBudget = (value: number) => (budget > 0 ? Math.min((value / budget) * 100, 100) : 0)
   const perPerson = travelers > 0 ? Math.round(totalCost / travelers) : 0
-  const perDayAverage = stops.length ? Math.round(totalCost / Math.max(1, Math.max(...stops.map(s => s.day)))) : 0
+  // Per-day average divides by the count of days that actually have stops,
+  // not the highest day number (a gap in day numbers would over-dilute it).
+  const dayCount = new Set(stops.map(s => s.day)).size
+  const perDayAverage = dayCount ? Math.round(totalCost / dayCount) : 0
 
   return (
     <div className="flex flex-col gap-5">
@@ -127,12 +130,12 @@ export function BudgetDashboard({ stops, budget, totalCost }: { stops: Stop[]; b
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md bg-secondary p-4">
+            <div className="rounded-xl border border-border/60 bg-muted/60 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Per person</p>
               <p className="mt-1 font-serif text-2xl font-semibold">{formatKES(perPerson)}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">split {travelers} way{travelers === 1 ? '' : 's'}</p>
             </div>
-            <div className="rounded-md bg-secondary p-4">
+            <div className="rounded-xl border border-border/60 bg-muted/60 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Trip total</p>
               <p className="mt-1 font-serif text-2xl font-semibold">{formatKES(totalCost)}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">split {travelers} ways</p>

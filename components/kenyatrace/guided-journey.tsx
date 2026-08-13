@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SignInButton, useUser } from '@clerk/nextjs'
@@ -18,12 +19,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { BUDGET_TIER_META, budgetTierId, dailyAllowance, tierMismatchWarning } from '@/lib/budget'
 import { geocodeArea, reverseGeocode } from '@/lib/geocode'
 import { formatKES, wikimediaThumb } from '@/lib/kenya-data'
+import { seasonLabel } from '@/lib/seasons'
+import { haversineKm } from '@/lib/travel'
 import { cn } from '@/lib/utils'
 import { KenyaMap } from './kenya-map'
 import { ItineraryEditor } from './itinerary-editor'
 import { BudgetBar, ListingImage } from './shared'
 import { SampleTraceDialog } from './sample-trace'
 import { useTracking } from './tracking-provider'
+import { WhereYouStay, type StayAlternative } from './where-you-stay'
 import type { Stop } from './types'
 
 type Traveler = 'citizen' | 'tourist' | 'foreigner'
@@ -42,6 +46,8 @@ interface Draft {
   budget: number
   pace: 'relaxed' | 'balanced' | 'full'
   extra: string
+  // "YYYY-MM" — when the traveller is going. Drives season-aware planning.
+  travelMonth: string
   plan: JourneyPlan | null
   tripId: Id<'trips'> | null
   rating: number
@@ -105,6 +111,48 @@ const GENERATION_STEPS = [
   'Building your day-by-day Kenya plan…',
 ]
 
+/** Converts plan stops to the row shape Convex trips persist (create + replace). */
+function toTripStops(stops: Stop[]) {
+  return stops.map((s, i) => ({
+    name: s.title, place: s.place, day: s.day, time: s.time, cost: s.cost, kind: s.kind, order: i,
+    lat: s.lat, lng: s.lng, locked: s.locked, reason: s.reason, verified: s.verified, duration: s.duration,
+    source: s.source, listingId: s.listingId, vertical: s.vertical, image: s.image,
+    travelKm: s.travelKm, travelMins: s.travelMins, travelRouted: s.travelRouted, completedAt: s.completedAt,
+  }))
+}
+
+/**
+ * Rebuilds a stop around a real catalog stay — only real data (name, price,
+ * coords, photo), a factual reason, and no stale routed drive times.
+ */
+function stayPatch(base: Stop, alt: StayAlternative, prev?: Stop): Stop {
+  const km = prev && prev.lat != null && prev.lng != null ? Math.round(haversineKm(prev.lat, prev.lng, alt.lat, alt.lng)) : null
+  const bits = [
+    km != null ? `${km} km from ${prev!.title}` : null,
+    alt.rating > 0 ? `${alt.rating.toFixed(1)}★ rated` : null,
+    `${formatKES(alt.price)}/${alt.unit}`,
+  ].filter(Boolean)
+  return {
+    ...base,
+    title: alt.name,
+    place: alt.location,
+    cost: alt.price,
+    verified: true,
+    source: 'catalog' as const,
+    listingId: alt.id,
+    vertical: 'stays',
+    unit: alt.unit,
+    image: alt.image,
+    lat: alt.lat,
+    lng: alt.lng,
+    reason: bits.join(' · '),
+    // The routed leg into this stop described the old geometry — clear it.
+    travelKm: undefined,
+    travelMins: undefined,
+    travelRouted: undefined,
+  }
+}
+
 function emptyDraft(): Draft {
   return {
     origin: '',
@@ -114,12 +162,20 @@ function emptyDraft(): Draft {
     budget: 60000,
     pace: 'balanced',
     extra: '',
+    travelMonth: '',
     plan: null,
     tripId: null,
     rating: 0,
     review: '',
     published: false,
   }
+}
+
+function formatMins(mins: number) {
+  if (!mins || mins < 60) return `${mins || 0} min`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m ? `${h}h ${m}m` : `${h}h`
 }
 
 function StarRating({ value, onChange }: { value: number; onChange: (n: number) => void }) {
@@ -136,7 +192,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (n: number) 
 
 function GenerationProgress({ active }: { active: number }) {
   return (
-    <div className="flex flex-col gap-2.5 rounded-lg border bg-card p-4">
+    <div className="flex flex-col gap-2.5 rounded-2xl border bg-card p-4 shadow-soft">
       <p className="flex items-center gap-2 text-sm font-semibold text-primary">
         <Sparkles className="size-4 animate-pulse" /> Planning your trip
       </p>
@@ -165,7 +221,8 @@ function GenerationProgress({ active }: { active: number }) {
 function enrichStops(stops: Stop[], listings: { name: string; lat: number; lng: number }[] | undefined): Stop[] {
   const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
   return stops.map(s => {
-    if (s.lat && s.lng) return s
+    // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
+    if (s.lat != null && s.lng != null) return s
     const t = norm(s.title)
     const listing = (listings ?? []).find(l => {
       const n = norm(l.name)
@@ -204,6 +261,9 @@ export function GuidedJourney() {
     } catch { /* ignore */ }
   }, [])
   const [stage, setStage] = useState<Stage>('where')
+  // True when the planner was pre-filled from the signed-in profile's saved
+  // preferences — shown as a small "pre-filled from your profile" note.
+  const [prefilled, setPrefilled] = useState(false)
   const [animPhase, setAnimPhase] = useState<'exit-left' | 'exit-right' | null>(null)
   const [enterAnim, setEnterAnim] = useState<'enter-right' | 'enter-left'>('enter-right')
   const animTimer = useRef<number | null>(null)
@@ -260,13 +320,65 @@ export function GuidedJourney() {
     try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch { /* ignore */ }
   }, [draft])
 
+  // Keep a ref of the latest draft so the async location callback can check
+  // whether the user already set an origin (typed or via a model) meanwhile.
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+
+  // When a signed-in traveller has saved preferences, apply them to a fresh
+  // journey (one that hasn't been touched yet) so the planner starts smart.
+  // Applied only once per session — later edits by the user are never stomped.
+  const prefillAppliedRef = useRef(false)
+  useEffect(() => {
+    const p = me?.preferences
+    if (!p || prefillAppliedRef.current) return
+    if (draftRef.current.traveler) return
+    prefillAppliedRef.current = true
+    setDraft(d => {
+      if (d.traveler) return d
+      const next: Partial<Draft> = {}
+      const interests = (p.interests ?? []).filter(i => INTERESTS.includes(i))
+      if (interests.length) next.interests = interests
+      if (p.pace === 'relaxed' || p.pace === 'balanced' || p.pace === 'full') next.pace = p.pace
+      if (typeof p.budget === 'number' && p.budget >= 5000 && p.budget <= 250000) next.budget = p.budget
+      return { ...d, ...next }
+    })
+    setPrefilled(true)
+    toast.success('Pre-filled from your profile preferences')
+  }, [me])
+
+  // Auto-detect the traveller's location once on load, so planning starts
+  // from where they actually are — never a default city. A quiet attempt:
+  // permission denial or an unavailable GPS just leaves the manual fields.
+  const autoLocatedRef = useRef(false)
+  useEffect(() => {
+    if (autoLocatedRef.current || draftRef.current.origin) return
+    autoLocatedRef.current = true
+    if (!('geolocation' in navigator)) return
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        setLocating(false)
+        if (draftRef.current.origin) return
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        const label = await reverseGeocode(lat, lng)
+        setDraft(d => (d.origin ? d : { ...d, origin: label || `Lat ${lat.toFixed(3)}, Lng ${lng.toFixed(3)}`, originLat: lat, originLng: lng }))
+        if (label) toast.success(`Planning from your exact location — ${label}`)
+      },
+      () => { setLocating(false) },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+    )
+  }, [])
+
   // The free AI model sometimes omits coordinates — backfill them from the
   // verified listings database and the known-towns table once available.
   // Only writes state when enrichment actually changed something, otherwise
   // an unfixable stop would re-trigger this effect forever.
   useEffect(() => {
     if (!draft.plan || !allListings) return
-    if (!draft.plan.stops.some(s => !s.lat || !s.lng)) return
+    // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
+    if (!draft.plan.stops.some(s => s.lat == null || s.lng == null)) return
     const enriched = enrichStops(draft.plan.stops, allListings)
     const changed = enriched.some((s, i) => s.lat !== draft.plan!.stops[i]?.lat || s.lng !== draft.plan!.stops[i]?.lng)
     if (!changed) return
@@ -357,9 +469,12 @@ export function GuidedJourney() {
     const town = TOWNS.find(t => t.name === m.origin)
     setDraft(d => ({
       ...d,
-      origin: m.origin,
-      originLat: town?.lat,
-      originLng: town?.lng,
+      // A model is a trip *template*, not an origin — planning must start
+      // from where the traveller actually is. The model's origin only
+      // applies when no real location is known yet (e.g. GPS was denied).
+      origin: d.origin || m.origin,
+      originLat: d.originLat ?? town?.lat,
+      originLng: d.originLng ?? town?.lng,
       traveler: m.traveler,
       days: m.days,
       budget: m.budget,
@@ -384,11 +499,25 @@ export function GuidedJourney() {
           interests: draft.interests,
           pace: draft.pace,
           extra: draft.extra,
+          month: draft.travelMonth || undefined,
+          candidates: planCandidates,
         }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error)
       const enriched = { ...data, stops: enrichStops(data.stops as Stop[], allListings) }
+      // If the AI's plan still overshoots the budget (the API tolerates ~15%
+      // overshoot before rejecting), never land on an over-budget itinerary —
+      // send the traveller back to the budget stage so they can adjust and
+      // the plan is regenerated to fit.
+      const plannedTotal = (enriched.stops as Stop[]).reduce((sum, s) => sum + s.cost, 0)
+      if (plannedTotal > draft.budget) {
+        setDraft(d => ({ ...d, plan: null, tripId: null, published: false }))
+        goTo('budget', true)
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        toast.error(`Your plan came to ${formatKES(plannedTotal)} — ${formatKES(plannedTotal - draft.budget)} over your ${formatKES(draft.budget)} budget. Adjust the budget (or trip length) and we'll replan to fit it.`)
+        return
+      }
       setDraft(d => ({ ...d, plan: enriched, tripId: null, published: false }))
       goTo('plan', true)
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -413,7 +542,9 @@ export function GuidedJourney() {
         interests: draft.interests,
         pace: draft.pace,
         extra: draft.extra,
+        month: draft.travelMonth || undefined,
         keptStops: dayStops.filter(s => s.locked).map(s => ({ title: s.title, place: s.place })),
+        candidates: planCandidates,
       }),
     })
     const data = await response.json()
@@ -434,19 +565,22 @@ export function GuidedJourney() {
     try {
       const start = new Date()
       const end = new Date(start.getTime() + 86400000 * Math.max(draft.days - 1, 0))
+      // Local calendar dates, not UTC: an evening planner in EAT would
+      // otherwise get a start date that's already "yesterday" in UTC.
+      const localDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       const id = await create({
         name: plan.name,
         destination: plan.destination,
         origin: draft.origin,
         traveler: draft.traveler ?? undefined,
-        startDate: start.toISOString().slice(0, 10),
-        endDate: end.toISOString().slice(0, 10),
+        startDate: localDate(start),
+        endDate: localDate(end),
         budget: draft.budget,
         totalCost: plan.stops.reduce((s, x) => s + x.cost, 0),
-        stops: plan.stops.map((s, i) => ({
-          name: s.title, place: s.place, day: s.day, time: s.time, cost: s.cost, kind: s.kind, order: i,
-          lat: s.lat, lng: s.lng, locked: s.locked, reason: s.reason, verified: s.verified, duration: s.duration,
-        })),
+        // Persist the chosen travel month so the trip brief can read the
+        // season directly instead of guessing from the created-at date.
+        travelMonth: draft.travelMonth || undefined,
+        stops: toTripStops(plan.stops),
       })
       setDraft(d => ({ ...d, tripId: id }))
       goTo('track', true)
@@ -471,10 +605,75 @@ export function GuidedJourney() {
     if (!plan) return
     setDraft(d => ({ ...d, plan: { ...d.plan!, stops } }))
     if (draft.tripId) {
-      replaceStops({
-        tripId: draft.tripId,
-        stops: stops.map((s, i) => ({ name: s.title, place: s.place, day: s.day, time: s.time, cost: s.cost, kind: s.kind, order: i, lat: s.lat, lng: s.lng, locked: s.locked, reason: s.reason, verified: s.verified, duration: s.duration })),
-      }).then(() => toast.success('Itinerary saved')).catch(() => toast.error('Could not save changes'))
+      replaceStops({ tripId: draft.tripId, stops: toTripStops(stops) })
+        .then(() => toast.success('Itinerary saved'))
+        .catch(() => toast.error('Could not save changes'))
+    }
+  }
+
+  /**
+   * Swaps every night at a planned stay for a real nearby alternative from the
+   * catalog. The new stop carries only real data (name, price, coords, photo),
+   * and the stale routed drive times around it are cleared so nothing invented
+   * lingers. The swap is allowed even if it pushes the total over budget — the
+   * BudgetBar turns red so the traveller sees it, and they can adjust.
+   */
+  function handleSwapStay(indexes: number[], alt: StayAlternative) {
+    if (!plan) return
+    const next = plan.stops.map((s, i) => {
+      if (!indexes.includes(i)) return s
+      return stayPatch(s, alt, plan.stops[i - 1])
+    })
+    // The leg into the following same-day stop changed too — clear it as well.
+    const clearLeg = new Set<number>()
+    for (const i of indexes) {
+      for (let j = i + 1; j < next.length; j++) {
+        if (next[j].day === next[i].day) { clearLeg.add(j); break }
+      }
+    }
+    for (const j of clearLeg) {
+      if (indexes.includes(j)) continue
+      next[j] = { ...next[j], travelKm: undefined, travelMins: undefined, travelRouted: undefined }
+    }
+
+    const total = next.reduce((sum, s) => sum + s.cost, 0)
+    const over = total > draft.budget
+    const overage = over ? ` — ${formatKES(total - draft.budget)} over budget` : ''
+    setDraft(d => (d.plan ? { ...d, plan: { ...d.plan, stops: next } } : d))
+    if (draft.tripId) {
+      replaceStops({ tripId: draft.tripId, stops: toTripStops(next) })
+        .then(() => toast.success(`Swapped to ${alt.name}${overage}`))
+        .catch(() => toast.error('Could not save the swap'))
+    } else {
+      toast.success(`Swapped to ${alt.name}${overage}`)
+    }
+  }
+
+  /**
+   * One-click "Add to plan" from the no-stay suggestions: appends a real
+   * overnight stay on the last day of the trip, so a day-trip plan can
+   * become an overnight one without regenerating anything.
+   */
+  function handleAddStay(alt: StayAlternative) {
+    if (!plan) return
+    const last = plan.stops[plan.stops.length - 1]
+    const prev = [...plan.stops].reverse().find(s => s.lat != null && s.lng != null)
+    const stop = stayPatch(
+      { day: last?.day ?? 1, time: '20:00', title: '', place: '', cost: 0, kind: 'Stay', locked: false },
+      alt,
+      prev,
+    )
+    const next = [...plan.stops, stop]
+    const total = next.reduce((sum, s) => sum + s.cost, 0)
+    const over = total > draft.budget
+    const overage = over ? ` — ${formatKES(total - draft.budget)} over budget` : ''
+    setDraft(d => (d.plan ? { ...d, plan: { ...d.plan, stops: next } } : d))
+    if (draft.tripId) {
+      replaceStops({ tripId: draft.tripId, stops: toTripStops(next) })
+        .then(() => toast.success(`Added ${alt.name}${overage}`))
+        .catch(() => toast.error('Could not save the stay'))
+    } else {
+      toast.success(`Added ${alt.name}${overage}`)
     }
   }
 
@@ -483,7 +682,8 @@ export function GuidedJourney() {
   function startTracking() {
     if (!draft.tripId || !plan) return
     if (!navigator.geolocation) { toast.error('Location is not supported'); return }
-    if (!destinationStop?.lat || !destinationStop?.lng) { toast.error('This trip has no destination coordinates'); return }
+    // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
+    if (destinationStop?.lat == null || destinationStop?.lng == null) { toast.error('This trip has no destination coordinates'); return }
     if (me?.trackingConsent !== true) {
       toast.error('Location tracing needs your consent — enable it below')
       return
@@ -564,6 +764,7 @@ export function GuidedJourney() {
     stopTracking()
     try { sessionStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
     setDraft(emptyDraft())
+    setPrefilled(false)
     setFiles([])
     setCaption('')
     goTo('where')
@@ -588,8 +789,9 @@ export function GuidedJourney() {
     ? `I just explored ${plan.destination} with KenyaTrace${draft.rating ? ` and rated it ${draft.rating}/5` : ''}. Plan your own trip: ${shareLink}`
     : 'Plan your own Kenya trip with KenyaTrace'
 
+  // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
   const mapPoints = useMemo(() => draft.plan?.stops
-    ? draft.plan.stops.filter(s => s.lat && s.lng).map(s => ({ id: `${s.title}-${s.day}`, name: s.title, location: s.place, lat: s.lat!, lng: s.lng! }))
+    ? draft.plan.stops.filter(s => s.lat != null && s.lng != null).map(s => ({ id: `${s.title}-${s.day}`, name: s.title, location: s.place, lat: s.lat!, lng: s.lng! }))
     : [], [draft.plan])
 
   // Stable identities so the map isn't rebuilt on every keystroke or slider move.
@@ -638,6 +840,54 @@ export function GuidedJourney() {
     [draft.interests, draft.budget, draft.days],
   )
 
+  // Real, verified places from the catalog that fit this brief — sent to the
+  // AI so it curates from real data instead of inventing names, prices and
+  // coordinates. Shoestring trips stay close to the origin; generous budgets
+  // can roam the whole country.
+  const planCandidates = useMemo(() => {
+    if (!allListings) return []
+    const perDay = dailyAllowance(draft.budget, draft.days)
+    const maxDist = perDay < 6000 ? 200 : perDay < 15000 ? 400 : 1200
+    const priceCaps: Record<string, number> = {
+      stays: perDay * 1.6,
+      flights: perDay * 3.5,
+      taxis: perDay * 2,
+      cars: perDay * 2,
+      'things-to-do': perDay * 1.2,
+      attractions: perDay * 1.2,
+    }
+    const hasOrigin = draft.originLat != null && draft.originLng != null
+    return allListings
+      .map(l => {
+        let score = l.rating || 0
+        const cap = priceCaps[l.vertical] ?? perDay
+        if (l.price > 0 && l.price <= cap) score += 2
+        if (hasOrigin && l.lat != null) {
+          const d = haversineKm(draft.originLat!, draft.originLng!, l.lat, l.lng)
+          if (d > maxDist) score -= 4
+          else if (d < 80) score += 1.5
+        }
+        return { l, score }
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 60)
+      .map(({ l }) => ({
+        id: l._id,
+        vertical: l.vertical,
+        name: l.name,
+        location: l.location,
+        price: l.price,
+        unit: l.unit,
+        rating: l.rating,
+        reviews: l.reviews,
+        tags: l.tags,
+        description: l.description,
+        lat: l.lat,
+        lng: l.lng,
+        image: l.image,
+      }))
+  }, [allListings, draft.budget, draft.days, draft.originLat, draft.originLng])
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -649,7 +899,7 @@ export function GuidedJourney() {
       {/* ── STAGE: WHERE ─────────────────────────────────────────────────── */}
       {stage === 'where' && (
         <div className="flex flex-col gap-6">
-          <div className="relative h-56 overflow-hidden rounded-lg text-white md:h-64">
+          <div className="relative h-56 overflow-hidden rounded-3xl text-white shadow-lift ring-1 ring-border md:h-64">
             <ListingImage src={wikimediaThumb(JOURNEY_HERO)} alt="Kenya" fill priority className="object-cover" sizes="100vw" />
             <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-black/15" />
             <div className="relative flex h-full flex-col justify-end p-6 md:p-10">
@@ -688,10 +938,10 @@ export function GuidedJourney() {
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                      <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-3">
-                            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"><MapPin /></span>
+                            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground"><MapPin /></span>
                             <div className="min-w-0">
                               <p className="truncate font-semibold">{draft.origin}</p>
                               <p className="text-xs text-muted-foreground">
@@ -720,8 +970,8 @@ export function GuidedJourney() {
                         type="button"
                         onClick={() => setDraft(d => ({ ...d, traveler: t.id }))}
                         className={cn(
-                          'rounded-md border p-3 text-left transition-colors',
-                          draft.traveler === t.id ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:border-primary/40',
+                          'rounded-xl border p-3 text-left transition-colors',
+                          draft.traveler === t.id ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:border-primary/40 hover:bg-card',
                         )}
                       >
                         <p className="text-sm font-semibold">{t.label}</p>
@@ -747,7 +997,7 @@ export function GuidedJourney() {
                         key={m.label}
                         type="button"
                         onClick={() => applyModel(m)}
-                        className="rounded-md border p-3 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
+                        className="rounded-xl border p-3 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
                       >
                         <p className="text-sm font-semibold">{m.label}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">{m.days} days · {formatKES(m.budget)}</p>
@@ -783,9 +1033,24 @@ export function GuidedJourney() {
             <p className="mt-2 text-muted-foreground">{draft.days} day{draft.days === 1 ? '' : 's'} from {draft.origin}.</p>
           </div>
 
+          {prefilled && (
+            <p className="rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-2 text-sm text-primary"><Sparkles className="mr-1 inline size-4 align-[-3px]" />Pre-filled from your profile preferences — adjust anything below.</p>
+          )}
+
           <Card>
             <CardContent className="flex flex-col gap-5 p-6">
               <div>
+                <p className="text-sm font-medium">When are you going?</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Input type="month" className="w-auto" value={draft.travelMonth} onChange={e => setDraft(d => ({ ...d, travelMonth: e.target.value }))} aria-label="Travel month" />
+                  {draft.travelMonth && seasonLabel(draft.travelMonth) && (
+                    <span className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">{seasonLabel(draft.travelMonth)}</span>
+                  )}
+                  {!draft.travelMonth && <span className="text-xs text-muted-foreground">Optional — we&apos;ll tailor every pick to the season.</span>}
+                </div>
+              </div>
+
+              <div className="border-t pt-1">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">Total trip budget</p>
                   <span className="text-2xl font-bold text-primary">{formatKES(draft.budget)}</span>
@@ -830,7 +1095,7 @@ export function GuidedJourney() {
                   ))}
                 </div>
                 {tierWarning && (
-                  <p className="mt-2 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
                     <TriangleAlert className="mr-1 inline size-3.5 align-[-2px]" />
                     {tierWarning}
                   </p>
@@ -858,7 +1123,7 @@ export function GuidedJourney() {
       {stage === 'plan' && (
         <div className="flex flex-col gap-6">
           {!plan ? (
-            <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-10 text-center">
+            <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed p-10 text-center">
               <Route className="size-10 text-primary" />
               <h2 className="font-serif text-3xl">Your plan isn&apos;t ready yet</h2>
               <p className="text-muted-foreground">Set your budget and we&apos;ll build it.</p>
@@ -867,10 +1132,13 @@ export function GuidedJourney() {
           ) : (
             <>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-primary">From {draft.origin}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+                  From {draft.origin}
+                  {draft.travelMonth && seasonLabel(draft.travelMonth) && (<><span className="mx-2 text-muted-foreground">·</span>{seasonLabel(draft.travelMonth)}</>)}
+                </p>
                 <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight">{plan.name}</h1>
                 <p className="mt-2 max-w-3xl text-muted-foreground">{plan.summary}</p>
-                <p className="mt-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-primary"><Sparkles className="mr-1 inline size-4 align-[-3px]" />{plan.originNote}</p>
+                <p className="mt-3 rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-2.5 text-sm text-primary"><Sparkles className="mr-1 inline size-4 align-[-3px]" />{plan.originNote}</p>
               </div>
 
               {/* Budget vs plan cost */}
@@ -899,6 +1167,17 @@ export function GuidedJourney() {
 
               <KenyaMap points={planMapPoints} highlight={planHighlight} destIds={planDestIds} route={mapRoute.length >= 2 ? mapRoute : undefined} className="h-96" />
 
+              {/* Where you'll stay — every night, plus nearby verified alternatives to swap in */}
+              <WhereYouStay
+                stops={plan.stops}
+                listings={allListings}
+                budgetPerDay={dailyAllowance(draft.budget, draft.days)}
+                origin={draft.origin}
+                destination={plan.destination}
+                onSwap={handleSwapStay}
+                onAdd={handleAddStay}
+              />
+
               {/* Day-by-day with per-stop directions */}
               <div>
                 <h2 className="font-serif text-2xl font-semibold tracking-tight">Your days</h2>
@@ -909,17 +1188,45 @@ export function GuidedJourney() {
                       <div className="flex flex-col gap-2">
                         {stops.map((s, i) => (
                           <Card key={`${s.title}-${i}`} className="p-4">
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <div className="min-w-0">
+                            <div className="flex gap-3.5">
+                              {s.image && (
+                                <div className="relative hidden size-16 shrink-0 overflow-hidden rounded-xl sm:block">
+                                  <ListingImage src={s.image} alt="" fill className="object-cover" sizes="64px" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <p className="font-semibold">{s.title}</p>
+                                  <p className="font-semibold">
+                                    {s.verified && s.listingId && s.vertical ? (
+                                      <Link href={`/discover/${s.vertical}/${s.listingId}`} className="transition-colors hover:text-primary hover:underline underline-offset-2">{s.title}</Link>
+                                    ) : (
+                                      s.title
+                                    )}
+                                  </p>
                                   <Badge className="text-[10px]">{s.kind}</Badge>
+                                  {s.verified ? (
+                                    <Badge className="bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300"><Check className="size-3" />Verified</Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="border-amber-500/40 text-[10px] text-amber-700 dark:text-amber-300">Suggested</Badge>
+                                  )}
                                 </div>
                                 <p className="mt-0.5 text-sm text-muted-foreground">{s.time} · {s.place}</p>
+                                {s.travelKm != null && i > 0 && (
+                                  <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Navigation className="size-3 shrink-0 text-primary" />
+                                    {s.travelKm} km · ~{formatMins(s.travelMins ?? 0)} from {stops[i - 1]?.title}
+                                    <span className={cn('rounded-full px-1.5 py-px text-[10px] font-medium', s.travelRouted ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
+                                      {s.travelRouted ? 'routing' : 'estimate'}
+                                    </span>
+                                  </p>
+                                )}
                                 {s.howToGetThere && <p className="mt-1.5 text-sm"><span className="font-medium text-primary">Getting there: </span>{s.howToGetThere}</p>}
                                 {s.reason && <p className="mt-1 text-sm italic text-muted-foreground/80">{s.reason}</p>}
                               </div>
-                              <span className="shrink-0 text-sm font-semibold">{formatKES(s.cost)}</span>
+                              <div className="shrink-0 text-right">
+                                <p className="text-sm font-semibold">{s.verified ? formatKES(s.cost) : `~${formatKES(s.cost)}`}</p>
+                                <p className="text-[10px] text-muted-foreground">{s.verified ? `per ${s.unit ?? s.vertical ?? 'unit'}` : 'estimate'}</p>
+                              </div>
                             </div>
                           </Card>
                         ))}
@@ -964,7 +1271,7 @@ export function GuidedJourney() {
           </div>
 
           {!draft.tripId ? (
-            <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-10 text-center">
+            <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed p-10 text-center">
               <Navigation className="size-10 text-primary" />
               <h2 className="font-serif text-3xl">Save your plan to start tracking</h2>
               <p className="max-w-md text-muted-foreground">Your live location will be recorded on the map until you reach {plan?.destination ?? 'your destination'}.</p>
@@ -989,7 +1296,7 @@ export function GuidedJourney() {
               <Card>
                 <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
                   {!tracking && activeSession?.status !== 'arrived' && me?.trackingConsent !== true && (
-                    <div className="flex w-full items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                    <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-2.5">
                       <p className="text-sm text-muted-foreground">Record your route while you travel?</p>
                       <Switch checked={false} onCheckedChange={v => setConsent({ consent: v }).then(() => v && toast.success('Location tracing enabled')).catch(() => toast.error('Could not update location consent'))} />
                     </div>
@@ -1010,7 +1317,7 @@ export function GuidedJourney() {
                               : `${activeSession?.path.length ?? 0} point${activeSession?.path.length === 1 ? '' : 's'} recorded`
                             : `Your route from ${draft.origin} to ${plan?.destination ?? 'your destination'} — tracking keeps running while you explore the app`}
                         </p>
-                        <div className="mt-2 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-secondary">
+                        <div className="mt-2 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-muted">
                           <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${activeSession?.progressPct ?? 0}%` }} />
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">{activeSession?.progressPct ?? 0}% of the way there</p>
@@ -1048,7 +1355,7 @@ export function GuidedJourney() {
           </div>
 
           {!draft.tripId ? (
-            <div className="flex min-h-56 flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-10 text-center">
+            <div className="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed p-10 text-center">
               <Camera className="size-10 text-primary" />
               <h2 className="font-serif text-3xl">Save your trip first</h2>
               <p className="max-w-md text-muted-foreground">Share this trip&apos;s photos, videos and rating.</p>
@@ -1056,8 +1363,8 @@ export function GuidedJourney() {
             </div>
           ) : draft.published ? (
             <div className="flex flex-col gap-5">
-              <div className="flex items-center gap-4 rounded-lg border border-primary/30 bg-primary/5 p-5">
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"><Check className="size-6" /></span>
+              <div className="flex items-center gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-5 shadow-soft">
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><Check className="size-6" /></span>
                 <div>
                   <p className="font-semibold">Your experience is live</p>
                   <p className="text-sm text-muted-foreground">Anyone with the link can see your photos, videos and {draft.rating}/5 rating.</p>
@@ -1093,7 +1400,7 @@ export function GuidedJourney() {
                   <div>
                     <p className="text-sm font-medium">Photos & videos</p>
                     <div className="mt-2">
-                      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-8 text-center transition-colors hover:border-primary/40">
+                      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-8 text-center transition-colors hover:border-primary/40 hover:bg-primary/5">
                         <Camera className="size-8 text-primary" />
                         <span className="text-sm font-medium">Tap to add photos or videos</span>
                         <span className="text-xs text-muted-foreground">Up to 8 files · JPG, PNG, MP4</span>
@@ -1103,7 +1410,7 @@ export function GuidedJourney() {
                     {files.length > 0 && (
                       <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
                         {files.map((f, i) => (
-                          <div key={i} className="relative aspect-square overflow-hidden rounded-lg border">
+                          <div key={i} className="relative aspect-square overflow-hidden rounded-xl border">
                             {f.video ? (
                               <video src={URL.createObjectURL(f.file)} className="size-full object-cover" muted playsInline />
                             ) : (
@@ -1128,7 +1435,7 @@ export function GuidedJourney() {
                     <Input className="mt-1" value={caption} onChange={e => setCaption(e.target.value)} placeholder="The story behind this trip…" />
                   </div>
 
-                  <div className="rounded-lg border p-4">
+                  <div className="rounded-xl border bg-card p-4">
                     <p className="text-sm font-medium">Rate your experience</p>
                     <div className="mt-2"><StarRating value={draft.rating} onChange={n => setDraft(d => ({ ...d, rating: n }))} /></div>
                     <p className="mt-1 text-xs text-muted-foreground">{draft.rating ? `${draft.rating}/5 — ${draft.rating >= 4 ? 'glad you loved it' : draft.rating === 3 ? 'worthwhile trip' : 'thanks for the honest review'}` : 'Tap a star to rate'}</p>
@@ -1154,7 +1461,7 @@ export function GuidedJourney() {
       {/* ── STAGE: DONE ───────────────────────────────────────────────────── */}
       {stage === 'done' && (
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 py-6 text-center">
-          <span className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground"><Flag className="size-8" /></span>
+          <span className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-pop"><Flag className="size-8" /></span>
           <h1 className="font-serif text-4xl font-semibold tracking-tight">Session complete</h1>
           <p className="max-w-md text-muted-foreground">
             {plan ? `You planned ${plan.destination} from ${draft.origin} over ${draft.days} day${draft.days === 1 ? '' : 's'} on a ${formatKES(draft.budget)} budget${draft.rating ? `, and rated it ${draft.rating}/5` : ''}.` : 'Your Kenya journey is complete.'}

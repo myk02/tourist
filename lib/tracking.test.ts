@@ -54,7 +54,7 @@ describe('arrivalState', () => {
   const atDest = { lat: MARA.lat, lng: MARA.lng }
 
   it('needs ARRIVAL_CONFIRMATIONS consecutive fixes inside the radius', () => {
-    let streak = 0
+    const streak = 0
     let result = arrivalState(MARA.lat, MARA.lng, atDest.lat, atDest.lng, 10, streak)
     for (let i = 1; i < ARRIVAL_CONFIRMATIONS; i++) {
       expect(result.arrived).toBe(false)

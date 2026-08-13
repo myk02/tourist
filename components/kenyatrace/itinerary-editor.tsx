@@ -31,10 +31,10 @@ import { cn } from '@/lib/utils'
 import type { Stop } from './types'
 
 export const KIND_STYLE: Record<string, string> = {
-  Stay: 'bg-blue-100 text-blue-800',
-  Transport: 'bg-amber-100 text-amber-800',
-  Experience: 'bg-emerald-100 text-emerald-800',
-  Food: 'bg-rose-100 text-rose-800',
+  Stay: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  Transport: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  Experience: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  Food: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
 }
 
 function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -48,12 +48,20 @@ function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
 }
 
 function travelRow(a: Stop, b: Stop) {
-  if (!a.lat || !a.lng || !b.lat || !b.lng) return null
+  // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
+  if (a.lat == null || a.lng == null || b.lat == null || b.lng == null) return null
   const km = distanceKm(a.lat, a.lng, b.lat, b.lng)
   const hours = Math.max(km / 45, 0.25)
   const h = Math.floor(hours)
   const m = Math.round((hours - h) * 60)
   return `${h ? `${h}h ` : ''}${m}min · ${Math.round(km)} km`
+}
+
+function formatMins(mins: number) {
+  if (!mins || mins < 60) return `${mins || 0} min`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m ? `${h}h ${m}m` : `${h}h`
 }
 
 function kindFromVertical(vertical: string) {
@@ -78,7 +86,7 @@ function SortableStopRow({ stop, position, active, editing, readOnly, onEditingC
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn('flex items-center gap-3 rounded-md border bg-card p-3 transition-colors', isDragging && 'z-10 opacity-80 shadow-lg', active && 'border-primary ring-2 ring-primary/20')}
+      className={cn('flex items-center gap-3 rounded-xl border bg-card p-3 transition-colors', isDragging && 'z-10 opacity-80 shadow-lift', active && 'border-primary ring-2 ring-primary/20')}
     >
       {!readOnly && (
         <button
@@ -90,12 +98,16 @@ function SortableStopRow({ stop, position, active, editing, readOnly, onEditingC
           <GripVertical className="size-4" />
         </button>
       )}
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-xs font-bold text-primary">{stop.time}</span>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">{stop.time}</span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className={cn('font-semibold', stop.locked && 'opacity-60')}>{stop.title}</p>
           <Badge className={cn('shrink-0 text-[10px]', KIND_STYLE[stop.kind] ?? 'bg-secondary text-muted-foreground')}>{stop.kind}</Badge>
-          {stop.verified && <Badge className="shrink-0 bg-accent text-[10px] text-accent-foreground">Verified</Badge>}
+          {stop.verified ? (
+            <Badge className="shrink-0 bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300">Verified</Badge>
+          ) : stop.source === 'gap' ? (
+            <Badge variant="outline" className="shrink-0 border-amber-500/40 text-[10px] text-amber-700 dark:text-amber-300">Suggested</Badge>
+          ) : null}
           {stop.locked && <Lock className="size-3 shrink-0 text-primary" />}
         </div>
         <p className="truncate text-sm text-muted-foreground">{stop.place}</p>
@@ -154,13 +166,21 @@ function SortableStopRow({ stop, position, active, editing, readOnly, onEditingC
 }
 
 function TravelTime({ a, b }: { a: Stop; b: Stop }) {
-  const label = travelRow(a, b)
+  // Prefer the real routed travel time computed at plan time; fall back to the
+  // straight-line estimate so saved trips without routed data still show rows.
+  const label = b.travelKm != null && b.travelMins != null ? `${b.travelKm} km · ~${formatMins(b.travelMins)}` : travelRow(a, b)
+  const routed = b.travelKm != null && b.travelMins != null
   if (!label) return null
   return (
     <div className="flex items-center gap-2 pl-9 text-xs text-muted-foreground">
       <span className="h-4 w-px bg-border" />
       <Car className="size-3.5" />
       <span>{label}</span>
+      {routed && (
+        <span className={cn('rounded-full px-1.5 py-px text-[10px] font-medium', b.travelRouted ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
+          {b.travelRouted ? 'routing' : 'estimate'}
+        </span>
+      )}
     </div>
   )
 }
@@ -253,7 +273,8 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     for (const s of ordered) {
       const i = dayIndex.get(s.day) ?? 0
       dayIndex.set(s.day, i + 1)
-      if (s.lat && s.lng) {
+      // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
+      if (s.lat != null && s.lng != null) {
         points.push({ id: `${s.title}-${i}`, name: s.title, location: s.place, lat: s.lat, lng: s.lng })
         route.push([s.lng, s.lat])
       }
@@ -321,8 +342,9 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
       }
       const result: Stop[] = []
       for (const [day, dayStops] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
-        const withCoords = dayStops.filter(s => s.lat && s.lng)
-        const withoutCoords = dayStops.filter(s => !s.lat || !s.lng)
+        // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
+        const withCoords = dayStops.filter(s => s.lat != null && s.lng != null)
+        const withoutCoords = dayStops.filter(s => s.lat == null || s.lng == null)
         const ordered: Stop[] = []
         const remaining = [...withCoords]
         while (remaining.length) {
@@ -398,11 +420,26 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     }
   }
 
-  function addFromListing(name: string, place: string, cost: number, kind: string, lat: number | undefined, lng: number | undefined) {
+  function addFromListing(listing: { _id: string; name: string; location: string; price: number; vertical: string; lat: number | undefined; lng: number | undefined; image?: string }) {
     const targetDay = activeDay === 'all' ? (days.length ? days[days.length - 1][0] : 1) : parseInt(activeDay, 10)
     const dayStops = stops.filter(s => s.day === targetDay)
-    setStops(prev => [...prev, { day: targetDay, time: dayStops.length ? '15:00' : '09:00', title: name, place, cost, kind, lat, lng }])
-    toast.success(`${name} added to day ${targetDay}`)
+    setStops(prev => [...prev, {
+      day: targetDay,
+      time: dayStops.length ? '15:00' : '09:00',
+      title: listing.name,
+      place: listing.location,
+      cost: listing.price,
+      kind: kindFromVertical(listing.vertical),
+      lat: listing.lat,
+      lng: listing.lng,
+      image: listing.image,
+      // Search results are real catalog rows — mark them verified.
+      verified: true,
+      source: 'catalog' as const,
+      listingId: listing._id,
+      vertical: listing.vertical,
+    }])
+    toast.success(`${listing.name} added to day ${targetDay}`)
   }
 
   function renderStopList(day: number) {
@@ -482,18 +519,18 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
             </>
           )}
         </div>
-        <div className="mt-3 flex w-fit items-center gap-1 rounded-lg border p-1 lg:hidden">
+        <div className="mt-3 flex w-fit items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1 lg:hidden">
           <button
             type="button"
             onClick={() => setMobileView('list')}
-            className={cn('flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors', mobileView === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+            className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', mobileView === 'list' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}
           >
             <List className="size-4" />List
           </button>
           <button
             type="button"
             onClick={() => setMobileView('map')}
-            className={cn('flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors', mobileView === 'map' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+            className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', mobileView === 'map' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}
           >
             <MapIcon className="size-4" />Map
           </button>
@@ -505,7 +542,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
                 {days.map(([day]) => (
                   <div key={day} className="flex flex-col gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="flex size-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">{day}</span>
+                      <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground shadow-xs">{day}</span>
                       <h3 className="font-semibold">Day {day}</h3>
                       <span className="text-sm text-muted-foreground">· {formatKES(dayTotals.get(day) ?? 0)}</span>
                     </div>
@@ -590,12 +627,12 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
           {addTerm && (
             <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto">
               {results?.slice(0, 12).map(l => (
-                <div key={l._id} className="flex items-center gap-3 rounded-md border p-2.5">
+                <div key={l._id} className="flex items-center gap-3 rounded-xl border p-2.5 transition-colors hover:border-primary/30">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{l.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{l.location} · {formatKES(l.price)}</p>
                   </div>
-                  <Button size="sm" variant="outline" className="gap-1" onClick={() => addFromListing(l.name, l.location, l.price, kindFromVertical(l.vertical), l.lat, l.lng)}>
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => addFromListing({ _id: l._id, name: l.name, location: l.location, price: l.price, vertical: l.vertical, lat: l.lat, lng: l.lng, image: l.image })}>
                     <Plus className="size-3.5" /> Add
                   </Button>
                 </div>

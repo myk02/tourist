@@ -1,9 +1,12 @@
 'use client'
 
-import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronRight, GripVertical, X } from 'lucide-react'
+import { useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import type { Id } from '@/convex/_generated/dataModel'
+import { Check, ChevronRight, GripVertical, Route, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useTracking } from './tracking-provider'
@@ -21,6 +24,7 @@ export function TrackerWidget() {
   const { session, stop } = useTracking()
   const router = useRouter()
   const pathname = usePathname()
+  const enableTraceShare = useMutation(api.trips.enableTraceShare)
   // On arrival the X just hides the widget (the moment is preserved); while
   // tracking it ends the session.
   const [dismissed, setDismissed] = useState(false)
@@ -131,7 +135,7 @@ export function TrackerWidget() {
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {lastAnnouncedRef.current}
       </div>
-      <div ref={cardRef} className="rounded-xl border bg-card p-3 shadow-lg">
+      <div ref={cardRef} className="rounded-2xl border border-border/80 bg-card/95 p-3 shadow-pop backdrop-blur supports-backdrop-filter:bg-card/80">
         <div
           title="Drag to move · double-click to reset"
           className="flex cursor-grab touch-none select-none items-center gap-2 active:cursor-grabbing"
@@ -161,7 +165,7 @@ export function TrackerWidget() {
             <X className="size-4" />
           </Button>
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
           <div className={cn('h-full rounded-full transition-all', arrived ? 'bg-emerald-600' : 'bg-primary')} style={{ width: `${session.progressPct}%` }} />
         </div>
         {arrived ? (
@@ -169,8 +173,24 @@ export function TrackerWidget() {
             <Button size="sm" className="flex-1 gap-1" onClick={() => router.push(trackPath)}>
               Continue <ChevronRight className="size-4" />
             </Button>
-            <Button size="sm" variant="outline" className="flex-1" nativeButton={false} render={<Link href={`/moments?trip=${session.tripId}`} />}>
-              Share (optional)
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 gap-1"
+              onClick={() => {
+                void (async () => {
+                  if (!session) return
+                  try {
+                    const { token } = await enableTraceShare({ tripId: session.tripId as Id<'trips'> })
+                    await navigator.clipboard.writeText(`${window.location.origin}/trace/${session.tripId}?t=${token}`)
+                    toast.success('Trace link copied — anyone with it can see your route')
+                  } catch {
+                    toast.error('Could not share this trace')
+                  }
+                })()
+              }}
+            >
+              <Route className="size-4" />Share trace
             </Button>
           </div>
         ) : (

@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatKES, wikimediaThumb } from '@/lib/kenya-data'
+import { isValidConvexId } from '@/lib/id'
 import { cn } from '@/lib/utils'
 import { PayNowButton } from './pay-now'
 
@@ -74,7 +75,7 @@ export function SourceBadge({ source, className, onClick }: { source?: string | 
   )
 }
 
-export function RequireAuth({children}:{children:React.ReactNode}){const {isAuthenticated,isLoading}=useConvexAuth();if(isLoading)return <div className="mx-auto max-w-6xl p-8"><div className="h-48 animate-pulse rounded-lg bg-secondary"/></div>;if(!isAuthenticated)return <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center"><span className="flex size-16 items-center justify-center rounded-lg bg-secondary text-primary"><CircleUserRound className="size-8"/></span><h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1><p className="text-muted-foreground">Sign in to save routes, reservations, live traces and moments.</p><SignInButton mode="modal"><Button size="lg">Sign in to continue</Button></SignInButton></div>;return <>{children}</>}
+export function RequireAuth({children}:{children:React.ReactNode}){const {isAuthenticated,isLoading}=useConvexAuth();if(isLoading)return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl"/></div>;if(!isAuthenticated)return <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center"><span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8"/></span><h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1><p className="text-muted-foreground">Sign in to save routes, reservations, live traces and moments.</p><SignInButton mode="modal"><Button size="lg">Sign in to continue</Button></SignInButton></div>;return <>{children}</>}
 
 /**
  * One reservation row, resolving the listing by id. Used on the Profile
@@ -124,7 +125,7 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
     .map(kind => ({ kind, total: stops.filter(s => s.kind === kind).reduce((a, s) => a + s.cost, 0) }))
     .filter(k => k.total > 0)
   return (
-    <div className={cn('rounded-lg border p-4', className)}>
+    <div className={cn('rounded-2xl border bg-card p-4 shadow-soft', className)}>
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="font-medium">Trip cost</span>
         <span className="font-semibold">
@@ -133,13 +134,13 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
           {over && <span className="ml-2 text-xs font-semibold text-destructive">over budget</span>}
         </span>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary">
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
         <div className={cn('h-full rounded-full transition-all', over ? 'bg-destructive' : 'bg-primary')} style={{ width: `${pct}%` }} />
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{pct}% of your budget used{perDay != null ? ` · ≈ ${formatKES(perDay)} per day` : ''}</p>
       {kinds.length > 0 && (
         <div className="mt-3 border-t pt-3">
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
+          <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
             {kinds.map(k => <div key={k.kind} style={{ width: `${(k.total / Math.max(total, 1)) * 100}%`, backgroundColor: KIND_COLORS[k.kind] }} />)}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
@@ -156,8 +157,10 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
   )
 }
 
-export function Empty({title,text,action}:{title:string;text:string;action?:()=>void}){return <div className="col-span-full flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center"><Compass className="size-8 text-primary"/><h2 className="mt-4 font-serif text-2xl">{title}</h2><p className="mt-2 max-w-md text-muted-foreground">{text}</p>{action&&<Button className="mt-4" variant="outline" onClick={action}>Clear filters</Button>}</div>}
+export function Empty({title,text,action}:{title:string;text:string;action?:()=>void}){return <div className="col-span-full flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center"><Compass className="size-8 text-primary"/><h2 className="mt-4 font-serif text-2xl">{title}</h2><p className="mt-2 max-w-md text-muted-foreground">{text}</p>{action&&<Button className="mt-4" variant="outline" onClick={action}>Clear filters</Button>}</div>}
 
 export function NotFound(){return <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary"/><h1 className="font-serif text-4xl">This trail ends here</h1><p className="text-muted-foreground">The page or place you requested could not be found.</p><Button nativeButton={false} render={<Link href="/"/>}>Back to discover</Button></div>}
 
-export function useTripId(){const pathname=usePathname();const id=pathname.split('/')[2];return id as Id<'trips'>}
+export function useTripId(){const pathname=usePathname();const id=pathname.split('/')[2];// Validate the route param before querying — a malformed id would make
+// Convex throw and crash the page instead of showing NotFound.
+return isValidConvexId(id) ? id as Id<'trips'> : null}

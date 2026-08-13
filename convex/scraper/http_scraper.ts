@@ -70,7 +70,7 @@ async function scrapeStays(ctx: any, now: number): Promise<any[]> {
 
 async function parseBookingResults(html: string, now: number, source: string): Promise<any[]> {
   const results: any[] = []
-  const stayPattern = /<a[^>]*href="([^"]*hotel[^"]*)"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>[\s\S]*?<div[^>]*class="[^"]*bui-price[^"]*"[^>]*>[\s\S]*?([\₤K][^<\n]+)[\s\S]*?<div[^>]*class="[^"]*bui-review-score[^"]*"[^>]*>[\s\S]*?(\d+,\d+|\d+\.\d+)[\s\S]*?<span[^>]*>(\d+)[\s\S]*reviews/gi
+  const stayPattern = /<a[^>]*href="([^"]*hotel[^"]*)"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>[\s\S]*?<div[^>]*class="[^"]*bui-price[^"]*"[^>]*>[\s\S]*?([₤K][^<\n]+)[\s\S]*?<div[^>]*class="[^"]*bui-review-score[^"]*"[^>]*>[\s\S]*?(\d+,\d+|\d+\.\d+)[\s\S]*?<span[^>]*>(\d+)[\s\S]*reviews/gi
 
   let match
   while ((match = stayPattern.exec(html)) !== null && results.length < 15) {

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { SignInButton, useUser } from '@clerk/nextjs'
 import { useAction, useConvexAuth, useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { CalendarClock, Check, CircleUserRound, Loader2, Sparkles, Wallet } from 'lucide-react'
+import { CalendarClock, Camera, Check, CircleUserRound, Compass, Heart, Loader2, Sparkles, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -211,10 +211,15 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
 
 /** The full-screen paywall shown when access has run out. */
 function PaywallScreen({ status, compact = false }: { status: Status; compact?: boolean }) {
+  // Value-first: show the traveller exactly what they'd get back — their own
+  // trips, saved spots and moments — so the wall is about restoring real
+  // value, not just paying for access.
+  const context = useQuery(api.subscriptions.paywallContext)
+  const hasValue = (context?.tripCount ?? 0) > 0 || (context?.savedCount ?? 0) > 0 || (context?.momentCount ?? 0) > 0
   return (
     <div className={cn('mx-auto flex w-full flex-col', compact ? 'gap-4 max-w-3xl' : 'max-w-3xl gap-6 px-5 py-16')}>
       <div className="flex flex-col items-center gap-2.5 text-center">
-        <span className={cn('flex items-center justify-center rounded-xl bg-primary text-primary-foreground', compact ? 'size-10' : 'size-14')}>
+        <span className={cn('flex items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-pop', compact ? 'size-10' : 'size-14')}>
           <Sparkles className={compact ? 'size-5' : 'size-7'} />
         </span>
         <h1 className={cn('font-serif font-semibold tracking-tight text-balance', compact ? 'text-xl' : 'text-4xl')}>Pick a plan</h1>
@@ -222,6 +227,31 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
           {status.mode === 'none' ? 'Your 30-day free trial has ended.' : 'Your access has ended.'} One-time packs — no auto-renewal.
         </p>
       </div>
+
+      {hasValue && (
+        <div className="w-full rounded-2xl border bg-card p-4 text-left shadow-soft">
+          <p className="text-sm font-semibold">What&apos;s waiting for you</p>
+          {context!.upcomingTrip && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Next up: <span className="font-medium text-foreground">{context!.upcomingTrip.name}</span>
+              {context!.upcomingTrip.destination ? ` · ${context!.upcomingTrip.destination}` : ''}
+              {context!.upcomingTrip.startDate ? ` · starts ${context!.upcomingTrip.startDate}` : ''}
+            </p>
+          )}
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {context!.tripCount > 0 && (
+              <span className="flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium"><Compass className="size-3.5 text-primary" />{context!.tripCount} trip{context!.tripCount === 1 ? '' : 's'}</span>
+            )}
+            {context!.savedCount > 0 && (
+              <span className="flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium"><Heart className="size-3.5 text-primary" />{context!.savedCount} saved spot{context!.savedCount === 1 ? '' : 's'}</span>
+            )}
+            {context!.momentCount > 0 && (
+              <span className="flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium"><Camera className="size-3.5 text-primary" />{context!.momentCount} moment{context!.momentCount === 1 ? '' : 's'}</span>
+            )}
+          </div>
+        </div>
+      )}
+
       <DayPackCheckout />
     </div>
   )
@@ -276,7 +306,7 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
   if (!isAuthenticated) {
     return (
       <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
-        <span className="flex size-16 items-center justify-center rounded-lg bg-secondary text-primary"><CircleUserRound className="size-8" /></span>
+        <span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8" /></span>
         <h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1>
         <p className="text-muted-foreground">Sign in to plan routes, save reservations, live traces and moments.</p>
         <SignInButton mode="modal"><Button size="lg">Sign in to continue</Button></SignInButton>
@@ -284,18 +314,18 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
     )
   }
   if (isLoading || status === undefined || status === null) {
-    return <div className="mx-auto max-w-6xl p-8"><div className="h-48 animate-pulse rounded-lg bg-secondary" /></div>
+    return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl" /></div>
   }
   // A brand-new signed-in user has no row yet — the trial-start mutation is
   // in flight, so keep showing the skeleton instead of flashing the paywall.
   if (status.mode === 'none' && trialPending) {
-    return <div className="mx-auto max-w-6xl p-8"><div className="h-48 animate-pulse rounded-lg bg-secondary" /></div>
+    return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl" /></div>
   }
   if (!status.active) return <PaywallScreen status={status} />
   return (
     <div className="flex flex-col">
       {status.mode === 'trial' && (
-        <div className="border-b bg-primary/5">
+        <div className="border-b border-primary/10 bg-primary/5">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-sm">
             <p className="flex items-center gap-2 text-muted-foreground">
               <CalendarClock className="size-4 text-primary" />

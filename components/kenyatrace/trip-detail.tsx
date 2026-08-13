@@ -7,14 +7,15 @@ import { SignInButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { CalendarClock, Camera, Copy, CopyPlus, LocateFixed, Trash2 } from 'lucide-react'
+import { CalendarClock, Camera, Copy, CopyPlus, LocateFixed, Printer, Route, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { geocodeArea } from '@/lib/geocode'
+import { buildPrintableItinerary } from '@/lib/itinerary'
 import { formatKES } from '@/lib/kenya-data'
 import { ItineraryEditor } from './itinerary-editor'
 import { KenyaMap } from './kenya-map'
@@ -24,6 +25,8 @@ import { ForwardBookingDialog } from './forward-booking'
 import { ShareTripDialog } from './share-trip'
 import { BookingRow, BudgetBar, NotFound, useTripId } from './shared'
 import { RequireSubscription } from './paywall'
+import { TripBriefCard } from './trip-brief'
+import { TripChecklist } from './trip-checklist'
 import type { Stop } from './types'
 
 export function TripDetail() {
@@ -32,14 +35,15 @@ export function TripDetail() {
   const params = useSearchParams()
   const inviteToken = params.get('invite')
   const { isSignedIn } = useUser()
-  const trip = useQuery(api.trips.getWithStops, { id })
-  const bookings = useQuery(api.bookings.forTrip, trip?.role === 'owner' ? { tripId: id } : 'skip')
+  const trip = useQuery(api.trips.getWithStops, id ? { id } : 'skip')
+  const bookings = useQuery(api.bookings.forTrip, id && trip?.role === 'owner' ? { tripId: id } : 'skip')
   const remove = useMutation(api.trips.remove)
   const replaceStops = useMutation(api.trips.replaceStops)
   const updateTrip = useMutation(api.trips.update)
   const duplicateTrip = useMutation(api.trips.duplicate)
   const cancelBooking = useMutation(api.bookings.cancel)
   const acceptInvite = useMutation(api.trips.acceptInvite)
+  const enableTraceShare = useMutation(api.trips.enableTraceShare)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [inviteState, setInviteState] = useState<'idle' | 'accepting' | 'signin' | 'error'>('idle')
@@ -91,9 +95,14 @@ export function TripDetail() {
   const routeHighlight = useMemo(() => (originPoint ? ['origin'] : []), [originPoint])
   const routeDestIds = useMemo(() => (mapPoints.length ? [mapPoints[mapPoints.length - 1].id] : []), [mapPoints])
 
-  if (trip === undefined) return <div className="mx-auto max-w-6xl p-8"><div className="h-72 animate-pulse rounded-lg bg-secondary" /></div>
+  // A malformed /trips/<garbage> route must show NotFound, not crash Convex.
+  // Narrowed alias: TS won't narrow the union inside hoisted function
+  // declarations, so handlers and JSX below use the guaranteed non-null id.
+  if (id == null) return <NotFound />
+  const tripId = id
+  if (trip === undefined) return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-72 rounded-2xl" /></div>
   if (!trip) {
-    if (inviteState === 'accepting') return <div className="mx-auto max-w-6xl p-8"><div className="h-72 animate-pulse rounded-lg bg-secondary" /></div>
+    if (inviteState === 'accepting') return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-72 rounded-2xl" /></div>
     if (inviteState === 'signin') {
       return (
         <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
@@ -135,7 +144,7 @@ export function TripDetail() {
     if (!nextStatus) return
     setUpdating(true)
     try {
-      await updateTrip({ id, patch: { status: nextStatus.status } })
+      await updateTrip({ id: tripId, patch: { status: nextStatus.status } })
       toast.success(`Trip marked as ${nextStatus.status}`)
     } catch {
       toast.error('Could not update trip status')
@@ -146,7 +155,7 @@ export function TripDetail() {
 
   async function handleDuplicate() {
     try {
-      const newId = await duplicateTrip({ id })
+      const newId = await duplicateTrip({ id: tripId })
       toast.success('Trip duplicated')
       router.push(`/trips/${newId}`)
     } catch {
@@ -156,16 +165,51 @@ export function TripDetail() {
 
   async function handleCopyLink() {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/trips/${id}`)
+      await navigator.clipboard.writeText(`${window.location.origin}/trips/${tripId}`)
       toast.success('Trip link copied')
     } catch {
       toast.error('Could not copy link')
     }
   }
 
+  // Opens the itinerary as a clean, self-contained document for printing or
+  // saving as a PDF — an offline copy for the road.
+  function handlePrint() {
+    if (!trip) return
+    const win = window.open('', '_blank', 'width=860,height=1000')
+    if (!win) { toast.error('Pop-up blocked — allow pop-ups to print'); return }
+    win.document.write(buildPrintableItinerary({
+      name: trip.name,
+      destination: trip.destination,
+      origin: trip.origin,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      budget: trip.budget,
+      totalCost: trip.totalCost,
+      stops: trip.stops.map(s => ({
+        day: s.day, time: s.time, name: s.name, place: s.place, kind: s.kind,
+        cost: s.cost, verified: s.verified, travelKm: s.travelKm, travelMins: s.travelMins,
+      })),
+    }))
+    win.document.close()
+    setTimeout(() => win.print(), 350)
+  }
+
+  // Publishes the trip's live trace as a public, shareable page (the trace
+  // token is the password — created on demand for trips that predate tokens).
+  async function handleShareTrace() {
+    try {
+      const { token } = await enableTraceShare({ tripId })
+      await navigator.clipboard.writeText(`${window.location.origin}/trace/${tripId}?t=${token}`)
+      toast.success('Trace link copied — anyone with it can see your route')
+    } catch {
+      toast.error('Could not share this trace')
+    }
+  }
+
   async function handleRemove() {
     try {
-      await remove({ id })
+      await remove({ id: tripId })
       toast.success('Trip deleted')
       router.push('/trips')
     } catch {
@@ -185,7 +229,7 @@ export function TripDetail() {
   async function handleSave(stops: Stop[]) {
     try {
       await replaceStops({
-        tripId: id,
+        tripId,
         stops: stops.map((s, i) => ({
           name: s.title,
           place: s.place,
@@ -200,6 +244,15 @@ export function TripDetail() {
           reason: s.reason,
           verified: s.verified,
           duration: s.duration,
+          source: s.source,
+          listingId: s.listingId,
+          vertical: s.vertical,
+          unit: s.unit,
+          image: s.image,
+          travelKm: s.travelKm,
+          travelMins: s.travelMins,
+          travelRouted: s.travelRouted,
+          completedAt: s.completedAt,
         })),
       })
       toast.success('Itinerary saved')
@@ -208,13 +261,13 @@ export function TripDetail() {
     }
   }
 
-  const stops = trip.stops.map(s => ({ day: s.day, time: s.time, title: s.name, place: s.place, cost: s.cost, kind: s.kind, lat: s.lat, lng: s.lng, locked: s.locked, reason: s.reason, verified: s.verified, duration: s.duration }))
+  const stops = trip.stops.map(s => ({ day: s.day, time: s.time, title: s.name, place: s.place, cost: s.cost, kind: s.kind, lat: s.lat, lng: s.lng, locked: s.locked, reason: s.reason, verified: s.verified, duration: s.duration, source: s.source as 'catalog' | 'gap' | undefined, listingId: s.listingId, vertical: s.vertical, unit: s.unit, image: s.image, travelKm: s.travelKm, travelMins: s.travelMins, travelRouted: s.travelRouted }))
   const activeBookings = (bookings ?? []).filter(b => b.status !== 'cancelled')
   const bookingsTotal = activeBookings.reduce((sum, b) => sum + b.amount, 0)
   return (
     <RequireSubscription enabled={requireSubscription}>
     <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-8">
-      <div className="overflow-hidden rounded-lg bg-primary px-6 py-10 text-primary-foreground md:px-10">
+      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-[color-mix(in_oklch,var(--primary),#000_28%)] px-6 py-10 text-primary-foreground shadow-lift ring-1 ring-primary/20 md:px-10">
         <div className="flex flex-wrap items-center gap-2">
           <Badge className="bg-accent text-accent-foreground">{trip.startDate} — {trip.endDate}</Badge>
           {!isOwner && <Badge className="bg-accent text-accent-foreground">{myRole === 'editor' ? 'Shared with you · Editor' : 'Shared with you · Viewer'}</Badge>}
@@ -230,13 +283,35 @@ export function TripDetail() {
         <div className="mt-6 flex flex-wrap gap-3">
           {isOwner && <Button variant="secondary" nativeButton={false} render={<Link href={`/trips/${trip._id}/track`} />}><LocateFixed data-icon="inline-start" />Start live tracking</Button>}
           {isOwner && <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" nativeButton={false} render={<Link href={`/moments?trip=${trip._id}`} />}><Camera data-icon="inline-start" />Moments</Button>}
-          {myRole !== 'viewer' && <ShareTripDialog tripId={id} tripName={trip.name} myRole={myRole} isOwner={isOwner} triggerClassName="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10" />}
+          {myRole !== 'viewer' && <ShareTripDialog tripId={tripId} tripName={trip.name} myRole={myRole} isOwner={isOwner} triggerClassName="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10" />}
           {canEdit && nextStatus && <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={handleNextStatus} disabled={updating}>{nextStatus.label}</Button>}
           {canEdit && <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={handleDuplicate}><CopyPlus data-icon="inline-start" />Duplicate</Button>}
+          {isOwner && <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={() => void handleShareTrace()}><Route data-icon="inline-start" />Share trace</Button>}
           <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={handleCopyLink}><Copy data-icon="inline-start" />Copy link</Button>
+          <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={handlePrint}><Printer data-icon="inline-start" />Print / PDF</Button>
           {isOwner && <Button variant="outline" className="border-destructive/40 bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setConfirmOpen(true)}><Trash2 data-icon="inline-start" />Delete trip</Button>}
         </div>
       </div>
+      {trip.stops.length > 0 && (
+        <Card>
+          <CardContent className="max-h-96 overflow-y-auto p-5">
+            <TripChecklist tripId={tripId} stops={trip.stops} editable={canEdit} />
+          </CardContent>
+        </Card>
+      )}
+      {isOwner && (
+        <TripBriefCard
+          tripId={tripId}
+          aiBrief={trip.aiBrief}
+          stops={trip.stops}
+          origin={trip.origin}
+          destination={trip.destination}
+          startDate={trip.startDate}
+          travelMonth={trip.travelMonth}
+          doneCount={trip.stops.filter(s => s.completedAt).length}
+          editable={isOwner}
+        />
+      )}
       <BudgetBar stops={stops} budget={trip.budget} />
       <Tabs defaultValue="itinerary">
         <TabsList>
@@ -256,14 +331,14 @@ export function TripDetail() {
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">Reservations linked to this trip</p>
-                <ForwardBookingDialog tripId={id} />
+                <ForwardBookingDialog tripId={tripId} />
               </div>
               {bookings === undefined ? (
-                <div className="h-28 animate-pulse rounded-lg bg-secondary" />
+                <div className="kt-shimmer h-28 rounded-xl" />
               ) : bookings.length > 0 ? (
                 bookings.map(b => <BookingRow key={b._id} booking={b} onCancel={handleCancelBooking} />)
               ) : (
-                <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+                <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
                   <CalendarClock className="size-8 text-primary" />
                   <p className="mt-4 font-serif text-2xl">No reservations for this trip</p>
                   <p className="mt-2 max-w-md text-muted-foreground">When you request a reservation from a place page and link it to this trip, it will appear here — or use “Forward a confirmation” above to add one from a booking email.</p>
@@ -273,7 +348,7 @@ export function TripDetail() {
             </div>
           </TabsContent>
         )}
-        {isOwner && <TabsContent value="moments"><MomentAlbum tripId={id} /></TabsContent>}
+        {isOwner && <TabsContent value="moments"><MomentAlbum tripId={tripId} /></TabsContent>}
       </Tabs>
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>

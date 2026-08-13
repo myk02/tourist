@@ -5,6 +5,7 @@ import { useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { arrivalState, distanceMeters, progressPct } from '@/lib/tracking'
 
 export type TrackingStatus = 'tracking' | 'arrived'
@@ -175,7 +176,15 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
           void record({ tripId: s.tripId as Id<'trips'>, lat, lng, accuracy }).catch(() => {})
         }
       },
-      () => { /* transient fix errors are fine — the next fix updates the UI */ },
+      error => {
+        // A hard permission denial (or GPS fully unavailable) would otherwise
+        // leave the session stuck at 0% forever with no way out — end it
+        // visibly instead of silently. Transient fix errors are fine.
+        if (error && error.code === 1 /* PERMISSION_DENIED */) {
+          setSession(null)
+          toast.error('Location permission was denied — tracking stopped')
+        }
+      },
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
     )
     return () => {

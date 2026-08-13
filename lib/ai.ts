@@ -30,6 +30,9 @@ async function complete(system: string, prompt: string, maxTokens: number): Prom
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+    // Plan generation must never hang forever — the free model can stall, so
+    // abort the request after 90s and let the caller surface a retryable error.
+    signal: AbortSignal.timeout(90000),
     body: JSON.stringify({
       model: JOURNEY_MODEL,
       reasoning: { enabled: false },

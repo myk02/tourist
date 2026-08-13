@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { ChevronLeft, ChevronRight, Globe, Lock, Share2, Star, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Globe, LayoutGrid, Lock, Share2, Star, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -59,7 +59,7 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
     }
   }
 
-  if (moments === undefined) return <div className="grid grid-cols-2 gap-4 md:grid-cols-3"><div className="aspect-square animate-pulse rounded-lg bg-secondary" /><div className="aspect-square animate-pulse rounded-lg bg-secondary" /><div className="aspect-square animate-pulse rounded-lg bg-secondary" /></div>
+  if (moments === undefined) return <div className="grid grid-cols-2 gap-4 md:grid-cols-3"><div className="kt-shimmer aspect-square rounded-xl" /><div className="kt-shimmer aspect-square rounded-xl" /><div className="kt-shimmer aspect-square rounded-xl" /></div>
 
   const active = lightbox ? moments[lightbox.moment] : null
   const activeMedia = active ? mediaOf(active) : []
@@ -74,29 +74,43 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
     }
   }
 
+  // The 9-grid recap shows only moments marked public — worth saying so the
+  // link isn't shared and then found empty.
+  async function recap() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/recap/${tripId}`)
+      const publicCount = (moments ?? []).filter(m => m.public).length
+      toast.success(publicCount === 0 ? 'Recap link copied — make some moments public to fill it' : publicCount < 9 ? 'Recap link copied — up to 9 public moments will appear' : 'Recap link copied')
+    } catch {
+      toast.error('Could not copy recap link')
+    }
+  }
+
   return (
     <div>
       {moments.length === 0 ? (
-        <div className="flex min-h-44 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+        <div className="flex min-h-44 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
           <p className="font-serif text-2xl">No moments yet</p>
           {onUploadClick && <Button className="mt-4" variant="outline" onClick={onUploadClick}>Add your first memory</Button>}
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">{moments.length} moment{moments.length === 1 ? '' : 's'}</p>
-            <Button variant="outline" size="sm" onClick={share}><Share2 data-icon="inline-start" />Share trip moments</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={recap}><LayoutGrid data-icon="inline-start" />Recap</Button>
+              <Button variant="outline" size="sm" onClick={share}><Share2 data-icon="inline-start" />Share moments</Button>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             {moments.map((m, mi) => {
               const media = mediaOf(m)
               return (
-                <div key={m._id} className="group relative aspect-square overflow-hidden rounded-lg">
+                <div key={m._id} className="group relative aspect-square overflow-hidden rounded-xl">
                   <button className="block size-full" onClick={() => setLightbox({ moment: mi, media: 0 })} aria-label={`Open moment: ${m.caption}`}>
                     {media[0].type === 'video' ? (
                       <video src={media[0].url} muted playsInline preload="metadata" className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={media[0].url} alt={m.caption} className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     )}
                   </button>
@@ -127,11 +141,10 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                   {active.best && <Badge className="bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
                 </DialogTitle>
               </DialogHeader>
-              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-black/5">
+              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-muted">
                 {activeMedia[activeIndex].type === 'video' ? (
                   <video src={activeMedia[activeIndex].url} controls autoPlay playsInline className="max-h-full w-full object-contain" />
                 ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={activeMedia[activeIndex].url} alt={active.caption} className="max-h-full w-full object-contain" />
                 )}
                 {activeMedia.length > 1 && (

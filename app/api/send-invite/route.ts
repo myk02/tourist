@@ -37,6 +37,12 @@ export async function POST(request: Request) {
 
   if (!EMAIL_RE.test(to)) return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
   if (!tripName) return NextResponse.json({ error: 'Missing invite details' }, { status: 400 })
+  // The link base is server-configured, never the client's Origin header — a
+  // page under an attacker's domain must not be able to make KenyaTrace email
+  // links pointing at it (token capture).
+  const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://kenyatrace.vercel.app'
+  const link = `${origin}/trips/${tripId}?invite=${token}`
+
   // Convex IDs and invite tokens use a URL-safe alphabet — rejecting anything
   // else keeps the raw link interpolation in the email HTML injection-proof.
   if (!/^[a-zA-Z0-9_-]+$/.test(tripId) || !/^[a-zA-Z0-9_-]+$/.test(token)) {
@@ -50,8 +56,6 @@ export async function POST(request: Request) {
     )
   }
 
-  const origin = request.headers.get('origin') ?? 'https://kenyatrace.vercel.app'
-  const link = `${origin}/trips/${tripId}?invite=${token}`
   const roleLabel = role === 'viewer' ? 'view and comment on' : 'view and edit'
 
   const html = `<!doctype html>

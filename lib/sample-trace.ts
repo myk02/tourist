@@ -34,7 +34,9 @@ export const SAMPLE_TRACE = {
     { day: 4, time: '16:00', title: 'Afternoon predator search', place: 'Mara Triangle, Maasai Mara', cost: 6200, kind: 'Experience', lat: -1.4500, lng: 35.0833, reason: 'Track lions, cheetahs and leopards across the reserve’s open plains.', duration: 180 },
     { day: 4, time: '20:00', title: 'Bush dinner at the camp', place: 'Maasai Mara, Narok', cost: 3500, kind: 'Food', lat: -1.4013, lng: 35.1329, reason: 'A lantern-lit dinner under a sky full of southern stars.', duration: 90 },
     // ─── Day 5 · Diani Beach ────────────────────────────────────
-    { day: 5, time: '08:00', title: 'Bush flight to Mombasa', place: 'Olkiombo (OLX) → Mombasa (MBA)', cost: 32000, kind: 'Transport', lat: -1.3217, lng: 36.8148, reason: 'Skip the 7-hour drive — a short hop in a small plane over the Rift Valley.', duration: 120 },
+    // The flight departs from Olkiombo airstrip in the Mara (not Wilson,
+    // Nairobi) — the map should show the traveller leaving from where they are.
+    { day: 5, time: '08:00', title: 'Bush flight to Mombasa', place: 'Olkiombo (OLX) → Mombasa (MBA)', cost: 32000, kind: 'Transport', lat: -1.3833, lng: 35.0833, reason: 'Skip the 7-hour drive — a short hop in a small plane over the Rift Valley.', duration: 120 },
     { day: 5, time: '14:00', title: 'Coastal transfer to Diani', place: 'Moi Intl → Diani Beach', cost: 10000, kind: 'Transport', lat: -4.0347, lng: 39.5942, reason: 'Private transfer across the Likoni channel to the south coast.', duration: 90 },
     { day: 5, time: '16:00', title: 'Check in at a beachfront resort', place: 'Diani Beach, Kwale', cost: 24000, kind: 'Stay', lat: -4.2695, lng: 39.5863, reason: 'White sands and warm water after four days of safari dust.', duration: 1440 },
     { day: 5, time: '19:00', title: 'Seafood dinner on the beach', place: 'Diani Beach, Kwale', cost: 3000, kind: 'Food', lat: -4.2760, lng: 39.5905, reason: 'Fresh coastal catch with your toes in the sand.', duration: 90 },

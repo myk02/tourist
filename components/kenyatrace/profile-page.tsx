@@ -8,7 +8,7 @@ import { UserButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { AlertCircle, Camera, Compass, Download, Heart, Sparkles } from 'lucide-react'
+import { AlertCircle, Camera, Compass, Download, Heart, Sparkles, TrendingDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,7 @@ export function Profile() {
   const trips = useQuery(api.trips.list)
   const bookings = useQuery(api.bookings.mine)
   const saved = useQuery(api.saved.listWithDetails)
+  const drops = useQuery(api.saved.drops)
   const allMoments = useQuery(api.moments.allForOwner)
   const sync = useMutation(api.users.sync)
   const cancel = useMutation(api.bookings.cancel)
@@ -146,7 +147,7 @@ export function Profile() {
   return (
     <RequireAuth>
       <div className="mx-auto flex max-w-5xl flex-col gap-8 px-5 py-10">
-        <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card px-5 py-4">
+        <div className="flex flex-wrap items-center gap-4 rounded-2xl border bg-card px-5 py-4 shadow-soft">
           {user?.imageUrl ? <Image src={user.imageUrl} width={48} height={48} className="rounded-full" alt="Profile" /> : <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary"><Compass /></span>}
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold tracking-tight">{user?.fullName || 'Kenya traveller'}</h1>
@@ -155,7 +156,17 @@ export function Profile() {
           <UserButton />
         </div>
 
-        <Tabs value={tab} onValueChange={setTab}>
+        <Tabs
+          value={tab}
+          onValueChange={v => {
+            setTab(v)
+            // Keep the selected tab in the URL so refresh/back/forward restore
+            // it (the effect above keeps it in sync the other way around).
+            const url = new URL(window.location.href)
+            url.searchParams.set('tab', v)
+            router.replace(url.pathname + url.search, { scroll: false })
+          }}
+        >
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="bookings">Bookings</TabsTrigger>
@@ -197,7 +208,7 @@ export function Profile() {
             {bookings?.length ? (
               bookings.map(b => <BookingRow key={b._id} booking={b} onCancel={handleCancel} />)
             ) : (
-              <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+              <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
                 <AlertCircle className="size-8 text-primary" />
                 <p className="mt-4 font-serif text-2xl">No bookings yet</p>
                 <p className="mt-2 text-muted-foreground">Reservations you make will appear here.</p>
@@ -207,11 +218,20 @@ export function Profile() {
           </TabsContent>
 
           <TabsContent value="saved">
+            {drops?.length ? (
+              <div className="mb-5 flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
+                <TrendingDown className="size-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                <p className="text-emerald-800 dark:text-emerald-200">
+                  <strong>{drops.length}</strong> saved spot{drops.length === 1 ? '' : 's'} dropped in price — grab {drops.length === 1 ? 'it' : 'them'} while {drops.length === 1 ? "it's" : "they're"} low.
+                </p>
+              </div>
+            ) : null}
             {saved?.length ? (
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {saved.map(s => {
                   const listing = s.listing
                   if (!listing) return null
+                  const drop = (drops ?? []).find(d => d.listing._id === listing._id)
                   return (
                   <Card key={listing._id} className="group overflow-hidden p-0 transition-colors hover:border-primary/40">
                     <div className="relative aspect-[4/3] overflow-hidden">
@@ -219,6 +239,7 @@ export function Profile() {
                         <ListingImage src={listing.image} fill className="object-cover transition-transform duration-300 group-hover:scale-[1.03]" alt={listing.name} sizes="(max-width: 768px) 100vw, 33vw" />
                       </Link>
                       <SourceBadge source={listing.source} className="absolute bottom-3 left-3" onClick={() => { const f = sourceToFilter(listing.source); if (f) router.push(`/discover/${listing.vertical}?source=${f}`) }} />
+                      {drop && <span className="absolute left-3 top-3 rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white shadow-sm">-{drop.dropPct}%</span>}
                       <button aria-label="Remove from saved" onClick={() => handleRemoveSaved(listing._id)} className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-red-500 shadow-sm transition-transform hover:scale-110">
                         <Heart className="size-4 fill-current" />
                       </button>
@@ -227,7 +248,17 @@ export function Profile() {
                       <CardContent className="p-4">
                         <p className="font-semibold leading-tight">{listing.name}</p>
                         <p className="mt-0.5 truncate text-sm text-muted-foreground">{listing.location} · ★ {listing.rating}</p>
-                        <p className="mt-1 font-semibold">{formatKES(listing.price)}<span className="font-normal text-muted-foreground"> / {listing.unit}</span></p>
+                        <p className="mt-1 font-semibold">
+                          {drop ? (
+                            <>
+                              <span className="text-emerald-600 dark:text-emerald-300">{formatKES(listing.price)}</span>
+                              <span className="ml-1.5 text-xs font-normal text-muted-foreground line-through">{formatKES(drop.priceAtSave)}</span>
+                            </>
+                          ) : (
+                            formatKES(listing.price)
+                          )}
+                          <span className="font-normal text-muted-foreground"> / {listing.unit}</span>
+                        </p>
                       </CardContent>
                     </Link>
                   </Card>
@@ -235,7 +266,7 @@ export function Profile() {
                 })}
               </div>
             ) : (
-              <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+              <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
                 <Heart className="size-8 text-primary" />
                 <p className="mt-4 font-serif text-2xl">Nothing saved yet</p>
                 <p className="mt-2 text-muted-foreground">Tap the heart on any place to keep it here.</p>
@@ -273,7 +304,7 @@ export function Profile() {
                   <label className="text-sm font-medium">Pace</label>
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     {PACES.map(p => (
-                      <button key={p.value} type="button" onClick={() => { setDirty(true); setPace(p.value) }} className={cn('rounded-md border px-2 py-2 text-sm transition-colors', pace === p.value ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground')}>
+                      <button key={p.value} type="button" onClick={() => { setDirty(true); setPace(p.value) }} className={cn('rounded-xl border px-2 py-2 text-sm transition-colors', pace === p.value ? 'border-primary bg-primary text-primary-foreground shadow-xs' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-card')}>
                         <span className="block font-medium">{p.label}</span>
                         <span className={cn('block text-[10px]', pace === p.value ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{p.hint}</span>
                       </button>

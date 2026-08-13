@@ -56,16 +56,18 @@ export const initialize = mutation({
     // public key, so the reference must be fresh for every attempt — reusing
     // one Paystack has already seen fails with "Duplicate Transaction
     // Reference" when a user retries after closing the popup.
+    //
+    // Every attempt gets its OWN pending row (never patched): a retry after a
+    // closed/crashed popup must not overwrite a reference the user may already
+    // have paid with, or two successful charges could map to a single payment.
+    // Superseded pending attempts are removed so rows don't accumulate.
     const reference = `KT-PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
-    const existing = await ctx.db
+    const stale = await ctx.db
       .query("payments")
       .withIndex("by_booking", q => q.eq("bookingId", bookingId))
       .filter(q => q.eq(q.field("status"), "pending"))
-      .first()
-    if (existing) {
-      await ctx.db.patch(existing._id, { reference, email: email.trim() })
-      return { paymentId: existing._id, reference, amount: existing.amount }
-    }
+      .collect()
+    await Promise.all(stale.map(row => ctx.db.delete(row._id)))
 
     const paymentId = await ctx.db.insert("payments", {
       ownerId: identity.subject,

@@ -6,7 +6,7 @@ import { SignInButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { Check, MapPin, Star } from 'lucide-react'
+import { Check, MapPin, Star, TrendingDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,14 +15,21 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { isValidConvexId } from '@/lib/id'
 import { formatKES } from '@/lib/kenya-data'
-import { ListingImage, SourceBadge, sourceToFilter } from './shared'
+import { ListingImage, NotFound, SourceBadge, sourceToFilter } from './shared'
 import { PaywallDialog } from './paywall'
 import { KenyaMap } from './kenya-map'
 
 export function Detail({ id }: { id: string }) {
   const { isSignedIn } = useUser()
-  const item = useQuery(api.listings.get, { id: id as Id<'listings'> })
+  // A malformed /discover/<vertical>/<garbage> route must show NotFound, not
+  // make Convex throw on an invalid id.
+  const validId = isValidConvexId(id)
+  const item = useQuery(api.listings.get, validId ? { id: id as Id<'listings'> } : 'skip')
+  // The traveller's saved row for this listing (price at save time) — used to
+  // flag a price drop since they saved it. Null for guests and non-savers.
+  const savedEntry = useQuery(api.saved.find, validId ? { listingId: id as Id<'listings'> } : 'skip')
   const trips = useQuery(api.trips.list)
   const create = useMutation(api.trips.create)
   const replaceStops = useMutation(api.trips.replaceStops)
@@ -115,23 +122,26 @@ export function Detail({ id }: { id: string }) {
   }
 
   // Stable identities so the map isn't rebuilt on every dialog keystroke.
+  // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
   const mapPoint = useMemo(() =>
-    item?.lat && item?.lng
+    item?.lat != null && item?.lng != null
       ? [{ id: item._id, name: item.name, location: item.location, lat: item.lat, lng: item.lng }]
       : [],
     [item],
   )
-  const mapHighlight = useMemo(() => (item?.lat ? [item._id] : []), [item])
+  const mapHighlight = useMemo(() => (item?.lat != null ? [item._id] : []), [item])
   const mapFocus = useMemo(() =>
-    item?.lat && item?.lng ? { lat: item.lat, lng: item.lng, zoom: 10 } : undefined,
+    item?.lat != null && item?.lng != null ? { lat: item.lat, lng: item.lng, zoom: 10 } : undefined,
     [item],
   )
+
+  if (!validId) return <NotFound />
 
   return (
     <>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-6">
         {/* Hero — one attractive picture with the essentials overlaid. */}
-        <div className="relative overflow-hidden rounded-xl">
+        <div className="relative overflow-hidden rounded-2xl shadow-lift ring-1 ring-border">
           <div className="relative h-64 md:h-80">
             <ListingImage src={item?.image || '/kenya-hero.png'} alt={item?.name || 'Listing'} fill priority className="object-cover" sizes="100vw" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/30" />
@@ -200,7 +210,7 @@ export function Detail({ id }: { id: string }) {
 
           {/* Sticky booking card */}
           <aside className="lg:sticky lg:top-20 lg:h-fit">
-            <Card className="shadow-sm">
+            <Card className="shadow-soft">
               <CardContent className="flex flex-col gap-4 p-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -213,6 +223,12 @@ export function Detail({ id }: { id: string }) {
                     </span>
                   ) : null}
                 </div>
+                {savedEntry && item && savedEntry.priceAtSave != null && item.price < savedEntry.priceAtSave && (
+                  <p className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
+                    <TrendingDown className="size-3.5 shrink-0" />
+                    Price dropped {formatKES(savedEntry.priceAtSave)} → {formatKES(item.price)} since you saved it.
+                  </p>
+                )}
                 <Button size="lg" className="w-full" onClick={handleReserveClick} disabled={!item}>
                   Reserve
                 </Button>

@@ -14,9 +14,9 @@ import { formatKES } from '@/lib/kenya-data'
 import type { ParsedBooking } from '@/lib/parse-booking'
 
 const TYPE_STYLE: Record<string, string> = {
-  Stay: 'bg-blue-100 text-blue-800',
-  Flight: 'bg-amber-100 text-amber-800',
-  Transport: 'bg-emerald-100 text-emerald-800',
+  Stay: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  Flight: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  Transport: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   General: 'bg-secondary text-muted-foreground',
 }
 
@@ -127,7 +127,7 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           {parsed && (
-            <div className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+            <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-soft">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold">{parsed.name}</p>
                 <Badge className={TYPE_STYLE[parsed.type] ?? 'bg-secondary text-muted-foreground'}>{parsed.type}</Badge>

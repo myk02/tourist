@@ -10,12 +10,28 @@ import { CalendarClock, Camera, CircleUserRound, Compass, Map, MapPin, Navigatio
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { PLANS, DayPackCheckout, PlanCard } from './paywall'
 
 const nav = [{href:'/',label:'Discover',icon:Compass},{href:'/plan',label:'Plan',icon:Sparkles},{href:'/trips',label:'Trips',icon:Map},{href:'/moments',label:'Moments',icon:Camera},{href:'/profile',label:'Profile',icon:CircleUserRound}]
 
+function isActive(pathname: string, href: string) {
+  return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href)
+}
+
 export function KenyaTraceShell({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-background text-foreground"><Header/><main className="pb-24 md:pb-8">{children}</main><MobileNav/></div>
+  return <div className="min-h-screen bg-background text-foreground"><Header/><main className="pb-32 md:pb-8">{children}</main><MobileNav/></div>
+}
+
+function Brand() {
+  return (
+    <Link href="/" className="group flex shrink-0 items-center gap-2.5">
+      <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs transition-transform group-hover:scale-[1.03]">
+        <Navigation className="size-5" />
+      </span>
+      <span className="font-serif text-xl font-semibold tracking-tight">KenyaTrace</span>
+    </Link>
+  )
 }
 
 function Header(){
@@ -39,20 +55,29 @@ function Header(){
   // The landing page keeps just the brand — no nav links up top.
   const isLanding = pathname === '/'
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/80 backdrop-blur-lg supports-backdrop-filter:bg-background/70">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 md:px-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <span className="flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground"><Navigation className="size-5"/></span>
-          <span className="font-serif text-xl font-semibold tracking-tight">KenyaTrace</span>
-        </Link>
+        <Brand />
         {!isLanding && (
-          <nav aria-label="Main navigation" className="hidden items-center gap-1 md:flex">
-            {nav.map(item=>{const Icon=item.icon;return <Button key={item.href} variant="ghost" className="gap-2 px-3.5" nativeButton={false} render={<Link href={item.href}/>}><Icon className="size-4"/><span className="text-sm">{item.label}</span></Button>})}
+          <nav aria-label="Main navigation" className="hidden items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1 md:flex">
+            {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={active
+                  ? 'inline-flex h-8 items-center gap-2 rounded-full bg-background px-3.5 text-sm font-semibold text-primary shadow-xs'
+                  : 'inline-flex h-8 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground'}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon className="size-4"/><span>{item.label}</span>
+              </Link>
+            )})}
           </nav>
         )}
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <span className="hidden items-center gap-2 rounded-md border border-border px-2.5 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground xl:flex"><MapPin className="size-4 text-primary"/>Made for Kenya</span>
+        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+          <span className="hidden items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground xl:flex"><MapPin className="size-3.5 text-primary"/>Made for Kenya</span>
           <HeaderAccount />
+          <ThemeToggle />
         </div>
       </div>
     </header>
@@ -105,7 +130,7 @@ function HeaderAccount() {
         <button
           type="button"
           onClick={() => setPlansOpen(true)}
-          className="hidden items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 sm:flex"
+          className="hidden items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 sm:flex"
           aria-label="Open plans"
         >
           {ended ? <Wallet className="size-3.5" /> : <CalendarClock className="size-3.5" />}
@@ -126,7 +151,7 @@ function HeaderAccount() {
       ) : (
         <>
           <SignInButton mode="modal">
-            <Button variant="ghost" size="sm">Sign in</Button>
+            <Button variant="ghost" size="sm" className="hidden md:inline-flex">Sign in</Button>
           </SignInButton>
           <SignUpButton mode="modal">
             <Button size="sm" className="hidden sm:inline-flex">Start free trial</Button>
@@ -137,7 +162,7 @@ function HeaderAccount() {
       <Dialog open={plansOpen} onOpenChange={setPlansOpen}>
         <DialogContent className="max-h-[86svh] overflow-y-auto p-5 sm:max-w-xl">
           <DialogHeader className="gap-2 items-center text-center">
-            <span className="mx-auto flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+            <span className="mx-auto flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs">
               <Sparkles className="size-5" />
             </span>
             <DialogTitle className="font-serif text-xl tracking-tight">
@@ -189,4 +214,22 @@ function HeaderAccount() {
   )
 }
 
-function MobileNav(){return <nav className="fixed inset-x-0 bottom-0 z-40 flex h-20 items-center justify-around border-t bg-background md:hidden">{nav.map(item=>{const Icon=item.icon;return <Button key={item.href} variant="ghost" className="flex-col gap-1 text-muted-foreground" nativeButton={false} render={<Link href={item.href}/>}><Icon/><span className="text-xs">{item.label}</span></Button>})}</nav>}
+function MobileNav(){
+  const pathname = usePathname()
+  return (
+    <nav className="fixed inset-x-4 bottom-3 z-40 flex h-16 items-center justify-around rounded-2xl border border-border/80 bg-background/90 shadow-lift backdrop-blur-lg supports-backdrop-filter:bg-background/75 md:hidden">
+      {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
+        <Link
+          key={item.href}
+          href={item.href}
+          aria-current={active ? 'page' : undefined}
+          className={active
+            ? 'flex min-w-14 flex-col items-center gap-0.5 rounded-xl bg-primary/10 px-3 py-1.5 text-primary'
+            : 'flex min-w-14 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground'}
+        >
+          <Icon className="size-5"/><span className="text-[11px] font-medium">{item.label}</span>
+        </Link>
+      )})}
+    </nav>
+  )
+}

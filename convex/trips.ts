@@ -1,6 +1,7 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
+import { distanceMeters } from "../lib/tracking"
 import { requireActiveAccess } from "./subscriptions"
 
 async function owner(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
@@ -63,13 +64,20 @@ export const getWithStops = query({ args: { id: v.id("trips") }, handler: async 
   return { ...trip, stops: stops.sort((a, b) => a.order - b.order), role }
 }})
 
-const stop = v.object({ name: v.string(), place: v.string(), day: v.number(), time: v.string(), cost: v.number(), kind: v.string(), order: v.number(), lat: v.optional(v.number()), lng: v.optional(v.number()), locked: v.optional(v.boolean()), reason: v.optional(v.string()), verified: v.optional(v.boolean()), duration: v.optional(v.number()) })
+const stop = v.object({ name: v.string(), place: v.string(), day: v.number(), time: v.string(), cost: v.number(), kind: v.string(), order: v.number(), lat: v.optional(v.number()), lng: v.optional(v.number()), locked: v.optional(v.boolean()), reason: v.optional(v.string()), verified: v.optional(v.boolean()), duration: v.optional(v.number()), source: v.optional(v.string()), listingId: v.optional(v.string()), vertical: v.optional(v.string()), unit: v.optional(v.string()),    image: v.optional(v.string()), travelKm: v.optional(v.number()), travelMins: v.optional(v.number()), travelRouted: v.optional(v.boolean()), completedAt: v.optional(v.number()) })
 
-export const create = mutation({ args: { name: v.string(), destination: v.string(), origin: v.optional(v.string()), traveler: v.optional(v.string()), startDate: v.string(), endDate: v.string(), budget: v.number(), totalCost: v.number(), stops: v.optional(v.array(stop)) }, handler: async (ctx, args) => {
+function makeToken(): string {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 24)
+}
+
+export const create = mutation({ args: { name: v.string(), destination: v.string(), origin: v.optional(v.string()), traveler: v.optional(v.string()), startDate: v.string(), endDate: v.string(), budget: v.number(), totalCost: v.number(), travelMonth: v.optional(v.string()), stops: v.optional(v.array(stop)) }, handler: async (ctx, args) => {
   const ownerId = await owner(ctx)
   await requireActiveAccess(ctx.db, ownerId)
   const { stops = [], ...trip } = args
-  const tripId = await ctx.db.insert("trips", { ...trip, ownerId, status: "planning", coverImage: "/kenya-hero.png" })
+  // Every new trip gets a secret trace-share token so the owner can publish
+  // their live trace with a public link at any time (generated up front, only
+  // shared when the owner asks).
+  const tripId = await ctx.db.insert("trips", { ...trip, ownerId, status: "planning", coverImage: "/kenya-hero.png", traceShareToken: makeToken() })
   await Promise.all(stops.map(item => ctx.db.insert("tripStops", { ...item, tripId })))
   return tripId
 }})
@@ -102,11 +110,15 @@ export const update = mutation({ args: { id: v.id("trips"), patch: v.object({
   review: v.optional(v.string()),
   sharedAt: v.optional(v.number()),
   coverImage: v.optional(v.string()),
+  aiBrief: v.optional(v.string()),
 }) }, handler: async (ctx, { id, patch }) => {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) throw new Error("Sign in required")
   const role = await accessRole(ctx, id, identity.subject)
   if (!role || role === "viewer") throw new Error("Trip not found")
+  // Owners need active access to edit; invited collaborators ride on the
+  // owner's subscription so sharing stays frictionless.
+  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
   return ctx.db.patch(id, patch)
 }})
 
@@ -143,6 +155,17 @@ export const remove = mutation({ args: { id: v.id("trips") }, handler: async (ct
   await Promise.all(stops.map(item => ctx.db.delete(item._id)))
   const shares = await ctx.db.query("tripShares").withIndex("by_trip", q => q.eq("tripId", id)).collect()
   await Promise.all(shares.map(share => ctx.db.delete(share._id)))
+  // Deleting a trip must not orphan its live-trace points, moments or the
+  // files those moments uploaded.
+  const positions = await ctx.db.query("positions").withIndex("by_trip_time", q => q.eq("tripId", id)).collect()
+  await Promise.all(positions.map(p => ctx.db.delete(p._id)))
+  const moments = await ctx.db.query("moments").withIndex("by_trip", q => q.eq("tripId", id)).collect()
+  await Promise.all(moments.map(async m => {
+    const storageIds = [m.storageId, ...(m.storageIds ?? [])].filter((x): x is Id<"_storage"> => !!x)
+    const videoIds = m.videoStorageIds ?? []
+    await Promise.all([...storageIds, ...videoIds].map(sid => ctx.storage.delete(sid)))
+    await ctx.db.delete(m._id)
+  }))
   await ctx.db.delete(id)
 }})
 
@@ -253,4 +276,74 @@ export const leaveTrip = mutation({ args: { tripId: v.id("trips") }, handler: as
     .first()
   if (!share) throw new Error("You are not a collaborator on this trip")
   await ctx.db.delete(share._id)
+}})
+
+// ─── Live-trace sharing (Phase 3: shareable public trace) ───────────────────
+
+/**
+ * Owner only: returns the trip's trace-share token, creating it on demand for
+ * trips created before tokens existed. The token is the "password" for the
+ * public trace link — the owner shares it explicitly, never automatically.
+ */
+export const enableTraceShare = mutation({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Sign in required")
+  const trip = await ctx.db.get(tripId)
+  if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
+  if (trip.traceShareToken) return { token: trip.traceShareToken }
+  const token = makeToken()
+  await ctx.db.patch(tripId, { traceShareToken: token })
+  return { token }
+}})
+
+/**
+ * Owner and editors can check a stop off as done (and un-check it). Setting
+ * completedAt stamps the moment; un-checking clears it.
+ */
+export const setStopCompleted = mutation({ args: { tripId: v.id("trips"), stopId: v.id("tripStops"), completed: v.boolean() }, handler: async (ctx, { tripId, stopId, completed }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Sign in required")
+  const role = await accessRole(ctx, tripId, identity.subject)
+  if (!role || role === "viewer") throw new Error("Trip not found")
+  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  const stopRow = await ctx.db.get(stopId)
+  if (!stopRow || stopRow.tripId !== tripId) throw new Error("Stop not found")
+  return ctx.db.patch(stopId, { completedAt: completed ? Date.now() : undefined })
+}})
+
+/**
+ * Public, token-gated view of a trip's live trace — powers the shareable
+ * trace page. No sign-in required; returns only what a stranger may see
+ * (trip name, dates, stop names/places, the recorded path) and never any
+ * costs, owner identity, or booking data.
+ */
+export const publicTrace = query({ args: { tripId: v.id("trips"), token: v.string() }, handler: async (ctx, { tripId, token }) => {
+  const trip = await ctx.db.get(tripId)
+  if (!trip || !trip.traceShareToken || trip.traceShareToken !== token) return null
+  const stops = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", tripId)).collect()
+  const trace = await ctx.db.query("positions").withIndex("by_trip_time", q => q.eq("tripId", tripId)).order("asc").collect()
+  const publicStops = stops
+    .sort((a, b) => a.order - b.order)
+    .map(s => ({ day: s.day, name: s.name, place: s.place, time: s.time, lat: s.lat, lng: s.lng }))
+  // Straight-line distance along the recorded path.
+  let distanceKm = 0
+  for (let i = 1; i < trace.length; i++) {
+    const a = trace[i - 1]
+    const b = trace[i]
+    if (a.lat != null && a.lng != null && b.lat != null && b.lng != null) {
+      distanceKm += distanceMeters(a.lat, a.lng, b.lat, b.lng) / 1000
+    }
+  }
+  return {
+    trip: {
+      name: trip.name,
+      destination: trip.destination,
+      origin: trip.origin ?? undefined,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+    },
+    stops: publicStops,
+    trace: trace.map(p => ({ lat: p.lat, lng: p.lng, accuracy: p.accuracy, recordedAt: p.recordedAt })),
+    distanceKm: Math.round(distanceKm),
+  }
 }})

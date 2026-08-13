@@ -47,11 +47,6 @@ const getPurchaseForVerifyRef = makeFunctionReference<
 /**
  * Server-side enforcement used by content-creating mutations across the app.
  * Lazily starts the 30-day trial on first gated write (so brand-new users
- * aren't blocked), then throws once access runs out.
- */
-/**
- * Server-side enforcement used by content-creating mutations across the app.
- * Lazily starts the 30-day trial on first gated write (so brand-new users
  * aren't blocked), then throws once access runs out. For accounts that
  * predate sign-up anchoring, the trial start falls back to the user row's
  * createdAt so the countdown is honest for them too.
@@ -91,6 +86,37 @@ export const getStatus = query({
       trialStartedAt: sub.trialEndsAt ? sub.trialEndsAt - TRIAL_DAYS * DAY_MS : null,
       paidUntil: sub.paidUntil ?? null,
       daysRemaining: active ? Math.ceil((deadline - now) / DAY_MS) : 0,
+    }
+  },
+})
+
+/**
+ * What a paywall would take away: the traveller's own content counts plus
+ * their next trip. Lets the paywall speak in real value ("2 trips, 12 saved
+ * spots, 34 moments waiting") instead of bare pricing.
+ */
+export const paywallContext = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    const trips = await ctx.db.query("trips").withIndex("by_owner", q => q.eq("ownerId", identity.subject)).order("desc").collect()
+    const saved = await ctx.db.query("savedListings").withIndex("by_owner", q => q.eq("ownerId", identity.subject)).collect()
+    let momentCount = 0
+    for (const t of trips) {
+      const ms = await ctx.db.query("moments").withIndex("by_trip", q => q.eq("tripId", t._id)).collect()
+      momentCount += ms.length
+    }
+    const upcoming = trips
+      .filter(t => t.status !== "completed")
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
+    return {
+      tripCount: trips.length,
+      savedCount: saved.length,
+      momentCount,
+      upcomingTrip: upcoming
+        ? { name: upcoming.name, destination: upcoming.destination, startDate: upcoming.startDate }
+        : null,
     }
   },
 })

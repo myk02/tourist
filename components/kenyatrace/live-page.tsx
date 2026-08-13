@@ -4,25 +4,29 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { Compass, MapPin, Navigation, Share2, Square } from 'lucide-react'
+import { Compass, ListChecks, MapPin, Navigation, Route, Share2, Square } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { geocodeArea } from '@/lib/geocode'
 import { KenyaMap } from './kenya-map'
-import { useTripId } from './shared'
+import { NotFound, useTripId } from './shared'
 import { useTracking } from './tracking-provider'
+import { TripChecklist } from './trip-checklist'
 import { RequireSubscription } from './paywall'
 
 export function Track() {
   const id = useTripId()
   const router = useRouter()
-  const trip = useQuery(api.trips.getWithStops, { id })
+  const trip = useQuery(api.trips.getWithStops, id ? { id } : 'skip')
   const me = useQuery(api.users.me)
-  const recorded = useQuery(api.positions.forTrip, { tripId: id })
+  const recorded = useQuery(api.positions.forTrip, id ? { tripId: id } : 'skip')
   const setConsent = useMutation(api.users.setTrackingConsent)
+  const enableTraceShare = useMutation(api.trips.enableTraceShare)
   const { session, start, stop } = useTracking()
+  const [checklistOpen, setChecklistOpen] = useState(false)
 
   // Resolve the saved origin label to coordinates so the map can show the
   // trip's starting point (lat 0 is the equator — null-check, not truthiness).
@@ -71,7 +75,7 @@ export function Track() {
   function handleStart() {
     if (!dest) { toast.error('This trip has no destination coordinates'); return }
     start({
-      tripId: id,
+      tripId,
       tripName: trip?.name ?? 'Trip',
       destinationName: trip?.destination || dest.name,
       destLat: dest.lat,
@@ -86,8 +90,22 @@ export function Track() {
     toast.success('Tracking stopped')
   }
 
-  if (trip === undefined || me === undefined) return <div className="min-h-screen animate-pulse bg-secondary" />
-  if (!trip) return null
+  async function handleShareTrace() {
+    try {
+      const { token } = await enableTraceShare({ tripId })
+      await navigator.clipboard.writeText(`${window.location.origin}/trace/${tripId}?t=${token}`)
+      toast.success('Trace link copied — anyone with it can see your route')
+    } catch {
+      toast.error('Could not share this trace')
+    }
+  }
+
+  // Narrowed alias: TS won't narrow the union inside hoisted function
+  // declarations, so handlers and JSX below use the guaranteed non-null id.
+  if (id == null) return <NotFound />
+  const tripId = id
+  if (trip === undefined || me === undefined) return <div className="kt-shimmer min-h-screen" />
+  if (!trip) return <NotFound />
 
   return (
     <RequireSubscription>
@@ -107,13 +125,13 @@ export function Track() {
             {!consent ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-4">
-                  <span className="flex size-12 items-center justify-center rounded-md bg-primary text-primary-foreground"><MapPin /></span>
+                  <span className="flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><MapPin /></span>
                   <div className="flex-1">
                     <p className="font-semibold">Share your live location?</p>
                     <p className="text-sm text-muted-foreground">We record your route to build a trace of your trip. Only you can see it, and you can turn it off anytime.</p>
                   </div>
                 </div>
-                <label className="flex cursor-pointer items-center justify-between rounded-md border p-3">
+                <label className="flex cursor-pointer items-center justify-between rounded-xl border p-3">
                   <span className="text-sm font-medium">Allow location tracing for this trip</span>
                   <Switch checked={false} onCheckedChange={() => setConsent({ consent: true }).catch(() => toast.error('Could not update location consent'))} />
                 </label>
@@ -121,21 +139,22 @@ export function Track() {
             ) : arrived ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-4">
-                  <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white"><Navigation /></span>
+                  <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs"><Navigation /></span>
                   <div className="flex-1">
                     <p className="font-semibold">You&apos;ve arrived at {trip.destination}</p>
                     <p className="text-sm text-muted-foreground">Live tracking detected your arrival — 100% of the way there.</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" className="gap-2" nativeButton={false} render={<a href={`/moments?trip=${id}`} />}><Share2 className="size-4" />Share your experience (optional)</Button>
-                  <Button variant="outline" nativeButton={false} render={<a href={`/trips/${id}`} />}>View trip</Button>
+                  <Button variant="outline" className="gap-2" onClick={() => void handleShareTrace()}><Route className="size-4" />Share trace</Button>
+                  <Button variant="outline" className="gap-2" nativeButton={false} render={<a href={`/moments?trip=${tripId}`} />}><Share2 className="size-4" />Share your experience</Button>
+                  <Button variant="outline" nativeButton={false} render={<a href={`/trips/${tripId}`} />}>View trip</Button>
                   <Button variant="ghost" className="gap-2" onClick={() => router.push('/')}><Compass className="size-4" />Back to discover</Button>
                 </div>
               </div>
             ) : active ? (
               <div className="flex items-center gap-4">
-                <span className="flex size-12 shrink-0 animate-pulse items-center justify-center rounded-md bg-red-500 text-white"><Square className="size-4" /></span>
+                <span className="flex size-12 shrink-0 animate-pulse items-center justify-center rounded-xl bg-red-500 text-white shadow-xs"><Square className="size-4" /></span>
                 <div className="flex-1">
                   <p className="font-semibold">Live tracking in progress</p>
                   <p className="text-sm text-muted-foreground">
@@ -143,7 +162,7 @@ export function Track() {
                       ? `${active.distanceKm.toFixed(1)} km to ${trip.destination} · ${active.path.length} point${active.path.length === 1 ? '' : 's'} recorded`
                       : `${active.path.length} point${active.path.length === 1 ? '' : 's'} recorded`}
                   </p>
-                  <div className="mt-2 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-secondary">
+                  <div className="mt-2 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${active.progressPct}%` }} />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{active.progressPct}% of the way there</p>
@@ -152,7 +171,7 @@ export function Track() {
               </div>
             ) : (
               <div className="flex items-center gap-4">
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-primary text-white"><Navigation /></span>
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-xs"><Navigation /></span>
                 <div className="flex-1">
                   <p className="font-semibold">Ready to trace your journey?</p>
                   <p className="text-sm text-muted-foreground">
@@ -162,8 +181,24 @@ export function Track() {
                 <Button onClick={handleStart}>Start</Button>
               </div>
             )}
+            {(trip.stops.length > 0) && (
+              <div className="mt-3 border-t pt-3">
+                <Button variant="ghost" size="sm" className="w-full gap-2" onClick={() => setChecklistOpen(true)}>
+                  <ListChecks className="size-4 text-primary" />
+                  Trip checklist · {trip.stops.filter(s => s.completedAt).length} of {trip.stops.length} done
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
+        <Dialog open={checklistOpen} onOpenChange={setChecklistOpen}>
+          <DialogContent className="max-h-[82svh] overflow-y-auto sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Check off stops</DialogTitle>
+            </DialogHeader>
+            <TripChecklist tripId={tripId} stops={trip.stops} editable={trip.role !== 'viewer'} />
+          </DialogContent>
+        </Dialog>
       </div>
     </RequireSubscription>
   )

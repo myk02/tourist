@@ -10,17 +10,39 @@ import { SignInButton, useUser } from '@clerk/nextjs'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Car, Check, Heart, LocateFixed, Map, RotateCcw, Search, SlidersHorizontal, Star, X } from 'lucide-react'
+import { Car, Check, Heart, LocateFixed, Map, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Star, X } from 'lucide-react'
 import { categories, formatKES, type Vertical } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
 import { KenyaMap, toPoint } from './kenya-map'
 import { ListingImage, type SourceFilterValue } from './shared'
 
 const NEAR_KM = 100
+
+/** How long ago a scraped listing was refreshed, as a short label. */
+function freshness(ts: number): string {
+  const h = Math.round((Date.now() - ts) / 3600000)
+  if (h < 48) return `${Math.max(1, h)}h ago`
+  return `${Math.round(h / 24)}d ago`
+}
+
+/** Profile interests → listing tags, for the "based on your preferences" row. */
+const INTEREST_TAGS: Record<string, string[]> = {
+  Wildlife: ['wildlife', 'safari', 'game', 'birds', 'flamingo'],
+  Safari: ['safari', 'game drive', 'wildlife', 'park', 'reserve'],
+  Beach: ['beach', 'coast', 'dhow', 'snorkel', 'diving', 'diani', 'watamu', 'malindi'],
+  Food: ['food', 'restaurant', 'dining', 'coffee', 'café'],
+  Culture: ['culture', 'heritage', 'museum', 'village', 'maasai', 'history'],
+  Adventure: ['adventure', 'hiking', 'rafting', 'climb', 'zip', 'bungee', 'cycle'],
+  'Local life': ['market', 'local', 'village', 'street', 'community'],
+  Hiking: ['hiking', 'trek', 'climb', 'mountain', 'trail'],
+  Luxury: ['luxury', 'resort', 'spa', 'villa', 'premium'],
+  City: ['city', 'museum', 'gallery', 'nairobi'],
+}
 
 function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371
@@ -106,6 +128,14 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const saveListing = useMutation(api.saved.save)
   const removeListing = useMutation(api.saved.remove)
   const savedIds = useMemo(() => new Set((savedListings ?? []).map(s => s.listingId)), [savedListings])
+  // Add-to-trip from a card: pick one of the traveller's editable trips.
+  const me = useQuery(api.users.me)
+  const trips = useQuery(api.trips.list)
+  const editableTrips = (trips ?? []).filter(t => t.role !== 'viewer')
+  const replaceStops = useMutation(api.trips.replaceStops)
+  const [pickerListingId, setPickerListingId] = useState<Id<'listings'> | null>(null)
+  const [pickerTripId, setPickerTripId] = useState<Id<'trips'> | null>(null)
+  const pickerTrip = useQuery(api.trips.getWithStops, pickerTripId ? { id: pickerTripId } : 'skip')
   const signInRef = useRef<HTMLDivElement>(null)
   const [pendingSaveId, setPendingSaveId] = useState<string | null>(null)
 
@@ -155,7 +185,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
       case 'rating': items.sort((a, b) => b.rating - a.rating); break
     }
     return items
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawItems, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, sourceFilter, amenities])
 
   useEffect(() => {
@@ -255,11 +284,59 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     document.getElementById(`listing-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
+  // Appends a listing as a stop on the chosen trip (same flow as the listing
+  // detail page) — a one-click "Add to my trip" from the card.
+  async function confirmAddToListing() {
+    if (!pickerListingId || !pickerTripId || !pickerTrip) return
+    const item = rawItems?.find(i => i._id === pickerListingId)
+    if (!item) return
+    const existing = pickerTrip.stops.map(s => ({
+      name: s.name, place: s.place, day: s.day, time: s.time, cost: s.cost, kind: s.kind, order: s.order,
+      lat: s.lat, lng: s.lng, verified: s.verified, duration: s.duration,
+    }))
+    const kind = item.vertical === 'stays' ? 'Stay' : item.vertical === 'flights' || item.vertical === 'taxis' || item.vertical === 'cars' ? 'Transport' : 'Experience'
+    try {
+      await replaceStops({
+        tripId: pickerTripId,
+        stops: [...existing, {
+          name: item.name, place: item.location, day: Math.max(...(existing.length ? existing.map(s => s.day) : [0]), 1),
+          time: '09:00', cost: item.price, kind, order: existing.length, lat: item.lat, lng: item.lng,
+          verified: true, source: 'catalog', listingId: item._id, vertical: item.vertical, unit: item.unit, image: item.image,
+        }],
+      })
+      toast.success(`Added to ${pickerTrip.name}`)
+      setPickerListingId(null)
+      setPickerTripId(null)
+    } catch {
+      toast.error('Could not add to this trip')
+    }
+  }
+
   // From the full-screen mobile map: close it, then highlight the listing.
   function handleMobileMarkerSelect(id: string) {
     setMapOpen(false)
     requestAnimationFrame(() => handleMarkerSelect(id))
   }
+
+  // "Based on your preferences": score every listing in this vertical by how
+  // many of the traveller's saved interests its tags match, and surface the
+  // top matches as a small rail — closes the Profile → Discover loop.
+  const recommended = useMemo(() => {
+    if (!rawItems || !me?.preferences?.interests?.length) return []
+    const tags = new Set<string>()
+    for (const interest of me.preferences.interests) {
+      for (const tag of INTEREST_TAGS[interest] ?? []) tags.add(tag.toLowerCase())
+    }
+    if (tags.size === 0) return []
+    const scored = rawItems
+      .map(item => ({
+        item,
+        score: (item.tags ?? []).reduce((s, t) => s + (tags.has(t.toLowerCase()) ? 1 : 0), 0),
+      }))
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+    return scored.slice(0, 6).map(x => x.item)
+  }, [rawItems, me])
 
   const mapPoints = (filteredItems ?? []).map(toPoint)
   const visible = filteredItems?.slice(0, visibleCount)
@@ -271,7 +348,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6">
       {/* Hero — one attractive picture, category name, nothing else. */}
-      <div className="relative overflow-hidden rounded-xl">
+      <div className="relative overflow-hidden rounded-2xl shadow-lift ring-1 ring-border">
         <div className="relative h-44 md:h-52">
           <ListingImage src={hero.image} alt={label} fill priority className="object-cover" sizes="100vw" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/35" />
@@ -314,7 +391,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                 }
                 if (suggestions.length === 0) return null
                 return (
-                  <div className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-lg border bg-popover p-1 shadow-lg">
+                  <div className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border bg-popover p-1 shadow-pop">
                     {suggestions.map(s => (
                       <button
                         key={s.name}
@@ -464,6 +541,26 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
         </CardContent>
       </Card>
 
+      {recommended.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="flex items-center gap-2 font-serif text-xl font-semibold tracking-tight">
+            <Sparkles className="size-4 text-primary" /> Based on your preferences
+          </h2>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {recommended.map(item => (
+              <Link key={item._id} href={`/discover/${item.vertical}/${item._id}`} className="group w-40 shrink-0">
+                <div className="relative aspect-[3/2] overflow-hidden rounded-xl">
+                  <ListingImage src={item.image} alt={item.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="160px" />
+                  <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 text-[11px] font-bold text-foreground shadow-sm">{formatKES(item.price)}</span>
+                </div>
+                <p className="mt-1.5 truncate text-sm font-semibold">{item.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{item.location}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-5">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -478,12 +575,12 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                     onMouseEnter={() => setHoveredId(item._id)}
                     onMouseLeave={() => setHoveredId(null)}
                     className={cn(
-                      'group relative rounded-xl border-0 bg-transparent p-0 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl',
+                      'group relative rounded-2xl border-0 bg-transparent p-0 shadow-soft transition-all duration-200 hover:-translate-y-1 hover:shadow-lift',
                       active && 'ring-2 ring-primary/40',
                     )}
                   >
                     <Link href={`/discover/${item.vertical}/${item._id}`} className="block">
-                      <div className="relative aspect-[3/2] overflow-hidden rounded-xl">
+                      <div className="relative aspect-[3/2] overflow-hidden rounded-2xl">
                         <ListingImage
                           src={item.image}
                           alt={item.name}
@@ -496,6 +593,12 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                           {formatKES(item.price)}
                           <span className="font-medium text-muted-foreground"> / {item.unit}</span>
                         </span>
+                        {(item.freeCancellation || item.instantConfirm) && (
+                          <div className="absolute left-3 top-12 flex flex-col items-start gap-1">
+                            {item.freeCancellation && <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">Free cancel</span>}
+                            {item.instantConfirm && <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">Instant confirm</span>}
+                          </div>
+                        )}
                         {item.rating > 0 && (
                           <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
                             <Star className="size-3 fill-amber-400 text-amber-400" />
@@ -504,10 +607,22 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                         )}
                         <div className="absolute inset-x-0 bottom-0 p-3 pr-16">
                           <p className="truncate text-sm font-semibold text-white">{item.name}</p>
-                          <p className="mt-0.5 truncate text-xs text-white/85">{item.location}</p>
+                          <p className="mt-0.5 truncate text-xs text-white/85">
+                            {item.location}
+                            {item.scrapedAt && (
+                              <span className="opacity-70"> · updated {freshness(item.scrapedAt)}</span>
+                            )}
+                          </p>
                         </div>
                       </div>
                     </Link>
+                    <button
+                      aria-label="Add to a trip"
+                      onClick={e => { e.preventDefault(); setPickerListingId(item._id); setPickerTripId(null) }}
+                      className="absolute right-12 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/60"
+                    >
+                      <Plus className="size-4" />
+                    </button>
                     <button
                       aria-label={saved ? 'Remove from saved' : 'Save to your list'}
                       onClick={e => { e.preventDefault(); toggleSave(item._id) }}
@@ -520,8 +635,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               })
             ) : (
               Array(PAGE_SIZE).fill(null).map((_, i) => (
-                <Card key={i} className="rounded-xl border-0 bg-transparent p-0">
-                  <Skeleton className="aspect-[3/2] w-full rounded-xl" />
+                <Card key={i} className="rounded-2xl border-0 bg-transparent p-0">
+                  <Skeleton className="aspect-[3/2] w-full rounded-2xl" />
                 </Card>
               ))
             )}
@@ -535,8 +650,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
           {filteredItems && filteredItems.length === 0 && (
             vertical === 'taxis' ? (
-              <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed py-12 text-center">
-                <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary"><Car className="size-6" /></span>
+              <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed py-12 text-center">
+                <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><Car className="size-6" /></span>
                 <div>
                   <p className="font-serif text-2xl font-semibold tracking-tight">Coming soon</p>
                   <p className="mx-auto mt-1 text-sm text-muted-foreground">Airport transfers and city rides.</p>
@@ -602,6 +717,19 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
           />
         </div>
       )}
+
+      <Dialog open={pickerListingId !== null} onOpenChange={open => { if (!open) setPickerListingId(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add to a trip</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <Select value={pickerTripId?.toString() || ''} onValueChange={v => setPickerTripId(v ? (v as Id<'trips'>) : null)}>
+              <SelectTrigger><SelectValue placeholder="Select a trip" /></SelectTrigger>
+              <SelectContent>{editableTrips.map(t => <SelectItem key={t._id} value={t._id}>{t.name}{t.role !== 'owner' ? ' · Shared' : ''}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button className="w-full" disabled={!pickerTripId} onClick={() => void confirmAddToListing()}>Add as a stop</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <SignInButton mode="modal"><div ref={signInRef} style={{ display: 'none' }} /></SignInButton>
     </div>
