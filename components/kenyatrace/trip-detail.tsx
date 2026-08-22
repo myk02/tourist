@@ -7,12 +7,13 @@ import { SignInButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { CalendarClock, Camera, Copy, CopyPlus, LocateFixed, Printer, Route, Trash2 } from 'lucide-react'
+import { CalendarClock, Camera, Copy, CopyPlus, Images, LocateFixed, Map, MoreHorizontal, Printer, Route, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { geocodeArea } from '@/lib/geocode'
 import { buildPrintableItinerary } from '@/lib/itinerary'
@@ -28,6 +29,35 @@ import { RequireSubscription } from './paywall'
 import { TripBriefCard } from './trip-brief'
 import { TripChecklist } from './trip-checklist'
 import type { Stop } from './types'
+
+// ─── Trip stage: the hub reorders itself around where the traveller is ──────
+
+type TripStage = 'planning' | 'active' | 'past'
+
+const DAY_MS = 86_400_000
+
+/** Local-timezone YYYY-MM-DD — dates on trips are plain calendar strings. */
+function dateOnly(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Stage comes from the dates when they exist (a trip is "past" the day after
+ * its end date, "active" within its window) and falls back to the manual
+ * status for dateless trips.
+ */
+function deriveStage(status?: string, startDate?: string, endDate?: string): TripStage {
+  if (status === 'completed') return 'past'
+  const iso = /^\d{4}-\d{2}-\d{2}$/
+  const today = dateOnly(new Date())
+  if (startDate && endDate && iso.test(startDate) && iso.test(endDate)) {
+    if (today > endDate) return 'past'
+    if (today >= startDate) return 'active'
+  } else if (status === 'travelling') {
+    return 'active'
+  }
+  return 'planning'
+}
 
 export function TripDetail() {
   const id = useTripId()
@@ -45,6 +75,7 @@ export function TripDetail() {
   const acceptInvite = useMutation(api.trips.acceptInvite)
   const enableTraceShare = useMutation(api.trips.enableTraceShare)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [inviteState, setInviteState] = useState<'idle' | 'accepting' | 'signin' | 'error'>('idle')
 
@@ -132,6 +163,69 @@ export function TripDetail() {
   // The owner's subscription gates their trip space; invited collaborators
   // ride on the owner's access so sharing stays frictionless.
   const requireSubscription = isOwner
+
+  const stage = deriveStage(trip.status, trip.startDate, trip.endDate)
+
+  // Status chip: a countdown before, "Day X of Y" on the road, done after.
+  let stageChip: string
+  if (stage === 'past') {
+    stageChip = 'Completed'
+  } else if (stage === 'active') {
+    const start = Date.parse(trip.startDate ?? '')
+    const end = Date.parse(trip.endDate ?? '')
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+      const total = Math.round((end - start) / DAY_MS) + 1
+      const dayN = Math.min(Math.max(Math.round((Date.parse(dateOnly(new Date())) - start) / DAY_MS) + 1, 1), total)
+      stageChip = `Day ${dayN} of ${total}`
+    } else {
+      stageChip = 'On the road'
+    }
+  } else if (trip.startDate && /^\d{4}-\d{2}-\d{2}$/.test(trip.startDate)) {
+    const daysTo = Math.round((Date.parse(trip.startDate) - Date.parse(dateOnly(new Date()))) / DAY_MS)
+    stageChip = daysTo <= 0 ? 'Starts today' : daysTo === 1 ? 'Starts tomorrow' : `Starts in ${daysTo} days`
+  } else {
+    stageChip = 'Planning'
+  }
+
+  // Tabs persist in the URL so back-navigation and shared links land on the
+  // same view; past trips open on Moments for the owner.
+  const TAB_IDS = ['itinerary', 'route', 'budget', 'bookings', 'moments']
+  const defaultTab = stage === 'past' && isOwner ? 'moments' : 'itinerary'
+  const requestedTab = params.get('tab')
+  const activeTab = requestedTab != null && TAB_IDS.includes(requestedTab) ? requestedTab : defaultTab
+  // Bookings and Moments are owner-only tabs — a viewer's deep link falls back.
+  const tab = !isOwner && (activeTab === 'bookings' || activeTab === 'moments') ? defaultTab : activeTab
+
+  function selectTab(value: string) {
+    router.replace(`/trips/${tripId}?tab=${encodeURIComponent(value)}`, { scroll: false })
+  }
+
+  // One primary action, chosen by stage: plan → refine, active → go live,
+  // past → relive. Everything else lives in the More menu.
+  const primaryAction = (() => {
+    if (stage === 'active' && isOwner) {
+      return (
+        <Button variant="secondary" nativeButton={false} render={<Link href={`/trips/${trip._id}/track`} />}>
+          <LocateFixed data-icon="inline-start" />Go live
+        </Button>
+      )
+    }
+    if (stage === 'past') {
+      return (
+        <Button variant="secondary" nativeButton={false} render={<Link href={`/recap/${trip._id}`} />}>
+          <Images data-icon="inline-start" />View recap
+        </Button>
+      )
+    }
+    if (canEdit) {
+      return (
+        <Button variant="secondary" nativeButton={false} render={<Link href={`/trips/${trip._id}?tab=itinerary`} />}>
+          <Map data-icon="inline-start" />Edit itinerary
+        </Button>
+      )
+    }
+    return null
+  })()
 
   const NEXT_STATUS: Record<string, { status: string; label: string }> = {
     planning: { status: 'booked', label: 'Mark as booked' },
@@ -270,6 +364,7 @@ export function TripDetail() {
       <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-[color-mix(in_oklch,var(--primary),#000_28%)] px-6 py-10 text-primary-foreground shadow-lift ring-1 ring-primary/20 md:px-10">
         <div className="flex flex-wrap items-center gap-2">
           <Badge className="bg-accent text-accent-foreground">{trip.startDate} — {trip.endDate}</Badge>
+          <Badge className="bg-primary-foreground/20 text-primary-foreground">{stageChip}</Badge>
           {!isOwner && <Badge className="bg-accent text-accent-foreground">{myRole === 'editor' ? 'Shared with you · Editor' : 'Shared with you · Viewer'}</Badge>}
         </div>
         <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight">{trip.name}</h1>
@@ -280,16 +375,61 @@ export function TripDetail() {
             {activeBookings.length} active reservation{activeBookings.length === 1 ? '' : 's'} · {formatKES(bookingsTotal)}
           </p>
         )}
-        <div className="mt-6 flex flex-wrap gap-3">
-          {isOwner && <Button variant="secondary" nativeButton={false} render={<Link href={`/trips/${trip._id}/track`} />}><LocateFixed data-icon="inline-start" />Start live tracking</Button>}
-          {isOwner && <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" nativeButton={false} render={<Link href={`/moments?trip=${trip._id}`} />}><Camera data-icon="inline-start" />Moments</Button>}
-          {myRole !== 'viewer' && <ShareTripDialog tripId={tripId} tripName={trip.name} myRole={myRole} isOwner={isOwner} triggerClassName="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10" />}
-          {canEdit && nextStatus && <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={handleNextStatus} disabled={updating}>{nextStatus.label}</Button>}
-          {canEdit && <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={handleDuplicate}><CopyPlus data-icon="inline-start" />Duplicate</Button>}
-          {isOwner && <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={() => void handleShareTrace()}><Route data-icon="inline-start" />Share trace</Button>}
-          <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={handleCopyLink}><Copy data-icon="inline-start" />Copy link</Button>
-          <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={handlePrint}><Printer data-icon="inline-start" />Print / PDF</Button>
-          {isOwner && <Button variant="outline" className="border-destructive/40 bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setConfirmOpen(true)}><Trash2 data-icon="inline-start" />Delete trip</Button>}
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          {primaryAction}
+          {canEdit && nextStatus && (
+            <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" onClick={handleNextStatus} disabled={updating}>{nextStatus.label}</Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground" aria-label="More trip actions">
+                  <MoreHorizontal data-icon="inline-start" />More
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="start" className="w-56">
+              {isOwner && (
+                <DropdownMenuItem render={<Link href={`/trips/${tripId}/track`} />}>
+                  <LocateFixed />Live tracking
+                </DropdownMenuItem>
+              )}
+              {isOwner && (
+                <DropdownMenuItem render={<Link href={`/moments?trip=${trip._id}`} />}>
+                  <Camera />Moments
+                </DropdownMenuItem>
+              )}
+              {myRole !== 'viewer' && (
+                <DropdownMenuItem onClick={() => setShareOpen(true)}>
+                  <Users />Invite &amp; share
+                </DropdownMenuItem>
+              )}
+              {isOwner && (
+                <DropdownMenuItem onClick={() => void handleShareTrace()}>
+                  <Route />Share trace link
+                </DropdownMenuItem>
+              )}
+              {canEdit && (
+                <DropdownMenuItem onClick={() => void handleDuplicate()}>
+                  <CopyPlus />Duplicate
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={handleCopyLink}>
+                <Copy />Copy link
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handlePrint}>
+                <Printer />Print / PDF
+              </DropdownMenuItem>
+              {isOwner && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" onClick={() => setConfirmOpen(true)}>
+                    <Trash2 />Delete trip
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       {trip.stops.length > 0 && (
@@ -313,7 +453,7 @@ export function TripDetail() {
         />
       )}
       <BudgetBar stops={stops} budget={trip.budget} />
-      <Tabs defaultValue="itinerary">
+      <Tabs value={tab} onValueChange={value => selectTab(String(value))}>
         <TabsList>
           <TabsTrigger value="itinerary">Itinerary</TabsTrigger>
           <TabsTrigger value="route">Route map</TabsTrigger>
@@ -350,6 +490,9 @@ export function TripDetail() {
         )}
         {isOwner && <TabsContent value="moments"><MomentAlbum tripId={tripId} /></TabsContent>}
       </Tabs>
+      {myRole !== 'viewer' && (
+        <ShareTripDialog tripId={tripId} tripName={trip.name} myRole={myRole} isOwner={isOwner} open={shareOpen} onOpenChange={setShareOpen} />
+      )}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Delete this trip?</DialogTitle><DialogDescription>This removes the trip and its stops permanently. This can't be undone.</DialogDescription></DialogHeader>

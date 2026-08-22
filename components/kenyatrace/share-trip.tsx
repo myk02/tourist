@@ -21,9 +21,19 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * that grants anyone who opens it a role on the trip, or email it directly to
  * a companion. The owner manages collaborator roles and removes people. All
  * updates are live via Convex, so collaborators see changes in real time.
+ *
+ * Pass `open` + `onOpenChange` for controlled mode (e.g. opened from a
+ * dropdown menu item) — the default trigger button is then not rendered.
  */
-export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClassName }: { tripId: Id<'trips'>; tripName: string; myRole: string; isOwner: boolean; triggerClassName?: string }) {
-  const [open, setOpen] = useState(false)
+export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClassName, open: controlledOpen, onOpenChange }: { tripId: Id<'trips'>; tripName: string; myRole: string; isOwner: boolean; triggerClassName?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const [open, setOpenState] = useState(false)
+  // Controlled mode (open prop) skips the built-in trigger entirely — the
+  // parent owns when the dialog is shown.
+  const setOpen = (o: boolean) => {
+    setOpenState(o)
+    onOpenChange?.(o)
+  }
+  const isOpen = controlledOpen ?? open
   const shares = useQuery(api.trips.listShares, { tripId })
   const me = useQuery(api.users.me)
   const createLink = useMutation(api.trips.createShareLink)
@@ -139,11 +149,13 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
   const emailReady = isOwner || !!link
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant="outline" className={cn('gap-1.5', triggerClassName)} onClick={() => setOpen(true)}>
-        <Users className="size-4" />
-        Share
-      </Button>
+    <Dialog open={isOpen} onOpenChange={setOpen}>
+      {controlledOpen === undefined && (
+        <Button variant="outline" className={cn('gap-1.5', triggerClassName)} onClick={() => setOpen(true)}>
+          <Users className="size-4" />
+          Share
+        </Button>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Share this trip</DialogTitle>
