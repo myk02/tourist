@@ -312,6 +312,8 @@ export function GuidedJourney() {
   const [publishing, setPublishing] = useState(false)
   const [adjustOpen, setAdjustOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  // Optimistic tracking-consent flip — the server value lands async.
+  const [localConsent, setLocalConsent] = useState(false)
   const [files, setFiles] = useState<{ file: File; video: boolean }[]>([])
   const [caption, setCaption] = useState('')
   const pendingFnRef = useRef<(() => void) | null>(null)
@@ -853,7 +855,6 @@ export function GuidedJourney() {
       flights: perDay * 3.5,
       taxis: perDay * 2,
       cars: perDay * 2,
-      'things-to-do': perDay * 1.2,
       attractions: perDay * 1.2,
     }
     const hasOrigin = draft.originLat != null && draft.originLng != null
@@ -908,6 +909,16 @@ export function GuidedJourney() {
               <p className="mt-3 max-w-xl text-white/85">We plan the best of Kenya around your exact spot.</p>
             </div>
           </div>
+
+          {/* Signed-out visitors get the value story in one quiet line —
+              planning is free, an account only enters at save time. */}
+          {!isSignedIn && (
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 rounded-xl border bg-card px-4 py-2.5 text-xs font-medium text-muted-foreground">
+              <span className="flex items-center gap-1.5"><Sparkles className="size-3.5 text-primary" />AI builds your day-by-day route</span>
+              <span className="flex items-center gap-1.5"><Check className="size-3.5 text-primary" />Free to plan — sign in only to save</span>
+              <span className="flex items-center gap-1.5"><MapPin className="size-3.5 text-primary" />Made for Kenya · prices in KSh</span>
+            </div>
+          )}
 
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
             <Card className="flex-1">
@@ -1295,10 +1306,18 @@ export function GuidedJourney() {
 
               <Card>
                 <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
-                  {!tracking && activeSession?.status !== 'arrived' && me?.trackingConsent !== true && (
+                  {!tracking && activeSession?.status !== 'arrived' && me?.trackingConsent !== true && !localConsent && (
                     <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-2.5">
                       <p className="text-sm text-muted-foreground">Record your route while you travel?</p>
-                      <Switch checked={false} onCheckedChange={v => setConsent({ consent: v }).then(() => v && toast.success('Location tracing enabled')).catch(() => toast.error('Could not update location consent'))} />
+                      <Switch
+                        checked={localConsent}
+                        onCheckedChange={v => {
+                          setLocalConsent(v)
+                          setConsent({ consent: v })
+                            .then(() => { if (v) toast.success('Location tracing enabled') })
+                            .catch(() => { setLocalConsent(false); toast.error('Could not update location consent') })
+                        }}
+                      />
                     </div>
                   )}
                   <div className="min-w-0">

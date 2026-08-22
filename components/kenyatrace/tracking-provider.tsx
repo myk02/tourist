@@ -25,6 +25,9 @@ export interface TrackingSession {
   progressPct: number
   startedAt: number
   arrivedAt?: number
+  /** Epoch ms of the last accepted GPS fix — lets the UI show staleness
+   *  honestly instead of silently stalling when fixes stop arriving. */
+  lastFixAt?: number
   /** Straight-line distance to the destination on the first fix, km-derived.
    *  Persisted with the session so progress survives a reload (it anchors the
    *  progress bar at the moment tracking started, not the moment the page
@@ -33,6 +36,9 @@ export interface TrackingSession {
 }
 
 const STORAGE_KEY = 'ktActiveTrack'
+/** Cross-tab claim so two browser tabs never double-record the same trail. */
+const TAB_LOCK_KEY = 'ktActiveTrackLock'
+const TAB_LOCK_TTL_MS = 15000
 
 interface TrackingContextValue {
   session: TrackingSession | null
@@ -68,19 +74,30 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   const arrivalNavigatedRef = useRef(false)
   const lastRecordedRef = useRef<{ lat: number; lng: number; at: number } | null>(null)
   const lastPersistedRef = useRef<{ at: number; status: TrackingStatus | null }>({ at: 0, status: null })
+  // This browser tab's identity for the cross-tab lock (stable across renders).
+  const tabIdRef = useRef<string>('')
+  // Warn once per session when trail persistence starts failing — never spam.
+  const recordWarnedRef = useRef(false)
 
   // Hydration-safe restore: storage is only read after mount, so the server
   // and client first renders always agree.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) setSession(prev => prev ?? (JSON.parse(raw) as TrackingSession))
+      if (raw) {
+        const restored = JSON.parse(raw) as TrackingSession
+        setSession(prev => prev ?? restored)
+        // A session restored mid-arrival must not re-fire the auto-navigation
+        // to the track page on every reload — it already fired once.
+        if (restored.status === 'arrived') arrivalNavigatedRef.current = true
+      }
     } catch { /* ignore */ }
   }, [])
 
   // Persist throttled — a fix arrives roughly every second and serializing the
   // whole (growing) session each time is wasteful. Write on status changes and
-  // at most every few seconds otherwise; worst case a reload loses seconds of path.
+  // at most every few seconds otherwise; worst case a reload loses seconds of
+  // path. The same write heartbeats this tab's cross-tab claim.
   useEffect(() => {
     try {
       if (!session) {
@@ -93,14 +110,53 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
       if (statusChanged || now - lastPersistedRef.current.at > 4000) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
         lastPersistedRef.current = { at: now, status: session.status }
+        if (session.status === 'tracking' && tabIdRef.current) {
+          localStorage.setItem(TAB_LOCK_KEY, JSON.stringify({ tabId: tabIdRef.current, at: now }))
+        }
       }
     } catch { /* ignore */ }
   }, [session])
 
+  // Release this tab's claim when it closes or navigates away mid-session so
+  // another tab can take over immediately instead of waiting out the TTL.
+  useEffect(() => {
+    tabIdRef.current = `t-${Math.random().toString(36).slice(2, 10)}`
+    const release = () => {
+      try {
+        const raw = localStorage.getItem(TAB_LOCK_KEY)
+        if (raw && (JSON.parse(raw) as { tabId?: string }).tabId === tabIdRef.current) {
+          localStorage.removeItem(TAB_LOCK_KEY)
+        }
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('pagehide', release)
+    return () => {
+      window.removeEventListener('pagehide', release)
+      release()
+    }
+  }, [])
+
   const start = useCallback((args: { tripId: string; tripName: string; destinationName: string; destLat: number; destLng: number; originLabel?: string }) => {
+    if (!('geolocation' in navigator)) {
+      toast.error('Location is not supported by this browser — tracking is unavailable')
+      return
+    }
+    // Cross-tab guard: a fresh claim from another tab means tracking already
+    // runs there — starting here too would double-record every point.
+    try {
+      const raw = localStorage.getItem(TAB_LOCK_KEY)
+      const lock = raw ? (JSON.parse(raw) as { tabId?: string; at?: number }) : null
+      if (!tabIdRef.current) tabIdRef.current = `t-${Math.random().toString(36).slice(2, 10)}`
+      if (lock?.tabId && lock.tabId !== tabIdRef.current && Date.now() - (lock.at ?? 0) < TAB_LOCK_TTL_MS) {
+        toast.error('Live tracking is already running in another tab')
+        return
+      }
+      localStorage.setItem(TAB_LOCK_KEY, JSON.stringify({ tabId: tabIdRef.current, at: Date.now() }))
+    } catch { /* ignore */ }
     arrivalStreakRef.current = 0
     arrivalNavigatedRef.current = false
     lastRecordedRef.current = null
+    recordWarnedRef.current = false
     setSession({
       tripId: args.tripId,
       tripName: args.tripName,
@@ -120,6 +176,12 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
 
   const stop = useCallback(() => {
     setSession(null)
+    try {
+      const raw = localStorage.getItem(TAB_LOCK_KEY)
+      if (raw && (JSON.parse(raw) as { tabId?: string }).tabId === tabIdRef.current) {
+        localStorage.removeItem(TAB_LOCK_KEY)
+      }
+    } catch { /* ignore */ }
   }, [])
 
   // Single watch per active session. The cleanup + StrictMode double-invoke
@@ -154,6 +216,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
             startDistance: base,
             lastPoint: { lat, lng, accuracy },
             path,
+            lastFixAt: Date.now(),
             // A malformed fix (NaN from a transient GPS glitch) must never
             // reach the UI's toFixed() and throw.
             distanceKm: Number.isFinite(distance) ? Math.round((distance / 1000) * 10) / 10 : prev.distanceKm,
@@ -173,13 +236,22 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
         const beenAWhile = !lastRecorded || now - lastRecorded.at > 5000
         if (moved && beenAWhile) {
           lastRecordedRef.current = { lat, lng, at: now }
-          void record({ tripId: s.tripId as Id<'trips'>, lat, lng, accuracy }).catch(() => {})
+          record({ tripId: s.tripId as Id<'trips'>, lat, lng, accuracy }).catch(() => {
+            // Silent loss used to mean the trace quietly never persisted. Tell
+            // the traveller once per session so they can check connectivity.
+            if (!recordWarnedRef.current) {
+              recordWarnedRef.current = true
+              toast.warning('Your route may not be saving — check your connection')
+            }
+          })
         }
       },
       error => {
         // A hard permission denial (or GPS fully unavailable) would otherwise
         // leave the session stuck at 0% forever with no way out — end it
-        // visibly instead of silently. Transient fix errors are fine.
+        // visibly instead of silently. Transient fix errors (unavailable,
+        // timeout) keep the session running; the UI shows staleness via
+        // lastFixAt instead of pretending everything is fine.
         if (error && error.code === 1 /* PERMISSION_DENIED */) {
           setSession(null)
           toast.error('Location permission was denied — tracking stopped')

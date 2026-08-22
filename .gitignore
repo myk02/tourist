@@ -21,3 +21,6 @@ tsconfig.tsbuildinfo
 
 # Logs
 error-log.txt
+
+# Local tool cache
+.freebuff/

@@ -53,18 +53,6 @@ export const VERTICAL_CONFIG: Record<string, VerticalConfig> = {
     extractPrompt: "Extract every domestic flight route in Kenya from the page. For each: route name (e.g. Nairobi to Mombasa), airports (departure → arrival), one-way fare in KES, airline name, flight duration, a primary image URL, 2-3 tags, and a short description. Include coordinates of the departure airport if shown.",
     schema: SHARED_SCHEMA,
   },
-  "things-to-do": {
-    searchQueries: [
-      "site:getyourguide.com OR site:viator.com tours activities Nairobi Kenya prices",
-      "site:getyourguide.com OR site:viator.com tours activities Maasai Mara Kenya prices",
-      "site:getyourguide.com OR site:viator.com tours activities Diani Mombasa Kenya prices",
-      "site:getyourguide.com OR site:viator.com tours activities Naivasha Nakuru Kenya prices",
-      "site:getyourguide.com OR site:viator.com tours activities Amboseli Kenya prices",
-    ],
-    resultsPerQuery: 20,
-    extractPrompt: "Extract every tour, activity, or experience in Kenya from the page. For each: activity name, city/region in Kenya, price per person in KES, rating, review count, a primary image URL, 3-5 short tags (e.g. Safari, Snorkeling, Cultural), and a 1-2 sentence description. Include coordinates if shown.",
-    schema: SHARED_SCHEMA,
-  },
   attractions: {
     searchQueries: [
       "site:tripadvisor.com OR site:lonelyplanet.com things to do Nairobi Kenya attractions",
@@ -72,9 +60,14 @@ export const VERTICAL_CONFIG: Record<string, VerticalConfig> = {
       "site:tripadvisor.com OR site:lonelyplanet.com things to do Mombasa Diani Kenya attractions",
       "site:tripadvisor.com OR site:lonelyplanet.com things to do Naivasha Nakuru Kenya attractions",
       "site:tripadvisor.com OR site:lonelyplanet.com national parks Kenya entry fees attractions",
+      "site:getyourguide.com OR site:viator.com tours activities Nairobi Kenya prices",
+      "site:getyourguide.com OR site:viator.com tours activities Maasai Mara Kenya prices",
+      "site:getyourguide.com OR site:viator.com tours activities Diani Mombasa Kenya prices",
+      "site:getyourguide.com OR site:viator.com tours activities Naivasha Nakuru Kenya prices",
+      "site:getyourguide.com OR site:viator.com tours activities Amboseli Kenya prices",
     ],
     resultsPerQuery: 20,
-    extractPrompt: "Extract every attraction, national park, landmark, or tourist site in Kenya from the page. For each: attraction name, location in Kenya, entry fee in KES, rating, review count, a primary image URL, 2-4 tags, and a short description. Include coordinates if shown.",
+    extractPrompt: "Extract every tour, activity, attraction, national park, landmark, or tourist site in Kenya from the page. For each: name, location in Kenya, price per person in KES, rating, review count, a primary image URL, 2-4 tags, and a short description. Include coordinates if shown.",
     schema: SHARED_SCHEMA,
   },
   cars: {

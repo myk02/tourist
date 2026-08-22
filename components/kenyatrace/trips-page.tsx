@@ -24,13 +24,6 @@ const STATUS_LABEL: Record<string, string> = {
   completed: 'Completed',
 }
 
-const STATUS_PROGRESS: Record<string, number> = {
-  planning: 25,
-  booked: 50,
-  travelling: 75,
-  completed: 100,
-}
-
 type Trip = NonNullable<ReturnType<typeof useQuery<typeof api.trips.list>>>[number]
 
 function daysUntil(dateStr: string) {
@@ -53,6 +46,8 @@ function countdown(trip: Trip) {
 
 function TripCard({ trip, onDuplicate, onCopyLink, onDelete, onLeave }: { trip: Trip; onDuplicate: (t: Trip) => void; onCopyLink: (t: Trip) => void; onDelete: (t: Trip) => void; onLeave: (t: Trip) => void }) {
   const spend = trip.budget > 0 ? Math.min((trip.totalCost / trip.budget) * 100, 100) : 0
+  // Real completion: share of stops actually checked off (0 when no stops yet).
+  const donePct = trip.stopCount ? Math.round((trip.doneCount / trip.stopCount) * 100) : 0
   const isOwner = trip.role === 'owner'
   return (
     <Card className="group overflow-hidden p-0 transition-colors hover:border-primary/40">
@@ -76,14 +71,14 @@ function TripCard({ trip, onDuplicate, onCopyLink, onDelete, onLeave }: { trip: 
         <p className={cn('text-sm font-medium', trip.status === 'completed' ? 'text-muted-foreground' : 'text-primary')}>{countdown(trip)}</p>
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
-            <span className="w-14 shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">Plan</span>
-            <Progress className="h-1.5" value={STATUS_PROGRESS[trip.status] ?? 25} />
-            <span className="w-10 shrink-0 text-right text-[11px] text-muted-foreground">{STATUS_PROGRESS[trip.status] ?? 25}%</span>
+            <span className="w-14 shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">Visited</span>
+            <Progress className="h-1.5" value={donePct} />
+            <span className="w-14 shrink-0 text-right text-[11px] text-muted-foreground">{trip.doneCount}/{trip.stopCount || 0}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-14 shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">Budget</span>
             <Progress className="h-1.5" value={spend} />
-            <span className="w-10 shrink-0 text-right text-[11px] text-muted-foreground">{Math.round(spend)}%</span>
+            <span className="w-14 shrink-0 text-right text-[11px] text-muted-foreground">{Math.round(spend)}%</span>
           </div>
         </div>
       </CardHeader>
@@ -217,13 +212,13 @@ export function Trips({ compact = false }: { compact?: boolean }) {
           </div>
           <Button nativeButton={false} render={<Link href="/plan" />}><Plus data-icon="inline-start" />New trip</Button>
         </div>
-        {planningTrips.length > 0 && mostUrgentPlanning && (
+        {planningTrips.length > 0 && mostUrgentPlanning && daysUntil(mostUrgentPlanning.startDate) <= 14 && (
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
             <div className="flex items-center gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><Compass /></span>
               <div>
-                <p className="font-semibold">Plan fast — {planningTrips.length} trip{planningTrips.length === 1 ? '' : 's'} still need{planningTrips.length === 1 ? 's' : ''} planning</p>
-                <p className="text-sm text-muted-foreground">Finish your itinerary before you head out, and your trip will be ready to book, track and share.</p>
+                <p className="font-semibold">{countdown(mostUrgentPlanning)} — {planningTrips.length === 1 ? 'it' : `${planningTrips.length} trips`} still need{planningTrips.length === 1 ? 's' : ''} planning</p>
+                <p className="text-sm text-muted-foreground">Finish the itinerary before you head out and your trip will be ready to book, track and share.</p>
               </div>
             </div>
             <Button nativeButton={false} render={<Link href={`/trips/${mostUrgentPlanning._id}`} />}>Plan now</Button>

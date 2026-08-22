@@ -77,10 +77,13 @@ export function Detail({ id }: { id: string }) {
   }
 
   // If the signed-in user's access has run out, show the paywall dialog
-  // instead of the reserve form (the server also rejects the write).
+  // instead of the reserve form (the server also rejects the write). While
+  // the status query is still loading we wait — treating "unknown" as "allowed"
+  // used to open the form right before the server rejected it.
   function handleReserveClick() {
     gate(() => {
-      if (subscriptionStatus && !subscriptionStatus.active) {
+      if (subscriptionStatus === undefined) return
+      if (subscriptionStatus === null || !subscriptionStatus.active) {
         setPaywallOpen(true)
         return
       }
@@ -88,23 +91,40 @@ export function Detail({ id }: { id: string }) {
     })
   }
 
+  const [adding, setAdding] = useState(false)
+  const [creatingTrip, setCreatingTrip] = useState(false)
+
   async function confirmAdd() {
-    if (!item || !selectedId || !selectedTrip) return
-    const existing = selectedTrip.stops.map(s => ({ name: s.name, place: s.place, day: s.day, time: s.time, cost: s.cost, kind: s.kind, order: s.order, lat: s.lat, lng: s.lng }))
-    const newStop = { name: item.name, place: item.location, day: Math.max(...(existing.length ? existing.map(s => s.day) : [0]), 1), time: '09:00', cost: item.price, kind: item.vertical === 'stays' ? 'Stay' : 'Experience', order: existing.length, lat: item.lat, lng: item.lng }
-    await replaceStops({ tripId: selectedId, stops: [...existing, newStop] })
-    toast.success(`Added to ${selectedTrip.name}`)
-    setPickerOpen(false)
-    router.push(`/trips/${selectedId}`)
+    if (!item || !selectedId || !selectedTrip || adding) return
+    setAdding(true)
+    try {
+      const existing = selectedTrip.stops.map(s => ({ name: s.name, place: s.place, day: s.day, time: s.time, cost: s.cost, kind: s.kind, order: s.order, lat: s.lat, lng: s.lng }))
+      const newStop = { name: item.name, place: item.location, day: Math.max(...(existing.length ? existing.map(s => s.day) : [0]), 1), time: '09:00', cost: item.price, kind: item.vertical === 'stays' ? 'Stay' : 'Experience', order: existing.length, lat: item.lat, lng: item.lng }
+      await replaceStops({ tripId: selectedId, stops: [...existing, newStop] })
+      toast.success(`Added to ${selectedTrip.name}`)
+      setPickerOpen(false)
+      router.push(`/trips/${selectedId}`)
+    } catch {
+      toast.error('Could not add this stop — try again')
+    } finally {
+      setAdding(false)
+    }
   }
 
   async function createNewTrip() {
-    if (!item) return
+    if (!item || creatingTrip) return
     gate(async () => {
-      const id = await create({ name: item.name + ' Trip', destination: item.location, startDate: new Date().toISOString().slice(0, 10), endDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10), budget: Math.max(item.price * 3, 50000), totalCost: item.price, stops: [{ name: item.name, place: item.location, day: 1, time: '09:00', cost: item.price, kind: item.vertical === 'stays' ? 'Stay' : 'Experience', order: 0, lat: item.lat, lng: item.lng }] })
-      toast.success('Trip created!')
-      router.push(`/trips/${id}`)
-      setPickerOpen(false)
+      setCreatingTrip(true)
+      try {
+        const id = await create({ name: item.name + ' Trip', destination: item.location, startDate: new Date().toISOString().slice(0, 10), endDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10), budget: Math.max(item.price * 3, 50000), totalCost: item.price, stops: [{ name: item.name, place: item.location, day: 1, time: '09:00', cost: item.price, kind: item.vertical === 'stays' ? 'Stay' : 'Experience', order: 0, lat: item.lat, lng: item.lng }] })
+        toast.success('Trip created!')
+        router.push(`/trips/${id}`)
+        setPickerOpen(false)
+      } catch {
+        toast.error('Could not create this trip — your access may have expired')
+      } finally {
+        setCreatingTrip(false)
+      }
     })
   }
 
@@ -229,14 +249,14 @@ export function Detail({ id }: { id: string }) {
                     Price dropped {formatKES(savedEntry.priceAtSave)} → {formatKES(item.price)} since you saved it.
                   </p>
                 )}
-                <Button size="lg" className="w-full" onClick={handleReserveClick} disabled={!item}>
-                  Reserve
+                <Button size="lg" className="w-full" onClick={handleReserveClick} disabled={!item || (isSignedIn && subscriptionStatus === undefined)}>
+                  {isSignedIn && subscriptionStatus === undefined ? 'Checking access…' : 'Reserve'}
                 </Button>
                 <Button variant="outline" className="w-full" onClick={handleAddToTrip} disabled={!item}>
                   Add to a trip
                 </Button>
-                <Button variant="ghost" className="w-full" onClick={createNewTrip} disabled={!item}>
-                  Start a new trip with this
+                <Button variant="ghost" className="w-full" onClick={createNewTrip} disabled={!item || creatingTrip}>
+                  {creatingTrip ? 'Creating…' : 'Start a new trip with this'}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">Free to reserve — pay later from your bookings.</p>
               </CardContent>
@@ -253,7 +273,7 @@ export function Detail({ id }: { id: string }) {
               <SelectTrigger><SelectValue placeholder="Select a trip" /></SelectTrigger>
               <SelectContent>{editableTrips.map(t => <SelectItem key={t._id} value={t._id}>{t.name}{t.role !== 'owner' ? ' · Shared' : ''}</SelectItem>)}</SelectContent>
             </Select>
-            <Button className="w-full" disabled={!selectedId} onClick={confirmAdd}>Add stop</Button>
+            <Button className="w-full" disabled={!selectedId || adding} onClick={confirmAdd}>{adding ? 'Adding…' : 'Add stop'}</Button>
           </div>
         </DialogContent>
       </Dialog>

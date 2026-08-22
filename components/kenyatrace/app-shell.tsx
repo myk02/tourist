@@ -13,7 +13,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ThemeToggle } from '@/components/theme-toggle'
 import { PLANS, DayPackCheckout, PlanCard } from './paywall'
 
-const nav = [{href:'/',label:'Discover',icon:Compass},{href:'/plan',label:'Plan',icon:Sparkles},{href:'/trips',label:'Trips',icon:Map},{href:'/moments',label:'Moments',icon:Camera},{href:'/profile',label:'Profile',icon:CircleUserRound}]
+// The home page IS the AI planner — labelled "Plan", while real discovery
+// lives at /discover as "Explore". Before this rename the two most important
+// destinations were effectively mislabelled.
+const nav = [{href:'/',label:'Plan',icon:Sparkles},{href:'/discover',label:'Explore',icon:Compass},{href:'/trips',label:'Trips',icon:Map},{href:'/moments',label:'Moments',icon:Camera},{href:'/profile',label:'Profile',icon:CircleUserRound}]
 
 function isActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href)
@@ -52,14 +55,11 @@ function Header(){
     }).catch(() => {})
   }, [user, sync])
 
-  // The landing page keeps just the brand — no nav links up top.
-  const isLanding = pathname === '/'
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/80 backdrop-blur-lg supports-backdrop-filter:bg-background/70">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 md:px-8">
         <Brand />
-        {!isLanding && (
-          <nav aria-label="Main navigation" className="hidden items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1 md:flex">
+        <nav aria-label="Main navigation" className="hidden items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1 md:flex">
             {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
               <Link
                 key={item.href}
@@ -73,7 +73,6 @@ function Header(){
               </Link>
             )})}
           </nav>
-        )}
         <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
           <span className="hidden items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground xl:flex"><MapPin className="size-3.5 text-primary"/>Made for Kenya</span>
           <HeaderAccount />

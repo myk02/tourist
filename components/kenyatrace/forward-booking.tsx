@@ -9,8 +9,8 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { formatKES } from '@/lib/kenya-data'
 import type { ParsedBooking } from '@/lib/parse-booking'
 
 const TYPE_STYLE: Record<string, string> = {
@@ -18,11 +18,6 @@ const TYPE_STYLE: Record<string, string> = {
   Flight: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
   Transport: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   General: 'bg-secondary text-muted-foreground',
-}
-
-function amountLabel(parsed: ParsedBooking) {
-  if (parsed.currency === 'USD') return `$${parsed.amount.toLocaleString()}`
-  return formatKES(parsed.amount)
 }
 
 /**
@@ -36,12 +31,17 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
   const [text, setText] = useState('')
   const [parsing, setParsing] = useState(false)
   const [parsed, setParsed] = useState<ParsedBooking | null>(null)
+  // The parse is a draft, not the truth — every field stays editable before
+  // it becomes a reservation, so a missed amount or typo is fixed here
+  // instead of being waved through to the itinerary.
+  const [edit, setEdit] = useState<ParsedBooking | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   function reset() {
     setText('')
     setParsed(null)
+    setEdit(null)
     setError(null)
   }
 
@@ -58,6 +58,7 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not read this email')
       setParsed(data)
+      setEdit({ ...data })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read this email')
       setParsed(null)
@@ -67,19 +68,19 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
   }
 
   async function addToTrip() {
-    if (!parsed) return
+    if (!parsed || !edit || !edit.name.trim()) return
     setSaving(true)
     try {
       await addFromEmail({
         tripId,
-        name: parsed.name,
-        place: parsed.place,
+        name: edit.name.trim(),
+        place: edit.place,
         type: parsed.type,
-        amount: parsed.amount,
-        reference: parsed.reference,
-        checkIn: parsed.checkIn,
-        checkOut: parsed.checkOut,
-        guests: parsed.guests,
+        amount: Math.max(edit.amount, 0),
+        reference: edit.reference,
+        checkIn: edit.checkIn,
+        checkOut: edit.checkOut,
+        guests: edit.guests,
       })
       toast.success('Booking added to your trip')
       setOpen(false)
@@ -89,6 +90,10 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  function patch(patchFields: Partial<ParsedBooking>) {
+    setEdit(prev => (prev ? { ...prev, ...patchFields } : prev))
   }
 
   return (
@@ -126,48 +131,72 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          {parsed && (
-            <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-soft">
+          {parsed && edit && (
+            <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-soft">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold">{parsed.name}</p>
+                <p className="font-semibold">Check the details</p>
                 <Badge className={TYPE_STYLE[parsed.type] ?? 'bg-secondary text-muted-foreground'}>{parsed.type}</Badge>
+                <span className="ml-auto text-xs text-muted-foreground">Edit anything the email got wrong</span>
               </div>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-                {parsed.place && (
-                  <>
-                    <dt className="text-muted-foreground">Where</dt>
-                    <dd>{parsed.place}</dd>
-                  </>
-                )}
-                {parsed.reference && (
-                  <>
-                    <dt className="text-muted-foreground">Reference</dt>
-                    <dd className="font-mono">{parsed.reference}</dd>
-                  </>
-                )}
-                <dt className="text-muted-foreground">Amount</dt>
-                <dd className="font-semibold">{amountLabel(parsed)}</dd>
-                {parsed.checkIn && (
-                  <>
-                    <dt className="text-muted-foreground">Dates</dt>
-                    <dd>{parsed.checkIn}{parsed.checkOut ? ` → ${parsed.checkOut}` : ''}</dd>
-                  </>
-                )}
-                {parsed.guests && (
-                  <>
-                    <dt className="text-muted-foreground">Guests</dt>
-                    <dd>{parsed.guests}</dd>
-                  </>
-                )}
-              </dl>
-              {parsed.amount === 0 && <p className="text-xs text-muted-foreground">No amount found in the email — this will be added at KSh 0. Edit the itinerary after adding if needed.</p>}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                  Name
+                  <Input className="h-8" value={edit.name} onChange={e => patch({ name: e.target.value })} />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                  Where
+                  <Input className="h-8" value={edit.place} onChange={e => patch({ place: e.target.value })} />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                  Reference
+                  <Input className="h-8 font-mono" value={edit.reference} onChange={e => patch({ reference: e.target.value })} />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                  Amount (KES)
+                  <Input
+                    className="h-8"
+                    type="number"
+                    min={0}
+                    value={edit.amount}
+                    onChange={e => {
+                      const n = parseInt(e.target.value, 10)
+                      if (!Number.isNaN(n)) patch({ amount: n })
+                    }}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                  Check-in
+                  <Input className="h-8" type="date" value={edit.checkIn ?? ''} onChange={e => patch({ checkIn: e.target.value || undefined })} />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                    Check-out
+                    <Input className="h-8" type="date" value={edit.checkOut ?? ''} onChange={e => patch({ checkOut: e.target.value || undefined })} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                    Guests
+                    <Input
+                      className="h-8"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={edit.guests ?? ''}
+                      onChange={e => {
+                        const n = parseInt(e.target.value, 10)
+                        patch({ guests: Number.isNaN(n) ? undefined : n })
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+              {!edit.name.trim() && <p className="text-xs text-destructive">A name is required before adding.</p>}
             </div>
           )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Close</Button>
-          <Button onClick={addToTrip} disabled={!parsed || saving} className="gap-2">
+          <Button onClick={addToTrip} disabled={!edit || !edit.name.trim() || saving} className="gap-2">
             {saving && <Loader2 className="size-4 animate-spin" />}
             Add to trip
           </Button>

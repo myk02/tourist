@@ -4,7 +4,7 @@ import { api, internal } from "../_generated/api"
 import { makeFunctionReference } from "convex/server"
 import { STALE_AFTER_MS } from "./constants"
 
-const VERTICALS = ["stays", "flights", "things-to-do", "attractions", "cars", "taxis"] as const
+const VERTICALS = ["stays", "flights", "attractions", "cars", "taxis"] as const
 type Vertical = (typeof VERTICALS)[number]
 
 // Real reference to this module's own public action, built by path so that

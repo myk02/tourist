@@ -1,11 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { CalendarDays, Footprints, MapPin, Route } from 'lucide-react'
+import { CalendarDays, Footprints, MapPin, Radio, Route } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { isValidConvexId } from '@/lib/id'
 import { KenyaMap } from './kenya-map'
@@ -45,6 +45,18 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
 
   const stopDays = new Set(data.stops.map(s => s.day)).size
 
+  // Freshness: the query is a live Convex subscription, so new GPS points
+  // arrive on their own — this chip makes that honesty visible. It ticks so
+  // "updated 5s ago" never goes stale on screen.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!data?.lastRecordedAt) return
+    const t = setInterval(() => setTick(x => x + 1), 10000)
+    return () => clearInterval(t)
+  }, [data?.lastRecordedAt])
+  const ageSec = data?.lastRecordedAt ? Math.max(0, Math.round((Date.now() - data.lastRecordedAt) / 1000)) : null
+  const freshness = ageSec == null ? null : ageSec < 60 ? 'just now' : ageSec < 3600 ? `${Math.round(ageSec / 60)} min ago` : `${Math.round(ageSec / 3600)}h ago`
+
   return (
     <div className="relative min-h-[100svh]">
       <KenyaMap
@@ -56,7 +68,14 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
       />
       <div className="absolute inset-x-4 bottom-5 mx-auto max-w-xl">
         <div className="rounded-2xl border border-border/80 bg-card/95 p-5 shadow-pop backdrop-blur supports-backdrop-filter:bg-card/85">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Live trip trace</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Live trip trace</p>
+            {freshness && (
+              <span className="flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
+                <Radio className="size-3 animate-pulse" /> Updated {freshness}
+              </span>
+            )}
+          </div>
           <h1 className="mt-1 font-serif text-2xl font-semibold tracking-tight">{data.trip.name}</h1>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
             <MapPin className="size-3.5 shrink-0 text-primary" />

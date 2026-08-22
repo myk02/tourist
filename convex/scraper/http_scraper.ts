@@ -45,7 +45,7 @@ async function fetchHTML(url: string, retry = 0): Promise<string | null> {
   }
 }
 
-const VERTICALS = ["stays", "flights", "things-to-do", "attractions", "cars", "taxis"] as const
+const VERTICALS = ["stays", "flights", "attractions", "cars", "taxis"] as const
 type Vertical = (typeof VERTICALS)[number]
 
 async function scrapeStays(ctx: any, now: number): Promise<any[]> {
@@ -178,7 +178,7 @@ function parseActivityResults(html: string, now: number, act: any): any[] {
     const price = parseInt(match[2].replace(/,/g, "")) || 1500
     if (price > 0) {
       results.push({
-        vertical: "things-to-do",
+        vertical: "attractions",
         name: match[1]?.trim() || "Activity",
         location: act.location,
         price,
@@ -373,6 +373,17 @@ function extractImageFromHtml(html: string, index: number): string {
   return "https://upload.wikimedia.org/wikipedia/commons/d/de/Secretary_Kerry_Sits_With_His_Fellow_Foreign_Ministers_at_the_Villa_Rosa_Kempinski_Hotel_in_Nairobi_%2828531519154%29.jpg"
 }
 
+/** Attractions now absorbs the bookable "things to do" tours/activities too,
+ *  so the single Discover tab stays populated from both Wikipedia landmarks
+ *  and scraped GetYourGuide/Viator activities. */
+async function scrapeAttractionsAndActivities(ctx: any, now: number): Promise<any[]> {
+  const [parks, activities] = await Promise.all([
+    scrapeAttractions(ctx, now),
+    scrapeThingsToDo(ctx, now),
+  ])
+  return [...parks, ...activities]
+}
+
 export const scrapeVertical = internalAction({
   args: { vertical: v.string() },
   handler: async (ctx, { vertical }) => {
@@ -380,8 +391,7 @@ export const scrapeVertical = internalAction({
     const scrapers: Record<string, (ctx: any, now: number) => Promise<any[]>> = {
       stays: scrapeStays,
       flights: scrapeFlights,
-      "things-to-do": scrapeThingsToDo,
-      attractions: scrapeAttractions,
+      attractions: scrapeAttractionsAndActivities,
       cars: scrapeCars,
       taxis: scrapeTaxis,
     }

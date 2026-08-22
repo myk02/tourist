@@ -1,32 +1,40 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { Compass, ListChecks, MapPin, Navigation, Route, Share2, Square } from 'lucide-react'
+import { Compass, ListChecks, MapPin, Navigation, Route, Share2, ShieldOff, Square } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { geocodeArea } from '@/lib/geocode'
+import { cn } from '@/lib/utils'
 import { KenyaMap } from './kenya-map'
 import { NotFound, useTripId } from './shared'
 import { useTracking } from './tracking-provider'
 import { TripChecklist } from './trip-checklist'
 import { RequireSubscription } from './paywall'
 
+/** Seconds after which a missing GPS fix starts to look like a stall. */
+const STALE_AFTER_MS = 45000
+
 export function Track() {
   const id = useTripId()
-  const router = useRouter()
   const trip = useQuery(api.trips.getWithStops, id ? { id } : 'skip')
   const me = useQuery(api.users.me)
-  const recorded = useQuery(api.positions.forTrip, id ? { tripId: id } : 'skip')
+  const recorded = useQuery(api.positions.forTrip, id ? { tripId: id, maxPoints: 2000 } : 'skip')
   const setConsent = useMutation(api.users.setTrackingConsent)
   const enableTraceShare = useMutation(api.trips.enableTraceShare)
   const { session, start, stop } = useTracking()
   const [checklistOpen, setChecklistOpen] = useState(false)
+  // Optimistic consent: the server value arrives async, so the switch flips
+  // immediately and reverts only if the mutation fails — no more "dead" toggle.
+  const [localConsent, setLocalConsent] = useState(false)
+  // Ticks while a session is active so staleness stays current even when no
+  // new fixes arrive.
+  const [, setTick] = useState(0)
 
   // Resolve the saved origin label to coordinates so the map can show the
   // trip's starting point (lat 0 is the equator — null-check, not truthiness).
@@ -51,10 +59,18 @@ export function Track() {
   const trackHighlight = useMemo(() => (originPoint ? ['origin'] : []), [originPoint])
   const trackDestIds = useMemo(() => (mapPoints.length ? [mapPoints[mapPoints.length - 1].id] : []), [mapPoints])
 
-  const consent = me?.trackingConsent === true
+  const consent = me?.trackingConsent === true || localConsent
   const active = session && session.tripId === id ? session : null
   const tracking = active?.status === 'tracking'
   const arrived = active?.status === 'arrived'
+
+  // Staleness: recompute every 10s while tracking so a stalled GPS shows up.
+  useEffect(() => {
+    if (!tracking) return
+    const t = setInterval(() => setTick(x => x + 1), 10000)
+    return () => clearInterval(t)
+  }, [tracking])
+  const staleForMs = tracking && active?.lastFixAt ? Date.now() - active.lastFixAt : 0
 
   const destinationStop = trip?.stops.filter(s => s.lat != null && s.lng != null).slice(-1)[0]
   const dest = destinationStop ? { name: destinationStop.name, lat: destinationStop.lat!, lng: destinationStop.lng! } : null
@@ -88,6 +104,15 @@ export function Track() {
   function handleStop() {
     stop()
     toast.success('Tracking stopped')
+  }
+
+  // Consent is enforced server-side on every record() — turning it off here
+  // ends persistence immediately, wherever the user is in the app.
+  function handleRevokeConsent() {
+    setLocalConsent(false)
+    setConsent({ consent: false })
+      .then(() => toast.success('Location tracing turned off'))
+      .catch(() => toast.error('Could not update location consent'))
   }
 
   async function handleShareTrace() {
@@ -133,7 +158,15 @@ export function Track() {
                 </div>
                 <label className="flex cursor-pointer items-center justify-between rounded-xl border p-3">
                   <span className="text-sm font-medium">Allow location tracing for this trip</span>
-                  <Switch checked={false} onCheckedChange={() => setConsent({ consent: true }).catch(() => toast.error('Could not update location consent'))} />
+                  <Switch
+                    checked={localConsent}
+                    onCheckedChange={v => {
+                      setLocalConsent(v)
+                      setConsent({ consent: v })
+                        .then(() => { if (v) toast.success('Location tracing enabled') })
+                        .catch(() => { setLocalConsent(false); toast.error('Could not update location consent') })
+                    }}
+                  />
                 </label>
               </div>
             ) : arrived ? (
@@ -149,7 +182,7 @@ export function Track() {
                   <Button variant="outline" className="gap-2" onClick={() => void handleShareTrace()}><Route className="size-4" />Share trace</Button>
                   <Button variant="outline" className="gap-2" nativeButton={false} render={<a href={`/moments?trip=${tripId}`} />}><Share2 className="size-4" />Share your experience</Button>
                   <Button variant="outline" nativeButton={false} render={<a href={`/trips/${tripId}`} />}>View trip</Button>
-                  <Button variant="ghost" className="gap-2" onClick={() => router.push('/')}><Compass className="size-4" />Back to discover</Button>
+                  <Button variant="ghost" className="gap-2" nativeButton={false} render={<a href="/discover" />}><Compass className="size-4" />Explore more</Button>
                 </div>
               </div>
             ) : active ? (
@@ -166,6 +199,11 @@ export function Track() {
                     <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${active.progressPct}%` }} />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{active.progressPct}% of the way there</p>
+                  {staleForMs > STALE_AFTER_MS && (
+                    <p className="mt-1.5 w-fit rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                      Weak GPS signal — last fix {Math.round(staleForMs / 60000)} min ago
+                    </p>
+                  )}
                 </div>
                 <Button variant="destructive" onClick={handleStop}>End</Button>
               </div>
@@ -179,6 +217,17 @@ export function Track() {
                   </p>
                 </div>
                 <Button onClick={handleStart}>Start</Button>
+              </div>
+            )}
+            {consent && (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/40 px-3.5 py-2.5">
+                <span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                  <ShieldOff className="size-4 shrink-0 text-primary" />
+                  Location tracing is on for this trip — routes save only while it stays on.
+                </span>
+                <Button variant="ghost" size="sm" className={cn('shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive')} onClick={handleRevokeConsent}>
+                  Turn off
+                </Button>
               </div>
             )}
             {(trip.stops.length > 0) && (

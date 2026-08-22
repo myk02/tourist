@@ -41,7 +41,13 @@ export const list = query({ args: {}, handler: async (ctx) => {
     const trip = await ctx.db.get(share.tripId)
     return trip ? { ...trip, role: share.role as "editor" | "viewer" } : null
   }))
-  return [...ownedWithRole, ...shared.filter((t): t is NonNullable<typeof t> => t !== null)]
+  const all = [...ownedWithRole, ...shared.filter((t): t is NonNullable<typeof t> => t !== null)]
+  // Real completion stats so cards show actual progress instead of a status
+  // guess: how many of the trip's stops have been checked off.
+  return Promise.all(all.map(async t => {
+    const stops = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", t._id)).collect()
+    return { ...t, stopCount: stops.length, doneCount: stops.filter(s => s.completedAt != null).length }
+  }))
 }})
 
 export const get = query({ args: { id: v.id("trips") }, handler: async (ctx, { id }) => {
@@ -321,7 +327,10 @@ export const publicTrace = query({ args: { tripId: v.id("trips"), token: v.strin
   const trip = await ctx.db.get(tripId)
   if (!trip || !trip.traceShareToken || trip.traceShareToken !== token) return null
   const stops = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", tripId)).collect()
-  const trace = await ctx.db.query("positions").withIndex("by_trip_time", q => q.eq("tripId", tripId)).order("asc").collect()
+  // Bounded read (newest points win) so long traces can't grow without limit.
+  const traceRows = await ctx.db.query("positions").withIndex("by_trip_time", q => q.eq("tripId", tripId)).order("desc").take(5000)
+  const trace = traceRows.reverse()
+  const lastRecordedAt = trace.length ? trace[trace.length - 1].recordedAt : undefined
   const publicStops = stops
     .sort((a, b) => a.order - b.order)
     .map(s => ({ day: s.day, name: s.name, place: s.place, time: s.time, lat: s.lat, lng: s.lng }))
@@ -345,5 +354,6 @@ export const publicTrace = query({ args: { tripId: v.id("trips"), token: v.strin
     stops: publicStops,
     trace: trace.map(p => ({ lat: p.lat, lng: p.lng, accuracy: p.accuracy, recordedAt: p.recordedAt })),
     distanceKm: Math.round(distanceKm),
+    lastRecordedAt,
   }
 }})

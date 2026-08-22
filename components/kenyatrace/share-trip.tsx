@@ -8,7 +8,7 @@ import { Check, Link2, Loader2, Mail, Send, Trash2, UserRound, Users } from 'luc
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
@@ -38,19 +38,28 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
   const [emailError, setEmailError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sentTo, setSentTo] = useState<string | null>(null)
+  // Destructive removes (a person, or the live invite link) confirm first —
+  // a stray tap used to cut someone off with no warning.
+  const [pendingRemove, setPendingRemove] = useState<{ shareId: Id<'tripShares'>; label: string } | null>(null)
 
-  function copy(text: string) {
-    navigator.clipboard.writeText(text).catch(() => { /* clipboard unavailable */ })
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+      return true
+    } catch {
+      toast.error('Could not copy — your browser blocked clipboard access')
+      return false
+    }
   }
 
   async function makeLink() {
     setCreating(true)
     try {
       const { token } = await createLink({ tripId, role: linkRole })
-      copy(`${window.location.origin}/trips/${tripId}?invite=${token}`)
-      toast.success('Invite link copied — anyone with it can join')
+      const ok = await copy(`${window.location.origin}/trips/${tripId}?invite=${token}`)
+      if (ok) toast.success('Invite link copied — anyone with it can join')
     } catch {
       toast.error('Could not create an invite link')
     } finally {
@@ -118,6 +127,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
     try {
       await removeShare({ shareId })
       toast.success(`${label} removed`)
+      setPendingRemove(null)
     } catch {
       toast.error('Could not remove')
     } finally {
@@ -168,7 +178,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
                     {copied && link ? 'Copied' : link ? 'Copy link' : 'Create invite link'}
                   </Button>
                   {link && (
-                    <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy === link.shareId} onClick={() => remove(link.shareId, 'Invite link')}>
+                    <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy === link.shareId} onClick={() => setPendingRemove({ shareId: link.shareId, label: 'Invite link' })}>
                       <Trash2 className="size-3.5" /> Revoke
                     </Button>
                   )}
@@ -239,7 +249,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
                         <SelectItem value="viewer">Viewer</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button size="icon" variant="ghost" className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={`Remove ${c.name}`} disabled={busy === c.shareId} onClick={() => remove(c.shareId, c.name)}>
+                    <Button size="icon" variant="ghost" className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={`Remove ${c.name}`} disabled={busy === c.shareId} onClick={() => setPendingRemove({ shareId: c.shareId, label: c.name })}>
                       <Trash2 className="size-4" />
                     </Button>
                   </>
@@ -250,6 +260,29 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
             ))}
           </div>
         </div>
+
+        <Dialog open={pendingRemove !== null} onOpenChange={o => { if (!o) setPendingRemove(null) }}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{pendingRemove?.label === 'Invite link' ? 'Revoke the invite link?' : `Remove ${pendingRemove?.label}?`}</DialogTitle>
+              <DialogDescription>
+                {pendingRemove?.label === 'Invite link'
+                  ? 'Anyone who hasn\u2019t opened it yet will lose access. You can create a new link afterwards.'
+                  : 'They will immediately lose access to this trip. The owner can re-invite them any time.'}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPendingRemove(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={busy === pendingRemove?.shareId}
+                onClick={() => { if (pendingRemove) void remove(pendingRemove.shareId, pendingRemove.label) }}
+              >
+                {busy === pendingRemove?.shareId ? 'Working…' : 'Confirm'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   )

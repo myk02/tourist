@@ -66,14 +66,23 @@ function formatMins(mins: number) {
 
 function kindFromVertical(vertical: string) {
   if (vertical === 'stays') return 'Stay'
-  if (vertical === 'attractions' || vertical === 'things-to-do') return 'Experience'
+  if (vertical === 'attractions') return 'Experience'
   if (vertical === 'flights' || vertical === 'taxis' || vertical === 'cars') return 'Transport'
   return 'Experience'
 }
 
-function SortableStopRow({ stop, position, active, editing, readOnly, onEditingChange, onUpdate, onRemove }: {
+/** Stable per-row identity: titles can repeat, so keys must not derive from them. */
+function stopKey() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return `k-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function ensureKeys(stops: Stop[]): Stop[] {
+  return stops.map(s => (s.key ? s : { ...s, key: stopKey() }))
+}
+
+function SortableStopRow({ stop, active, editing, readOnly, onEditingChange, onUpdate, onRemove }: {
   stop: Stop
-  position: number
   active?: boolean
   editing: boolean
   readOnly?: boolean
@@ -81,12 +90,12 @@ function SortableStopRow({ stop, position, active, editing, readOnly, onEditingC
   onUpdate: (patch: Partial<Stop>) => void
   onRemove: () => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `${stop.title}-${position}` })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.key! })
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn('flex items-center gap-3 rounded-xl border bg-card p-3 transition-colors', isDragging && 'z-10 opacity-80 shadow-lift', active && 'border-primary ring-2 ring-primary/20')}
+      className={cn('flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3 transition-colors', isDragging && 'z-10 opacity-80 shadow-lift', active && 'border-primary ring-2 ring-primary/20')}
     >
       {!readOnly && (
         <button
@@ -113,31 +122,37 @@ function SortableStopRow({ stop, position, active, editing, readOnly, onEditingC
         <p className="truncate text-sm text-muted-foreground">{stop.place}</p>
         {stop.reason && <p className="mt-0.5 text-xs text-muted-foreground/80">{stop.reason}</p>}
       </div>
-      <div className="hidden flex-col items-end gap-1 sm:flex">
+      <div className="flex shrink-0 flex-col items-end gap-1">
         {editing ? (
           <>
             <Input
               type="time"
-              className="h-8 w-28"
+              className="h-8 w-24 sm:w-28"
               value={stop.time}
               aria-label="Time"
               onChange={e => onUpdate({ time: e.target.value })}
             />
             <Input
               type="number"
-              className="h-8 w-28"
+              className="h-8 w-24 sm:w-28"
               value={stop.cost}
               aria-label="Cost"
-              onChange={e => onUpdate({ cost: parseInt(e.target.value, 10) || 0 })}
+              onChange={e => {
+                const n = parseInt(e.target.value, 10)
+                if (!Number.isNaN(n)) onUpdate({ cost: n })
+              }}
             />
             <Input
               type="number"
-              className="h-8 w-28"
+              className="h-8 w-24 sm:w-28"
               value={stop.duration ?? 60}
               min={5}
               max={1440}
               aria-label="Duration in minutes"
-              onChange={e => onUpdate({ duration: parseInt(e.target.value, 10) || 60 })}
+              onChange={e => {
+                const n = parseInt(e.target.value, 10)
+                if (!Number.isNaN(n)) onUpdate({ duration: n })
+              }}
             />
           </>
         ) : (
@@ -199,29 +214,36 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
 }>(function ItineraryEditor({ initial = [], budget = 80000, title = 'Kenya Highlights', defaultMobileView = 'list', onSave, onReplanDay, onChange, readOnly = false }, ref) {
   // Initialize from the prop only — reading storage here would make the
   // client's first render differ from the server's (SSR hydration mismatch).
-  const [stops, setStops] = useState<Stop[]>(initial)
+  const [stops, setStops] = useState<Stop[]>(() => ensureKeys(initial))
   // True once the component has mounted, so `onChange` is only surfaced to the
   // parent after the first paint (avoids a setState-during-render warning).
   const [mounted, setMounted] = useState(false)
   const [activeDay, setActiveDay] = useState<string>('all')
-  // Editing is keyed by the row's stable sortable id (title + position within
-  // the day), not a raw index, so deleting a row can't point edits at the
-  // wrong stop.
+  // Editing is keyed by the stop's stable identity, so duplicate titles or a
+  // reorder can never point edits at the wrong row.
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [addTerm, setAddTerm] = useState('')
+  // Search only fires 300ms after typing settles — every keystroke used to
+  // hit the listings query.
+  const [searchTerm, setSearchTerm] = useState('')
   const [replanningDay, setReplanningDay] = useState<number | null>(null)
   const [hoveredStop, setHoveredStop] = useState<string | null>(null)
   const [mobileView, setMobileView] = useState<'list' | 'map'>(defaultMobileView)
   const sensors = useSensors(useSensor(PointerSensor))
 
+  useEffect(() => {
+    const t = setTimeout(() => setSearchTerm(addTerm), 300)
+    return () => clearTimeout(t)
+  }, [addTerm])
+
   useImperativeHandle(ref, () => ({
     addStop: (stop) => setStops(prev => {
       const lastDay = prev.length ? Math.max(...prev.map(s => s.day)) : 1
-      return [...prev, { ...stop, day: lastDay, time: '09:00' }]
+      return [...prev, { ...stop, day: lastDay, time: '09:00', key: stopKey() }]
     }),
   }), [])
 
-  const results = useQuery(api.listings.searchAll, { term: addTerm || undefined })
+  const results = useQuery(api.listings.searchAll, { term: searchTerm || undefined })
 
   // Surface every change to the parent (e.g. the journey's draft), but only
   // after the component has mounted so the first onChange doesn't fire during
@@ -267,15 +289,12 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     const dayIndex = new Map<number, number>()
     const points: { id: string; name: string; location: string; lat: number; lng: number }[] = []
     const route: [number, number][] = []
-    // Index every stop within its day (including stops without coordinates),
-    // so map point ids match the DOM row ids (`stop-{title}-{i}`) exactly —
-    // otherwise marker clicks/hover scroll to the wrong stop.
+    // Point ids are the stop's stable key — identical to the DOM row ids
+    // (`stop-{key}`) so marker clicks/hover scroll to exactly the right stop.
     for (const s of ordered) {
-      const i = dayIndex.get(s.day) ?? 0
-      dayIndex.set(s.day, i + 1)
       // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
       if (s.lat != null && s.lng != null) {
-        points.push({ id: `${s.title}-${i}`, name: s.title, location: s.place, lat: s.lat, lng: s.lng })
+        points.push({ id: s.key!, name: s.title, location: s.place, lat: s.lat, lng: s.lng })
         route.push([s.lng, s.lat])
       }
     }
@@ -298,32 +317,13 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     }
   }
 
-  function patchStop(day: number, indexInDay: number, patch: Partial<Stop>) {
-    setStops(prev => {
-      const next = [...prev]
-      let pos = -1
-      let seen = 0
-      for (let i = 0; i < next.length; i++) {
-        if (next[i].day === day) {
-          if (seen === indexInDay) { pos = i; break }
-          seen++
-        }
-      }
-      if (pos >= 0) next[pos] = { ...next[pos], ...patch }
-      return next
-    })
+  function patchStop(key: string, patch: Partial<Stop>) {
+    setStops(prev => prev.map(s => (s.key === key ? { ...s, ...patch } : s)))
   }
 
-  function removeStop(day: number, indexInDay: number) {
-    setStops(prev => {
-      const next: Stop[] = []
-      let seen = 0
-      for (const s of prev) {
-        if (s.day === day && seen++ === indexInDay) continue
-        next.push(s)
-      }
-      return next
-    })
+  function removeStop(key: string) {
+    setStops(prev => prev.filter(s => s.key !== key))
+    setEditingKey(prev => (prev === key ? null : prev))
   }
 
   /**
@@ -371,8 +371,8 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     if (!over || active.id === over.id) return
     setStops(prev => {
       const dayStops = prev.filter(s => s.day === day)
-      const from = dayStops.findIndex((s, i) => `${s.title}-${i}` === active.id)
-      const to = dayStops.findIndex((s, i) => `${s.title}-${i}` === over.id)
+      const from = dayStops.findIndex(s => s.key === active.id)
+      const to = dayStops.findIndex(s => s.key === over.id)
       if (from < 0 || to < 0) return prev
       const reordered = [...dayStops]
       const [moved] = reordered.splice(from, 1)
@@ -400,10 +400,10 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
           if (old.locked) {
             result.push(old)
           } else if (newIdx < next.length) {
-            result.push({ ...next[newIdx++], day: old.day, locked: false })
+            result.push({ ...next[newIdx++], day: old.day, locked: false, key: stopKey() })
           }
         }
-        while (newIdx < next.length) result.push({ ...next[newIdx++], day })
+        while (newIdx < next.length) result.push({ ...next[newIdx++], day, key: stopKey() })
         const out: Stop[] = []
         let seen = 0
         for (const s of prev) {
@@ -438,6 +438,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
       source: 'catalog' as const,
       listingId: listing._id,
       vertical: listing.vertical,
+      key: stopKey(),
     }])
     toast.success(`${listing.name} added to day ${targetDay}`)
   }
@@ -452,25 +453,24 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
           collisionDetection={closestCenter}
           onDragEnd={e => handleDragEnd(day, e)}
         >
-          <SortableContext items={dayStops.map((s, i) => `${s.title}-${i}`)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={dayStops.map(s => s.key!)} strategy={verticalListSortingStrategy}>
             {dayStops.map((stop, i) => (
               <div
-                key={`${stop.title}-${i}`}
-                id={`stop-${stop.title}-${i}`}
-                onMouseEnter={() => setHoveredStop(`${stop.title}-${i}`)}
+                key={stop.key}
+                id={`stop-${stop.key}`}
+                onMouseEnter={() => setHoveredStop(stop.key!)}
                 onMouseLeave={() => setHoveredStop(null)}
                 className="flex flex-col gap-1.5"
               >
                 {i > 0 && <TravelTime a={dayStops[i - 1]} b={stop} />}
                 <SortableStopRow
                   stop={stop}
-                  position={i}
-                  active={hoveredStop === `${stop.title}-${i}`}
-                  editing={editingKey === `${stop.title}-${i}`}
+                  active={hoveredStop === stop.key}
+                  editing={editingKey === stop.key}
                   readOnly={readOnly}
-                  onEditingChange={editing => setEditingKey(editing ? `${stop.title}-${i}` : null)}
-                  onUpdate={patch => patchStop(day, i, patch)}
-                  onRemove={() => removeStop(day, i)}
+                  onEditingChange={editing => setEditingKey(editing ? stop.key! : null)}
+                  onUpdate={patch => patchStop(stop.key!, patch)}
+                  onRemove={() => removeStop(stop.key!)}
                 />
               </div>
             ))}

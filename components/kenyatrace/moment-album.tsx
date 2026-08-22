@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight, Globe, LayoutGrid, Lock, Share2, Star, Trash
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 type Moment = NonNullable<ReturnType<typeof useQuery<typeof api.moments.list>>>[number]
@@ -30,6 +30,8 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
   const setPublic = useMutation(api.moments.setPublic)
   const removeMoment = useMutation(api.moments.remove)
   const [lightbox, setLightbox] = useState<{ moment: number; media: number } | null>(null)
+  // Deleting removes the stored files for good — confirm before it happens.
+  const [pendingDelete, setPendingDelete] = useState<Moment | null>(null)
 
   async function toggleBest(m: Moment) {
     try {
@@ -116,12 +118,14 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                   </button>
                   {media.length > 1 && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{media.length} media</Badge>}
                   {m.best && <Badge className="absolute right-2 top-2 bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
-                  <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+                  {/* Controls stay visible on touch (no hover there); desktop
+                      reveals them on hover to keep tiles clean. */}
+                  <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                     <p className="line-clamp-2 text-sm text-white">{m.caption}</p>
                     <div className="flex shrink-0 gap-1">
                       <button aria-label="Toggle best moment" onClick={() => toggleBest(m)} className={cn('flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground transition-colors', m.best && 'text-accent')}><Star className={cn('size-4', m.best && 'fill-current')} /></button>
                       <button aria-label="Toggle visibility" onClick={() => togglePublic(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground">{m.public ? <Globe className="size-4" /> : <Lock className="size-4" />}</button>
-                      <button aria-label="Delete moment" onClick={() => handleRemove(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+                      <button aria-label="Delete moment" onClick={() => setPendingDelete(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
                     </div>
                   </div>
                 </div>
@@ -161,11 +165,26 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={() => toggleBest(active)}>{active.best ? 'Remove best' : 'Mark best'}</Button>
                 <Button variant="outline" size="sm" onClick={() => togglePublic(active)}>{active.public ? 'Make private' : 'Make public'}</Button>
-                <Button variant="destructive" size="sm" onClick={() => handleRemove(active)}>Delete</Button>
+                <Button variant="destructive" size="sm" onClick={() => setPendingDelete(active)}>Delete</Button>
                 <DialogClose render={<Button variant="ghost" size="sm" />}><X className="size-4" /> Close</DialogClose>
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingDelete} onOpenChange={open => { if (!open) setPendingDelete(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete this moment?</DialogTitle>
+            <DialogDescription>
+              “{pendingDelete?.caption?.slice(0, 80)}” and its media are removed for good. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => { if (pendingDelete) void handleRemove(pendingDelete); setPendingDelete(null) }}>Delete</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

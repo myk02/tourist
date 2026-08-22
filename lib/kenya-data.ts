@@ -1,4 +1,4 @@
-export type Vertical = "stays" | "flights" | "things-to-do" | "attractions" | "cars" | "taxis"
+export type Vertical = "stays" | "flights" | "attractions" | "cars" | "taxis"
 
 export type Listing = {
   _id: string
@@ -20,8 +20,7 @@ export type Listing = {
 export const categories: { id: Vertical; label: string }[] = [
   { id: "stays", label: "Stays" },
   { id: "flights", label: "Flights" },
-  { id: "things-to-do", label: "Things to do" },
-  { id: "attractions", label: "Attractions" },
+  { id: "attractions", label: "Things to do" },
   { id: "cars", label: "Cars" },
   { id: "taxis", label: "Taxis" },
 ]

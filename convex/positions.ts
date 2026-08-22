@@ -16,12 +16,16 @@ export const record = mutation({ args: { tripId: v.id("trips"), lat: v.number(),
   return ctx.db.insert("positions", { ...args, ownerId: identity.subject, recordedAt: Date.now() })
 }})
 
-export const forTrip = query({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
+export const forTrip = query({ args: { tripId: v.id("trips"), maxPoints: v.optional(v.number()) }, handler: async (ctx, { tripId, maxPoints }) => {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) return []
   const trip = await ctx.db.get(tripId)
   if (!trip || trip.ownerId !== identity.subject) return []
-  return ctx.db.query("positions").withIndex("by_trip_time", q => q.eq("tripId", tripId)).order("asc").collect()
+  // Bounded read: the newest points win, capped so a weeks-long trace can't
+  // grow the payload without limit. Returned chronologically for drawing.
+  const cap = Math.min(Math.max(maxPoints ?? 2000, 100), 5000)
+  const rows = await ctx.db.query("positions").withIndex("by_trip_time", q => q.eq("tripId", tripId)).order("desc").take(cap)
+  return rows.reverse()
 }})
 
 export const latest = query({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {

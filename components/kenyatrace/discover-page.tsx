@@ -19,7 +19,7 @@ import { Car, Check, Heart, LocateFixed, Map, Plus, RotateCcw, Search, SlidersHo
 import { categories, formatKES, type Vertical } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
 import { KenyaMap, toPoint } from './kenya-map'
-import { ListingImage, type SourceFilterValue } from './shared'
+import { ListingImage } from './shared'
 
 const NEAR_KM = 100
 
@@ -58,8 +58,7 @@ function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
 const VERTICAL_HERO: Record<string, { image: string; tagline: string }> = {
   stays: { image: 'https://upload.wikimedia.org/wikipedia/commons/7/72/PIC_0106.JPG', tagline: 'Wake up by the coast or in the wild' },
   flights: { image: 'https://upload.wikimedia.org/wikipedia/commons/d/d4/Nairobi_Skyline_Savannah_Kenya_May19_R1600687.jpg', tagline: 'City to savannah in an hour' },
-  'things-to-do': { image: 'https://upload.wikimedia.org/wikipedia/commons/f/f7/Kilimanjaro_from_Amboseli.jpg', tagline: 'Game drives, water sports, culture' },
-  attractions: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'The places Kenya is famous for' },
+  attractions: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'Tours, parks, and the places Kenya is famous for' },
   cars: { image: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Lake_Naivasha%2C_Kenya_%2845636345554%29.jpg', tagline: 'Drive Kenya your own way' },
   taxis: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'City rides and airport runs' },
 }
@@ -74,7 +73,6 @@ const SORTS = [
 
 type SortValue = (typeof SORTS)[number]['value']
 type QuickFilter = 'all' | 'rated' | 'budget'
-type SourceFilter = SourceFilterValue
 
 const PAGE_SIZE = 12
 
@@ -88,7 +86,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const urlMin = params.get('min')
   const urlMax = params.get('max')
   const urlNear = params.get('near') === '1'
-  const urlSource = (params.get('source') || 'all') as SourceFilter
   const urlAmenities = (params.get('amenity') || '').split(',').filter(Boolean)
 
   const [searchTerm, setSearchTerm] = useState(urlQ)
@@ -101,7 +98,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   )
   const [nearMe, setNearMe] = useState(urlNear)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(urlSource)
   const [amenities, setAmenities] = useState<string[]>(urlAmenities)
   const [locating, setLocating] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -173,9 +169,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     if (nearMe && coords) {
       items = items.filter(i => distanceKm(coords.lat, coords.lng, i.lat, i.lng) <= NEAR_KM)
     }
-    if (sourceFilter === 'firecrawl') items = items.filter(i => i.source === 'firecrawl')
-    if (sourceFilter === 'live') items = items.filter(i => i.source === 'scraper' || i.source === 'wikipedia')
-    if (sourceFilter === 'curated') items = items.filter(i => !i.source)
     if (amenities.includes('freeCancellation')) items = items.filter(i => i.freeCancellation)
     if (amenities.includes('instantConfirm')) items = items.filter(i => i.instantConfirm)
     switch (sort) {
@@ -185,7 +178,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
       case 'rating': items.sort((a, b) => b.rating - a.rating); break
     }
     return items
-  }, [rawItems, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, sourceFilter, amenities])
+  }, [rawItems, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, amenities])
 
   useEffect(() => {
     const p = new URLSearchParams()
@@ -194,7 +187,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     if (rating > 0) p.set('rating', String(rating))
     if (priceNarrowed) { p.set('min', String(activePrice[0])); p.set('max', String(activePrice[1])) }
     if (nearMe) p.set('near', '1')
-    if (sourceFilter !== 'all') p.set('source', sourceFilter)
     if (amenities.length > 0) p.set('amenity', amenities.join(','))
     if (sort !== 'recommended') p.set('sort', sort)
     const qs = p.toString()
@@ -202,7 +194,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     if (target !== window.location.pathname + window.location.search) {
       router.replace(target, { scroll: false })
     }
-  }, [debouncedSearch, activeFilter, rating, sort, priceNarrowed, activePrice, nearMe, sourceFilter, amenities, vertical, router])
+  }, [debouncedSearch, activeFilter, rating, sort, priceNarrowed, activePrice, nearMe, amenities, vertical, router])
 
   useEffect(() => {
     setSearchTerm(urlQ)
@@ -212,11 +204,10 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     setSort(urlSort)
     setPriceRange(urlMin && urlMax ? [parseInt(urlMin, 10), parseInt(urlMax, 10)] : null)
     setNearMe(urlNear)
-    setSourceFilter(urlSource)
     setAmenities((params.get('amenity') || '').split(',').filter(Boolean))
-  }, [urlQ, urlFilter, urlRating, urlSort, urlMin, urlMax, urlNear, urlSource, params])
+  }, [urlQ, urlFilter, urlRating, urlSort, urlMin, urlMax, urlNear, params])
 
-  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [debouncedSearch, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, sourceFilter, amenities])
+  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [debouncedSearch, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, amenities])
 
   // Auto-refresh stale listings from the scraper — but only once per session
   // per vertical, so a page visit doesn't trigger a paid scrape every time.
@@ -244,7 +235,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     setPriceRange(null)
     setNearMe(false)
     setCoords(null)
-    setSourceFilter('all')
     setAmenities([])
   }
 
@@ -340,8 +330,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
   const mapPoints = (filteredItems ?? []).map(toPoint)
   const visible = filteredItems?.slice(0, visibleCount)
-  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || sourceFilter !== 'all' || amenities.length > 0
-  const activeFilterCount = [activeFilter !== 'all', rating > 0, priceNarrowed, nearMe, sourceFilter !== 'all', amenities.length > 0].filter(Boolean).length
+  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || amenities.length > 0
+  const activeFilterCount = [activeFilter !== 'all', rating > 0, priceNarrowed, nearMe, amenities.length > 0].filter(Boolean).length
   const hero = VERTICAL_HERO[vertical] ?? VERTICAL_HERO.attractions
   const label = categories.find(c => c.id === vertical)?.label ?? vertical
 
@@ -519,11 +509,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                   {nearMe && (
                     <button onClick={() => { setNearMe(false); setCoords(null) }} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
                       Near me <X className="size-3.5" />
-                    </button>
-                  )}
-                  {sourceFilter !== 'all' && (
-                    <button onClick={() => setSourceFilter('all')} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
-                      {sourceFilter === 'firecrawl' ? 'Firecrawl' : sourceFilter === 'live' ? 'Live web' : 'Curated'} <X className="size-3.5" />
                     </button>
                   )}
                   {amenities.map(value => (

@@ -5,6 +5,8 @@ export type Stop = {
   place: string
   cost: number
   kind: string
+  /** UI-only stable identity for drag/edit/map sync. Never persisted. */
+  key?: string
   lat?: number
   lng?: number
   reason?: string
