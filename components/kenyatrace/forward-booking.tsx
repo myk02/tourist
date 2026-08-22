@@ -30,7 +30,7 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [parsing, setParsing] = useState(false)
-  const [parsed, setParsed] = useState<ParsedBooking | null>(null)
+  const [parsed, setParsed] = useState<(ParsedBooking & { source?: 'regex' | 'ai' }) | null>(null)
   // The parse is a draft, not the truth — every field stays editable before
   // it becomes a reservation, so a missed amount or typo is fixed here
   // instead of being waved through to the itinerary.
@@ -136,6 +136,9 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold">Check the details</p>
                 <Badge className={TYPE_STYLE[parsed.type] ?? 'bg-secondary text-muted-foreground'}>{parsed.type}</Badge>
+                {parsed.source === 'ai' && (
+                  <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">AI read · verify</Badge>
+                )}
                 <span className="ml-auto text-xs text-muted-foreground">Edit anything the email got wrong</span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
