@@ -45,6 +45,10 @@ export const initialize = mutation({
   handler: async (ctx, { bookingId, email }) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Sign in required")
+    // Fail BEFORE the checkout opens: without the secret key nothing can ever
+    // be verified, so starting a popup could take a user's money with no
+    // record of the payment on our side.
+    if (!process.env.PAYSTACK_SECRET_KEY) throw new Error("Payment provider is not configured — contact support")
     if (!EMAIL_RE.test(email.trim())) throw new Error("Enter a valid email address")
     const booking = await ctx.db.get(bookingId)
     if (!booking || booking.ownerId !== identity.subject) throw new Error("Booking not found")

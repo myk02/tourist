@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Car, Check, Heart, LocateFixed, Map, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Star, X } from 'lucide-react'
 import { categories, formatKES, type Vertical } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
+import { toReplaceStopsPayload } from '@/lib/stop-fields'
 import { KenyaMap, toPoint } from './kenya-map'
 import { ListingImage } from './shared'
 
@@ -280,10 +281,9 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     if (!pickerListingId || !pickerTripId || !pickerTrip) return
     const item = rawItems?.find(i => i._id === pickerListingId)
     if (!item) return
-    const existing = pickerTrip.stops.map(s => ({
-      name: s.name, place: s.place, day: s.day, time: s.time, cost: s.cost, kind: s.kind, order: s.order,
-      lat: s.lat, lng: s.lng, verified: s.verified, duration: s.duration,
-    }))
+    // Full-fidelity payload — a subset here would wipe completedAt/reason/
+    // locks/images off every existing stop (replaceStops is delete+insert).
+    const existing = toReplaceStopsPayload(pickerTrip.stops)
     const kind = item.vertical === 'stays' ? 'Stay' : item.vertical === 'flights' || item.vertical === 'taxis' || item.vertical === 'cars' ? 'Transport' : 'Experience'
     try {
       await replaceStops({

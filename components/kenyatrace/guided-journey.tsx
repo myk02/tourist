@@ -593,7 +593,9 @@ export function GuidedJourney() {
   }
 
   function resetSession() {
-    stopTracking()
+    // Ending the planner must not kill a live trace started elsewhere (e.g.
+    // from a trip hub) — only stop tracking that belongs to THIS journey.
+    if (!trackSession || (draft.tripId && trackSession.tripId === String(draft.tripId))) stopTracking()
     try { sessionStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
     setDraft(emptyDraft())
     setPrefilled(false)

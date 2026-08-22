@@ -165,7 +165,14 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
             toast.error('Payment could not be confirmed — we\'ve flagged your reference for support. If you were charged, you won\'t lose out.')
           }
         } catch {
-          toast.error('Could not confirm the payment — try again in a moment')
+          // A thrown verify may mean the charge landed but confirmation died
+          // (network/server) — flag it for support either way.
+          void fetch('/api/payment-recovery', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ reference, email }),
+          }).catch(() => {})
+          toast.error('Could not confirm the payment — we\'ve flagged your reference for support')
         } finally {
           busyRef.current = false
           setBusy(null)
@@ -306,6 +313,20 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
   useEffect(() => {
     if (status?.active) writeCache('kt-access-active', true)
   }, [status])
+  // Offline awareness: on a cold load with no network the Clerk↔Convex
+  // handshake can never complete, so `isLoading` would spin forever and the
+  // saved-copy path below would stay unreachable — exactly when it's needed.
+  const [offline, setOffline] = useState(false)
+  useEffect(() => {
+    const update = () => setOffline(navigator.onLine === false)
+    update()
+    window.addEventListener('online', update)
+    window.addEventListener('offline', update)
+    return () => {
+      window.removeEventListener('online', update)
+      window.removeEventListener('offline', update)
+    }
+  }, [])
 
   // Lazily start the 30-day trial on first gated visit (idempotent). For a
   // brand-new user `ensureTrial` returns `{ started: true }` and status flips
@@ -335,9 +356,12 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
     )
   }
   if (isLoading || status === undefined || status === null) {
-    // Server unreachable but this browser recently had active access: keep
-    // the traveller working against their saved copy instead of a skeleton.
-    if (!isLoading && isAuthenticated && cachedActive) {
+    // Server unreachable or the auth handshake is hanging: when this browser
+    // recently had active access, keep the traveller working against their
+    // saved copy instead of a skeleton. Offline wins even though neither
+    // isLoading nor isAuthenticated can resolve — the cache IS the proof
+    // this device had access, and the server re-checks on reconnect.
+    if (cachedActive && (offline || (isAuthenticated && !isLoading))) {
       return (
         <div className="flex flex-col">
           <div className="border-b border-amber-500/20 bg-amber-500/10 px-5 py-2 text-center text-xs font-medium text-amber-700 dark:text-amber-300">

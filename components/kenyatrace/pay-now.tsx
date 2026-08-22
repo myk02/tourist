@@ -65,7 +65,14 @@ export function PayNowButton({ booking }: { booking: Doc<'bookings'> }) {
             toast.error('Payment could not be confirmed — we\'ve flagged your reference for support. If you were charged, you won\'t lose out.')
           }
         } catch {
-          toast.error('Could not confirm the payment — try again in a moment')
+          // A thrown verify may mean the charge landed but confirmation died
+          // (network/server) — flag it for support either way.
+          void fetch('/api/payment-recovery', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ reference, email }),
+          }).catch(() => {})
+          toast.error('Could not confirm the payment — we\'ve flagged your reference for support')
         } finally {
           busyRef.current = false
           setBusy(false)

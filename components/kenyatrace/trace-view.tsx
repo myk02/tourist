@@ -27,6 +27,15 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
   const destIds = useMemo(() => (points.length ? [points[points.length - 1].id] : []), [points])
   const livePath = useMemo(() => (data && data.trace.length >= 2 ? data.trace.map(p => [p.lng, p.lat] as [number, number]) : undefined), [data])
 
+  // Freshness tick so "updated Xs ago" never goes stale on screen. Hooks
+  // MUST run before any early return — a conditional hook count crashes React.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!data?.lastRecordedAt) return
+    const t = setInterval(() => setTick(x => x + 1), 10000)
+    return () => clearInterval(t)
+  }, [data?.lastRecordedAt])
+
   const unavailable = (
     <div className="flex min-h-[100svh] items-center justify-center bg-background px-5">
       <div className="flex max-w-md flex-col items-center gap-4 rounded-2xl border bg-card p-8 text-center shadow-soft">
@@ -44,16 +53,6 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
   if (!data) return unavailable
 
   const stopDays = new Set(data.stops.map(s => s.day)).size
-
-  // Freshness: the query is a live Convex subscription, so new GPS points
-  // arrive on their own — this chip makes that honesty visible. It ticks so
-  // "updated 5s ago" never goes stale on screen.
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    if (!data?.lastRecordedAt) return
-    const t = setInterval(() => setTick(x => x + 1), 10000)
-    return () => clearInterval(t)
-  }, [data?.lastRecordedAt])
   const ageSec = data?.lastRecordedAt ? Math.max(0, Math.round((Date.now() - data.lastRecordedAt) / 1000)) : null
   const freshness = ageSec == null ? null : ageSec < 60 ? 'just now' : ageSec < 3600 ? `${Math.round(ageSec / 60)} min ago` : `${Math.round(ageSec / 3600)}h ago`
 

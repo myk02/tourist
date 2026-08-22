@@ -1,6 +1,6 @@
-import { action, internalMutation, query } from "./_generated/server"
+import { action, internalMutation, internalQuery } from "./_generated/server"
 import { v } from "convex/values"
-import { api, internal } from "./_generated/api"
+import { internal } from "./_generated/api"
 import { EMAIL_FROM, resend } from "../lib/resend"
 
 /**
@@ -44,15 +44,19 @@ interface Due {
   tripName?: string
 }
 
-/** Upcoming reservations of the signed-in traveller with a reminder window open. */
-export const dueForMe = query({ args: {}, handler: async ctx => {
-  const identity = await ctx.auth.getUserIdentity()
-  if (!identity) return []
-  const user = await ctx.db.query("users").withIndex("by_clerk", q => q.eq("clerkId", identity.subject)).unique()
+/**
+ * Upcoming reservations of one traveller with a reminder window open.
+ * INTERNAL + explicit clerkId: auth does NOT propagate from an action through
+ * ctx.runQuery, so the sweep passes its verified identity down instead — a
+ * public version here would either always see no identity (sweep broken) or
+ * let anyone read another traveller's reminder payload.
+ */
+export const dueForUser = internalQuery({ args: { clerkId: v.string() }, handler: async (ctx, { clerkId }) => {
+  const user = await ctx.db.query("users").withIndex("by_clerk", q => q.eq("clerkId", clerkId)).unique()
   const to = user?.email
   if (!to) return []
   const now = Date.now()
-  const bookings = await ctx.db.query("bookings").withIndex("by_owner", q => q.eq("ownerId", identity.subject)).collect()
+  const bookings = await ctx.db.query("bookings").withIndex("by_owner", q => q.eq("ownerId", clerkId)).collect()
   const out: Due[] = []
   for (const b of bookings) {
     if (b.status === "cancelled" || !b.checkIn) continue
@@ -87,7 +91,7 @@ export const sweep = action({ args: {}, handler: async ctx => {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) return { sent: 0 }
   if (!resend) return { sent: 0 }
-  const dues = await ctx.runQuery(api.reminders.dueForMe)
+  const dues = await ctx.runQuery(internal.reminders.dueForUser, { clerkId: identity.subject })
   let sent = 0
   for (const d of dues as Due[]) {
     const whenLabel = d.which === "r48" ? "In 2 days" : "Tomorrow"

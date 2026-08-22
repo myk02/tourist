@@ -144,6 +144,10 @@ export const initializeDayPack = mutation({
   handler: async (ctx, { days, email }) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Sign in required")
+    // Fail BEFORE the checkout opens: without the secret key nothing can ever
+    // be verified, so starting a popup would let users pay for days that are
+    // never recorded.
+    if (!process.env.PAYSTACK_SECRET_KEY) throw new Error("Payment provider is not configured — contact support")
     const price = PLAN_PRICES[days]
     if (!price) throw new Error("Invalid day pack")
     if (!EMAIL_RE.test(email.trim())) throw new Error("Enter a valid email address")

@@ -17,6 +17,9 @@ function dayFromDate(startDate: string, checkIn: string): number {
   return Math.max(Math.round((check - start) / 86400000) + 1, 1)
 }
 
+/** How long a pending checkout may block cancellation before it counts as abandoned. */
+const PENDING_PAYMENT_GRACE_MS = 60 * 60 * 1000
+
 export const mine = query({ args: {}, handler: async (ctx) => {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) return []
@@ -152,14 +155,19 @@ export const cancel = mutation({ args: { id: v.id("bookings") }, handler: async 
   // Paid reservations can't be cancelled online — a refund must be issued
   // through the Paystack dashboard.
   if (booking.status === "paid") throw new Error("Paid reservations can't be cancelled online — contact support for a refund")
-  // If the user opened a checkout for this booking, let it finish or expire
-  // first so a payment can't land on a cancelled reservation.
+  // An open checkout blocks cancellation — but an ABANDONED one must not
+  // trap the reservation forever. A pending attempt older than the grace
+  // window is a closed/crashed popup (a retry would have superseded it, same
+  // as payments.initialize does), so void it and let the cancellation through.
   const openPayment = await ctx.db
     .query("payments")
     .withIndex("by_booking", q => q.eq("bookingId", id))
     .filter(q => q.eq(q.field("status"), "pending"))
     .first()
-  if (openPayment) throw new Error("Complete or close the pending payment before cancelling")
+  if (openPayment && Date.now() - openPayment.createdAt < PENDING_PAYMENT_GRACE_MS) {
+    throw new Error("Complete or close the pending payment before cancelling")
+  }
+  if (openPayment) await ctx.db.delete(openPayment._id)
   // Undo the linked itinerary stop and its contribution to the trip total.
   // Note: replaceStops recreates stops with new ids, so match by the booking
   // reference (the `reason` survives itinerary saves) as a fallback.

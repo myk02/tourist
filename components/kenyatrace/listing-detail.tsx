@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { isValidConvexId } from '@/lib/id'
 import { formatKES } from '@/lib/kenya-data'
+import { toReplaceStopsPayload } from '@/lib/stop-fields'
 import { ListingImage, NotFound, SourceBadge, sourceToFilter } from './shared'
 import { PaywallDialog } from './paywall'
 import { KenyaMap } from './kenya-map'
@@ -98,7 +99,9 @@ export function Detail({ id }: { id: string }) {
     if (!item || !selectedId || !selectedTrip || adding) return
     setAdding(true)
     try {
-      const existing = selectedTrip.stops.map(s => ({ name: s.name, place: s.place, day: s.day, time: s.time, cost: s.cost, kind: s.kind, order: s.order, lat: s.lat, lng: s.lng }))
+      // Full-fidelity payload — a subset here would wipe completedAt/reason/
+      // locks/images off every existing stop (replaceStops is delete+insert).
+      const existing = toReplaceStopsPayload(selectedTrip.stops)
       const newStop = { name: item.name, place: item.location, day: Math.max(...(existing.length ? existing.map(s => s.day) : [0]), 1), time: '09:00', cost: item.price, kind: item.vertical === 'stays' ? 'Stay' : 'Experience', order: existing.length, lat: item.lat, lng: item.lng }
       await replaceStops({ tripId: selectedId, stops: [...existing, newStop] })
       toast.success(`Added to ${selectedTrip.name}`)

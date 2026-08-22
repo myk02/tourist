@@ -31,15 +31,18 @@ const CATEGORY_COLOR: Record<string, string> = {
  * is persisted back onto the trip record (debounced) so the split survives
  * reloads and is visible to collaborators.
  */
-export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTravelers }: { stops: Stop[]; budget: number; totalCost: number; tripId?: string; initialTravelers?: number }) {
+export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTravelers, canEdit = true }: { stops: Stop[]; budget: number; totalCost: number; tripId?: string; initialTravelers?: number; canEdit?: boolean }) {
   const updateTrip = useMutation(api.trips.update)
   const [travelers, setTravelers] = useState(Math.max(1, Math.min(initialTravelers ?? 2, 50)))
+  // Only persist after a real user edit — mounting the tab must never write
+  // the default value onto trips that simply haven't set a count yet.
+  const [edited, setEdited] = useState(false)
   const persistTimer = useRef<number | null>(null)
 
   // Persist the traveller count so split-cost survives reloads. Debounced —
   // typing "4" shouldn't fire a mutation per keystroke.
   useEffect(() => {
-    if (!tripId || initialTravelers === travelers) return
+    if (!tripId || !edited || !canEdit) return
     if (persistTimer.current !== null) window.clearTimeout(persistTimer.current)
     persistTimer.current = window.setTimeout(() => {
       persistTimer.current = null
@@ -48,7 +51,7 @@ export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTrave
     return () => {
       if (persistTimer.current !== null) window.clearTimeout(persistTimer.current)
     }
-  }, [tripId, travelers, initialTravelers, updateTrip])
+  }, [tripId, travelers, edited, canEdit, updateTrip])
 
   const breakdown = useMemo(() => {
     const byKind = new Map<string, number>()
@@ -146,7 +149,8 @@ export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTrave
               max={50}
               className="h-9 w-24"
               value={travelers}
-              onChange={e => setTravelers(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              disabled={!canEdit}
+              onChange={e => { setEdited(true); setTravelers(Math.max(1, parseInt(e.target.value, 10) || 1)) }}
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
