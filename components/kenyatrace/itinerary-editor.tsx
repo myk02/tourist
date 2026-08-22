@@ -24,9 +24,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Car, Clock, GripVertical, List, Lock, LockOpen, Map as MapIcon, Pencil, Plus, RefreshCw, Route, Search, Utensils, Wallet, X } from 'lucide-react'
+import { Car, Clock, GripVertical, List, Lock, LockOpen, Map as MapIcon, Pencil, Plus, RefreshCw, Route, Search, TriangleAlert, Utensils, Wallet, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatKES } from '@/lib/kenya-data'
+import { dayOptimizationHint } from '@/lib/route-optimize'
 import { cn } from '@/lib/utils'
 import type { Stop } from './types'
 
@@ -281,6 +282,32 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     return [...map.entries()].sort((a, b) => b[1] - a[1])
   }, [stops])
 
+  // Per-day zig-zag detection: which days would get meaningfully shorter if
+  // their stops were reordered (locked stops respected).
+  const [dismissedHints, setDismissedHints] = useState<Set<number>>(new Set())
+  const dayHints = useMemo(() => {
+    const map = new Map<number, NonNullable<ReturnType<typeof dayOptimizationHint<Stop>>>>()
+    if (readOnly) return map
+    for (const [day, dayStops] of days) {
+      const hint = dayOptimizationHint(dayStops)
+      if (hint) map.set(day, hint)
+    }
+    return map
+  }, [days, readOnly])
+
+  function optimizeDay(day: number) {
+    const dayStops = stops.filter(s => s.day === day)
+    const hint = dayOptimizationHint(dayStops)
+    if (!hint) return
+    const ordered = hint.order.map(i => dayStops[i])
+    setStops(prev => {
+      const firstIdx = prev.findIndex(s => s.day === day)
+      if (firstIdx < 0) return prev
+      return [...prev.slice(0, firstIdx), ...ordered, ...prev.slice(firstIdx).filter(s => s.day !== day)]
+    })
+    toast.success(`Day ${day} reordered — ~${Math.round(hint.savingsKm)} km shorter`)
+  }
+
   const mapData = useMemo(() => {
     const day = activeDay === 'all' ? null : parseInt(activeDay, 10)
     const filtered = day === null ? stops : stops.filter(s => s.day === day)
@@ -443,11 +470,32 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     toast.success(`${listing.name} added to day ${targetDay}`)
   }
 
+  /** Amber nudge shown above a day whose stop order visibly zig-zags. */
+  function renderDayHint(day: number) {
+    const hint = dayHints.get(day)
+    if (!hint || dismissedHints.has(day)) return null
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+        <TriangleAlert className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1">
+          This day backtracks — reordering the stops makes it ~{Math.round(hint.savingsKm)} km ({Math.round(hint.savingsPct * 100)}%) shorter.
+        </span>
+        <Button variant="outline" size="sm" className="h-7 gap-1.5 border-amber-500/40 bg-transparent text-xs hover:bg-amber-500/15 hover:text-inherit" onClick={() => optimizeDay(day)}>
+          <Route className="size-3.5" />Optimize day
+        </Button>
+        <button type="button" aria-label="Dismiss hint" onClick={() => setDismissedHints(prev => new Set(prev).add(day))} className="text-amber-700/70 transition-colors hover:text-amber-900 dark:text-amber-300/70 dark:hover:text-amber-100">
+          <X className="size-3.5" />
+        </button>
+      </div>
+    )
+  }
+
   function renderStopList(day: number) {
     const dayStops = stops.filter(s => s.day === day)
     if (dayStops.length === 0) return <p className="p-6 text-center text-sm text-muted-foreground">No stops yet — add some below or with the search.</p>
     return (
       <div className="flex flex-col gap-1.5">
+        {renderDayHint(day)}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
