@@ -3,6 +3,7 @@ import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import { DAY_MS } from "../lib/plans"
 import { requireActiveAccess } from "./subscriptions"
+import { accessRole } from "./trips"
 
 // The moments growth loop: every MEDIA_PER_DAY photos/videos a traveller
 // uploads earns them one extra free day of access (stacked onto paidUntil
@@ -36,7 +37,9 @@ export const publicForTrip = query({ args: { tripId: v.id("trips") }, handler: a
     const ids = idsOf(moment.storageId, moment.storageIds)
     const imageUrls = await Promise.all(ids.map(id => ctx.storage.getUrl(id)))
     const videoUrls = await Promise.all((moment.videoStorageIds ?? []).map(id => ctx.storage.getUrl(id)))
-    return { ...moment, imageUrl: imageUrls[0] ?? null, imageUrls: imageUrls.filter((x): x is string => !!x), videoUrls: videoUrls.filter((x): x is string => !!x) }
+    // Reactions are collaborator-internal — never exposed on public pages.
+    const { reactions, ...rest } = moment
+    return { ...rest, imageUrl: imageUrls[0] ?? null, imageUrls: imageUrls.filter((x): x is string => !!x), videoUrls: videoUrls.filter((x): x is string => !!x) }
   }))
   return {
     trip: { name: trip.name, destination: trip.destination, origin: trip.origin, startDate: trip.startDate, endDate: trip.endDate, rating: trip.rating, review: trip.review },
@@ -163,4 +166,27 @@ export const remove = mutation({ args: { id: v.id("moments") }, handler: async (
   const videoIds = moment.videoStorageIds ?? []
   await Promise.all([...ids, ...videoIds].map(sid => ctx.storage.delete(sid)))
   await ctx.db.delete(id)
+}})
+
+const REACTION_EMOJIS = ["👍", "❤️", "🔥", "🎉"] as const
+
+/** Quick-tap reaction on a moment. Collaborators (editors/owners) only —
+ *  tapping an existing reaction removes it. Counts stay inside the album. */
+export const react = mutation({ args: { id: v.id("moments"), emoji: v.string() }, handler: async (ctx, { id, emoji }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Sign in required")
+  if (!(REACTION_EMOJIS as readonly string[]).includes(emoji)) throw new Error("Unsupported reaction")
+  const moment = await ctx.db.get(id)
+  if (!moment) throw new Error("Moment not found")
+  const role = await accessRole(ctx, moment.tripId, identity.subject)
+  if (!role || role === "viewer") throw new Error("Only collaborators can react")
+  const mine = (moment.reactions ?? []).find(r => r.userId === identity.subject)
+  const had = mine?.emoji === emoji
+  // One reaction per person: a second tap clears it, a different emoji switches it.
+  const reactions = [
+    ...(moment.reactions ?? []).filter(r => r.userId !== identity.subject),
+    ...(had ? [] : [{ userId: identity.subject, emoji }]),
+  ].slice(0, 50)
+  await ctx.db.patch(id, { reactions: reactions.length ? reactions : undefined })
+  return { reacted: !had }
 }})

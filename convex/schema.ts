@@ -17,8 +17,10 @@ export default defineSchema({
     role: v.string(),
     invitedAt: v.number(),
   }).index("by_trip", ["tripId"]).index("by_user", ["collaboratorId"]).index("by_token", ["token"]),
+  stopVotes: defineTable({ stopId: v.id("tripStops"), tripId: v.id("trips"), userId: v.string(), vote: v.union(v.literal("up"), v.literal("down")) }).index("by_stop", ["stopId"]).index("by_trip", ["tripId"]),
+  dayNotes: defineTable({ tripId: v.id("trips"), day: v.number(), authorId: v.string(), authorName: v.optional(v.string()), body: v.string(), createdAt: v.number() }).index("by_trip_day", ["tripId", "day"]),
   positions: defineTable({ tripId: v.id("trips"), ownerId: v.string(), lat: v.number(), lng: v.number(), accuracy: v.number(), recordedAt: v.number() }).index("by_trip_time", ["tripId", "recordedAt"]),
-  moments: defineTable({ tripId: v.id("trips"), ownerId: v.string(), caption: v.string(), storageId: v.optional(v.id("_storage")), storageIds: v.optional(v.array(v.id("_storage"))), videoStorageIds: v.optional(v.array(v.id("_storage"))), stopName: v.optional(v.string()), location: v.optional(v.string()), lat: v.optional(v.number()), lng: v.optional(v.number()), best: v.optional(v.boolean()), createdAt: v.number(), public: v.boolean() }).index("by_trip", ["tripId"]),
+  moments: defineTable({ tripId: v.id("trips"), ownerId: v.string(), caption: v.string(), storageId: v.optional(v.id("_storage")), storageIds: v.optional(v.array(v.id("_storage"))), videoStorageIds: v.optional(v.array(v.id("_storage"))), stopName: v.optional(v.string()), location: v.optional(v.string()), lat: v.optional(v.number()), lng: v.optional(v.number()), best: v.optional(v.boolean()), createdAt: v.number(), public: v.boolean(), reactions: v.optional(v.array(v.object({ userId: v.string(), emoji: v.string() }))) }).index("by_trip", ["tripId"]),
   savedListings: defineTable({ ownerId: v.string(), listingId: v.id("listings"), savedAt: v.number(), priceAtSave: v.optional(v.number()) }).index("by_owner", ["ownerId"]),
   listings: defineTable({
     vertical: v.string(),

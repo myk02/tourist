@@ -16,7 +16,7 @@ type Access = "owner" | "editor" | "viewer" | null
  * Resolves the current user's level of access to a trip:
  * "owner" (created it), "editor"/"viewer" (invited collaborator), or null.
  */
-async function accessRole(ctx: QueryCtx | MutationCtx, tripId: Id<"trips">, subject: string): Promise<Access> {
+export async function accessRole(ctx: QueryCtx | MutationCtx, tripId: Id<"trips">, subject: string): Promise<Access> {
   const trip = await ctx.db.get(tripId)
   if (!trip) return null
   if (trip.ownerId === subject) return "owner"
@@ -378,4 +378,79 @@ export const checkedStopCount = query({ args: {}, handler: async ctx => {
     checked += stops.filter(s => s.completedAt != null).length
   }
   return checked
+}})
+
+// ─── Group layer: stop votes + per-day notes (no chat — Tripnotes-lite) ──────
+
+/** Cast or clear the current user's thumb on an itinerary stop. Editors and
+ *  owners only — viewers get read-only counts. */
+export const setStopVote = mutation({ args: { stopId: v.id("tripStops"), vote: v.union(v.literal("up"), v.literal("down"), v.null()) }, handler: async (ctx, { stopId, vote }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Sign in required")
+  const stop = await ctx.db.get(stopId)
+  if (!stop) throw new Error("Trip not found")
+  const role = await accessRole(ctx, stop.tripId, identity.subject)
+  if (!role || role === "viewer") throw new Error("Trip not found")
+  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  const existing = await ctx.db.query("stopVotes").withIndex("by_stop", q => q.eq("stopId", stopId)).filter(q => q.eq(q.field("userId"), identity.subject)).first()
+  if (vote === null) {
+    if (existing) await ctx.db.delete(existing._id)
+    return
+  }
+  if (existing) {
+    await ctx.db.patch(existing._id, { vote })
+    return
+  }
+  await ctx.db.insert("stopVotes", { stopId, tripId: stop.tripId, userId: identity.subject, vote })
+}})
+
+/** Every vote on a trip's stops, for collaborators' UIs to aggregate. */
+export const votesForTrip = query({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) return []
+  const role = await accessRole(ctx, tripId, identity.subject)
+  if (!role) return []
+  const rows = await ctx.db.query("stopVotes").withIndex("by_trip", q => q.eq("tripId", tripId)).collect()
+  return rows.map(v => ({ stopId: v.stopId, userId: v.userId, vote: v.vote }))
+}})
+
+/** One lightweight comment thread per itinerary day. */
+export const dayNotesForTrip = query({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) return []
+  const role = await accessRole(ctx, tripId, identity.subject)
+  if (!role) return []
+  const rows = await ctx.db.query("dayNotes").withIndex("by_trip_day", q => q.eq("tripId", tripId)).collect()
+  return rows
+    .sort((a, b) => a.day - b.day || a.createdAt - b.createdAt)
+    .map(n => ({ _id: n._id, day: n.day, authorId: n.authorId, authorName: n.authorName, body: n.body, createdAt: n.createdAt }))
+}})
+
+export const addDayNote = mutation({ args: { tripId: v.id("trips"), day: v.number(), body: v.string() }, handler: async (ctx, { tripId, day, body }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Sign in required")
+  const role = await accessRole(ctx, tripId, identity.subject)
+  if (!role || role === "viewer") throw new Error("Trip not found")
+  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  const text = body.trim().slice(0, 500)
+  if (!text) throw new Error("Note is empty")
+  await ctx.db.insert("dayNotes", {
+    tripId,
+    day,
+    authorId: identity.subject,
+    authorName: identity.name ?? "Traveller",
+    body: text,
+    createdAt: Date.now(),
+  })
+}})
+
+/** Authors remove their own notes; the owner can moderate any of them. */
+export const removeDayNote = mutation({ args: { noteId: v.id("dayNotes") }, handler: async (ctx, { noteId }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Sign in required")
+  const note = await ctx.db.get(noteId)
+  if (!note) return
+  const role = await accessRole(ctx, note.tripId, identity.subject)
+  if (!(note.authorId === identity.subject || role === "owner")) throw new Error("Not allowed")
+  await ctx.db.delete(noteId)
 }})

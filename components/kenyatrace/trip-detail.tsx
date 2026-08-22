@@ -450,7 +450,9 @@ export function TripDetail() {
       {stage !== 'active' && trip.stops.length > 0 && (
         <Card>
           <CardContent className="max-h-96 overflow-y-auto p-5">
-            <TripChecklist tripId={tripId} stops={trip.stops} editable={canEdit} />
+            {/* Group layer lives here during planning: thumbs + day notes for
+                editors/owners, read-only for viewers. */}
+            <TripChecklist tripId={tripId} stops={trip.stops} editable={canEdit} collab isOwner={isOwner} />
           </CardContent>
         </Card>
       )}

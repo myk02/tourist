@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
@@ -14,6 +15,9 @@ import { cn } from '@/lib/utils'
 type Moment = NonNullable<ReturnType<typeof useQuery<typeof api.moments.list>>>[number]
 type Media = { type: 'video' | 'image'; url: string }
 
+/** Collaborator-only quick reactions — counts never reach public pages. */
+const REACTIONS = ['👍', '❤️', '🔥', '🎉'] as const
+
 function mediaOf(m: Moment): Media[] {
   const images = m.imageUrls?.length ? m.imageUrls : m.imageUrl ? [m.imageUrl] : []
   const videos = m.videoUrls ?? []
@@ -25,13 +29,34 @@ function mediaOf(m: Moment): Media[] {
 }
 
 export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; onUploadClick?: () => void }) {
+  const { user } = useUser()
   const moments = useQuery(api.moments.list, { tripId })
   const setBest = useMutation(api.moments.setBest)
   const setPublic = useMutation(api.moments.setPublic)
   const removeMoment = useMutation(api.moments.remove)
+  const react = useMutation(api.moments.react)
   const [lightbox, setLightbox] = useState<{ moment: number; media: number } | null>(null)
   // Deleting removes the stored files for good — confirm before it happens.
   const [pendingDelete, setPendingDelete] = useState<Moment | null>(null)
+
+  async function toggleReaction(m: Moment, emoji: string) {
+    try {
+      await react({ id: m._id, emoji })
+    } catch {
+      toast.error('Only collaborators can react')
+    }
+  }
+
+  /** Counts per emoji + which one (if any) is mine. */
+  function reactionState(m: Moment) {
+    const counts = new Map<string, number>()
+    let mine: string | null = null
+    for (const r of m.reactions ?? []) {
+      counts.set(r.emoji, (counts.get(r.emoji) ?? 0) + 1)
+      if (user?.id && r.userId === user.id) mine = r.emoji
+    }
+    return { counts, mine }
+  }
 
   async function toggleBest(m: Moment) {
     try {
@@ -107,6 +132,8 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             {moments.map((m, mi) => {
               const media = mediaOf(m)
+              const { counts } = reactionState(m)
+              const reactionTotal = [...counts.values()].reduce((a, b) => a + b, 0)
               return (
                 <div key={m._id} className="group relative aspect-square overflow-hidden rounded-xl">
                   <button className="block size-full" onClick={() => setLightbox({ moment: mi, media: 0 })} aria-label={`Open moment: ${m.caption}`}>
@@ -120,12 +147,21 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                   {m.best && <Badge className="absolute right-2 top-2 bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
                   {/* Controls stay visible on touch (no hover there); desktop
                       reveals them on hover to keep tiles clean. */}
-                  <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                    <p className="line-clamp-2 text-sm text-white">{m.caption}</p>
-                    <div className="flex shrink-0 gap-1">
-                      <button aria-label="Toggle best moment" onClick={() => toggleBest(m)} className={cn('flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground transition-colors', m.best && 'text-accent')}><Star className={cn('size-4', m.best && 'fill-current')} /></button>
-                      <button aria-label="Toggle visibility" onClick={() => togglePublic(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground">{m.public ? <Globe className="size-4" /> : <Lock className="size-4" />}</button>
-                      <button aria-label="Delete moment" onClick={() => setPendingDelete(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+                  <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    {reactionTotal > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {[...counts.entries()].map(([emoji, n]) => (
+                          <span key={emoji} className="rounded-full bg-card/90 px-1.5 py-0.5 text-[11px] font-semibold text-card-foreground">{emoji} {n}</span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-end justify-between gap-2">
+                      <p className="line-clamp-2 text-sm text-white">{m.caption}</p>
+                      <div className="flex shrink-0 gap-1">
+                        <button aria-label="Toggle best moment" onClick={() => toggleBest(m)} className={cn('flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground transition-colors', m.best && 'text-accent')}><Star className={cn('size-4', m.best && 'fill-current')} /></button>
+                        <button aria-label="Toggle visibility" onClick={() => togglePublic(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground">{m.public ? <Globe className="size-4" /> : <Lock className="size-4" />}</button>
+                        <button aria-label="Delete moment" onClick={() => setPendingDelete(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -161,6 +197,29 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>{new Date(active.createdAt).toLocaleDateString()} · {active.location || active.stopName || 'Somewhere in Kenya'}{active.public ? ' · Public' : ' · Private'}</span>
                 <span>{activeMedia.length > 1 ? `${activeIndex + 1} / ${activeMedia.length}` : ''}</span>
+              </div>
+              {/* Collaborator quick reactions — one per person, tap again to clear. */}
+              <div className="flex flex-wrap gap-1.5 border-t pt-3">
+                {(() => {
+                  const { counts, mine } = reactionState(active)
+                  return REACTIONS.map(emoji => {
+                    const n = counts.get(emoji) ?? 0
+                    return (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => void toggleReaction(active, emoji)}
+                        aria-pressed={mine === emoji}
+                        className={cn(
+                          'flex h-8 items-center gap-1 rounded-full border px-2.5 text-sm transition-colors',
+                          mine === emoji ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40',
+                        )}
+                      >
+                        {emoji}{n > 0 && <span className="text-xs font-semibold">{n}</span>}
+                      </button>
+                    )
+                  })
+                })()}
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={() => toggleBest(active)}>{active.best ? 'Remove best' : 'Mark best'}</Button>
