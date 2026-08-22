@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { InstallPrompt } from './install-prompt'
 import { PLANS, DayPackCheckout, PlanCard } from './paywall'
 
 // The home page IS the AI planner — labelled "Plan", while real discovery
@@ -42,7 +43,7 @@ function BookingReminderSweep() {
 }
 
 export function KenyaTraceShell({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-background text-foreground"><BookingReminderSweep/><Header/><main className="pb-32 md:pb-8">{children}</main><MobileNav/></div>
+  return <div className="min-h-screen bg-background text-foreground"><BookingReminderSweep/><Header/><main className="pb-32 md:pb-8">{children}</main><MobileNav/><InstallPrompt/></div>
 }
 
 function Brand() {
