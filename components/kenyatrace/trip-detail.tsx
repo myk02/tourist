@@ -7,7 +7,7 @@ import { SignInButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { CalendarClock, Camera, Copy, CopyPlus, Images, LocateFixed, Map, MoreHorizontal, Printer, Route, Trash2, Users } from 'lucide-react'
+import { CalendarClock, Camera, Copy, CopyPlus, FileDown, Images, LocateFixed, Map, MoreHorizontal, Printer, Route, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { geocodeArea } from '@/lib/geocode'
-import { buildPrintableItinerary } from '@/lib/itinerary'
+import { buildPrintableItinerary, type PrintableItinerary } from '@/lib/itinerary'
+import { downloadItineraryImage } from '@/lib/itinerary-image'
 import { formatKES } from '@/lib/kenya-data'
 import { localDateOnly } from '@/lib/dates'
 import { ItineraryEditor } from './itinerary-editor'
@@ -263,13 +264,10 @@ export function TripDetail() {
     }
   }
 
-  // Opens the itinerary as a clean, self-contained document for printing or
-  // saving as a PDF — an offline copy for the road.
-  function handlePrint() {
-    if (!trip) return
-    const win = window.open('', '_blank', 'width=860,height=1000')
-    if (!win) { toast.error('Pop-up blocked — allow pop-ups to print'); return }
-    win.document.write(buildPrintableItinerary({
+  // The shared data shape for both exports (print/PDF and image).
+  function printableData(): PrintableItinerary {
+    if (!trip) throw new Error('Trip not loaded')
+    return {
       name: trip.name,
       destination: trip.destination,
       origin: trip.origin,
@@ -281,9 +279,33 @@ export function TripDetail() {
         day: s.day, time: s.time, name: s.name, place: s.place, kind: s.kind,
         cost: s.cost, verified: s.verified, travelKm: s.travelKm, travelMins: s.travelMins,
       })),
-    }))
+    }
+  }
+
+  // Opens the itinerary as a clean, self-contained document for printing or
+  // saving as a PDF — an offline copy for the road.
+  function handlePrint() {
+    let doc: string
+    try {
+      doc = buildPrintableItinerary(printableData())
+    } catch {
+      return
+    }
+    const win = window.open('', '_blank', 'width=860,height=1000')
+    if (!win) { toast.error('Pop-up blocked — allow pop-ups to print'); return }
+    win.document.write(doc)
     win.document.close()
     setTimeout(() => win.print(), 350)
+  }
+
+  // Renders the plan as a share-ready PNG (WhatsApp-sized).
+  async function handleDownloadImage() {
+    try {
+      await downloadItineraryImage(printableData())
+      toast.success('Itinerary image downloaded')
+    } catch {
+      toast.error('Could not create the image')
+    }
   }
 
   // Publishes the trip's live trace as a public, shareable page (the trace
@@ -413,6 +435,9 @@ export function TripDetail() {
               )}
               <DropdownMenuItem onClick={handleCopyLink}>
                 <Copy />Copy link
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleDownloadImage()}>
+                <FileDown />Download image
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handlePrint}>
                 <Printer />Print / PDF

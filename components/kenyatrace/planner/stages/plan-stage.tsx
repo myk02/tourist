@@ -1,11 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Check, Loader2, Navigation, Route, Sparkles } from 'lucide-react'
+import { ArrowRight, Check, FileDown, Loader2, Navigation, Printer, Route, Sparkles } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { dailyAllowance } from '@/lib/budget'
+import { buildPrintableItinerary, type PrintableItinerary } from '@/lib/itinerary'
+import { downloadItineraryImage } from '@/lib/itinerary-image'
 import { formatKES } from '@/lib/kenya-data'
 import { seasonLabel } from '@/lib/seasons'
 import { cn } from '@/lib/utils'
@@ -24,6 +27,51 @@ export function PlanStage() {
     handleSaveTrip, handleEditorSave, handleSwapStay, handleAddStay, replanDay,
     dayGroups, planMapPoints, planHighlight, planDestIds, mapRoute,
   } = useJourney()
+
+  // The plan has no saved dates yet — exports synthesize the planned window
+  // (today → +days), matching how the trip will be created on save.
+  function exportData(): PrintableItinerary {
+    if (!plan) throw new Error('No plan')
+    const start = new Date()
+    const end = new Date(start.getTime() + 86_400_000 * Math.max(draft.days - 1, 0))
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return {
+      name: plan.name,
+      destination: plan.destination,
+      origin: draft.origin,
+      startDate: iso(start),
+      endDate: iso(end),
+      budget: draft.budget,
+      totalCost: plan.stops.reduce((sum, s) => sum + s.cost, 0),
+      stops: plan.stops.map(s => ({
+        day: s.day, time: s.time, name: s.title, place: s.place, kind: s.kind,
+        cost: s.cost, verified: s.verified, travelKm: s.travelKm, travelMins: s.travelMins,
+      })),
+    }
+  }
+
+  function handlePrint() {
+    let doc: string
+    try {
+      doc = buildPrintableItinerary(exportData())
+    } catch {
+      return
+    }
+    const win = window.open('', '_blank', 'width=860,height=1000')
+    if (!win) return
+    win.document.write(doc)
+    win.document.close()
+    setTimeout(() => win.print(), 350)
+  }
+
+  async function handleDownloadImage() {
+    try {
+      await downloadItineraryImage(exportData())
+      toast.success('Itinerary image downloaded')
+    } catch {
+      toast.error('Could not create the image')
+    }
+  }
 
   if (!plan) {
     return (
@@ -162,6 +210,10 @@ export function PlanStage() {
             <Button variant="ghost" onClick={() => setAdjustOpen(o => !o)}>Adjust plan</Button>
           </>
         )}
+        <div className="flex flex-1 flex-wrap gap-2">
+          <Button variant="outline" onClick={handlePrint} className="gap-1.5"><Printer className="size-4" />Print / PDF</Button>
+          <Button variant="outline" onClick={() => void handleDownloadImage()} className="gap-1.5"><FileDown className="size-4" />Save image</Button>
+        </div>
         <Button variant="ghost" onClick={() => goTo('budget')}>Back to budget</Button>
       </div>
 
