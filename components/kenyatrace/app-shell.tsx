@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { SignInButton, SignUpButton, UserButton, useUser } from '@clerk/nextjs'
-import { useMutation, useQuery } from 'convex/react'
+import { useAction, useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { CalendarClock, Camera, CircleUserRound, Compass, Map, MapPin, Navigation, Sparkles, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
@@ -22,8 +22,27 @@ function isActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href)
 }
 
+/**
+ * Cron-less booking reminders: every app load (and every 10 minutes while
+ * it stays open) checks the signed-in traveller's upcoming reservations and
+ * emails the ones entering their 48h/24h window. Silent — a no-op when
+ * nothing is due, signed out, or email isn't configured.
+ */
+function BookingReminderSweep() {
+  const sweep = useAction(api.reminders.sweep)
+  const { isSignedIn } = useUser()
+  useEffect(() => {
+    if (!isSignedIn) return
+    const run = () => { void sweep().catch(() => {}) }
+    run()
+    const t = setInterval(run, 10 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [isSignedIn, sweep])
+  return null
+}
+
 export function KenyaTraceShell({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-background text-foreground"><Header/><main className="pb-32 md:pb-8">{children}</main><MobileNav/></div>
+  return <div className="min-h-screen bg-background text-foreground"><BookingReminderSweep/><Header/><main className="pb-32 md:pb-8">{children}</main><MobileNav/></div>
 }
 
 function Brand() {

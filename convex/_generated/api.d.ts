@@ -15,6 +15,7 @@ import type * as moments from "../moments.js";
 import type * as payments from "../payments.js";
 import type * as payments_helpers from "../payments_helpers.js";
 import type * as positions from "../positions.js";
+import type * as reminders from "../reminders.js";
 import type * as saved from "../saved.js";
 import type * as scraper_constants from "../scraper/constants.js";
 import type * as scraper_firecrawl from "../scraper/firecrawl.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   payments: typeof payments;
   payments_helpers: typeof payments_helpers;
   positions: typeof positions;
+  reminders: typeof reminders;
   saved: typeof saved;
   "scraper/constants": typeof scraper_constants;
   "scraper/firecrawl": typeof scraper_firecrawl;
