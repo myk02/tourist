@@ -1,6 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
@@ -25,10 +27,28 @@ const CATEGORY_COLOR: Record<string, string> = {
 /**
  * Centralized KES budget dashboard for a trip: categorized expenses (Stays,
  * Transport, Activities, Food), a per-day view, and a simple group
- * expense-splitting calculator for multi-traveller trips.
+ * expense-splitting calculator for multi-traveller trips. The traveller count
+ * is persisted back onto the trip record (debounced) so the split survives
+ * reloads and is visible to collaborators.
  */
-export function BudgetDashboard({ stops, budget, totalCost }: { stops: Stop[]; budget: number; totalCost: number }) {
-  const [travelers, setTravelers] = useState(2)
+export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTravelers }: { stops: Stop[]; budget: number; totalCost: number; tripId?: string; initialTravelers?: number }) {
+  const updateTrip = useMutation(api.trips.update)
+  const [travelers, setTravelers] = useState(Math.max(1, Math.min(initialTravelers ?? 2, 50)))
+  const persistTimer = useRef<number | null>(null)
+
+  // Persist the traveller count so split-cost survives reloads. Debounced —
+  // typing "4" shouldn't fire a mutation per keystroke.
+  useEffect(() => {
+    if (!tripId || initialTravelers === travelers) return
+    if (persistTimer.current !== null) window.clearTimeout(persistTimer.current)
+    persistTimer.current = window.setTimeout(() => {
+      persistTimer.current = null
+      updateTrip({ id: tripId as never, patch: { travelers } }).catch(() => { /* retried on next change */ })
+    }, 700)
+    return () => {
+      if (persistTimer.current !== null) window.clearTimeout(persistTimer.current)
+    }
+  }, [tripId, travelers, initialTravelers, updateTrip])
 
   const breakdown = useMemo(() => {
     const byKind = new Map<string, number>()

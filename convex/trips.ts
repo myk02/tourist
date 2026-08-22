@@ -117,6 +117,8 @@ export const update = mutation({ args: { id: v.id("trips"), patch: v.object({
   sharedAt: v.optional(v.number()),
   coverImage: v.optional(v.string()),
   aiBrief: v.optional(v.string()),
+  travelMonth: v.optional(v.string()),
+  travelers: v.optional(v.number()),
 }) }, handler: async (ctx, { id, patch }) => {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) throw new Error("Sign in required")

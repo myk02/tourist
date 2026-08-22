@@ -480,7 +480,7 @@ export function TripDetail() {
           <ItineraryEditor initial={stops} budget={trip.budget} title={trip.name} defaultMobileView={route.length > 0 ? 'map' : 'list'} onSave={canEdit ? handleSave : undefined} readOnly={!canEdit} />
         </TabsContent>
         <TabsContent value="route"><KenyaMap points={routeMapPoints} highlight={routeHighlight} route={route} destIds={routeDestIds} /></TabsContent>
-        <TabsContent value="budget"><BudgetDashboard stops={stops} budget={trip.budget} totalCost={trip.totalCost} /></TabsContent>
+        <TabsContent value="budget"><BudgetDashboard stops={stops} budget={trip.budget} totalCost={trip.totalCost} tripId={tripId} initialTravelers={trip.travelers} /></TabsContent>
         {isOwner && (
           <TabsContent value="bookings">
             <div className="flex flex-col gap-3">
