@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { geocodeArea } from '@/lib/geocode'
 import { buildPrintableItinerary } from '@/lib/itinerary'
 import { formatKES } from '@/lib/kenya-data'
+import { localDateOnly } from '@/lib/dates'
 import { ItineraryEditor } from './itinerary-editor'
 import { KenyaMap } from './kenya-map'
 import { MomentAlbum } from './moment-album'
@@ -28,6 +29,7 @@ import { BookingRow, BudgetBar, NotFound, useTripId } from './shared'
 import { RequireSubscription } from './paywall'
 import { TripBriefCard } from './trip-brief'
 import { TripChecklist } from './trip-checklist'
+import { TodayCard } from './today-card'
 import type { Stop } from './types'
 
 // ─── Trip stage: the hub reorders itself around where the traveller is ──────
@@ -35,11 +37,6 @@ import type { Stop } from './types'
 type TripStage = 'planning' | 'active' | 'past'
 
 const DAY_MS = 86_400_000
-
-/** Local-timezone YYYY-MM-DD — dates on trips are plain calendar strings. */
-function dateOnly(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 /**
  * Stage comes from the dates when they exist (a trip is "past" the day after
@@ -49,7 +46,7 @@ function dateOnly(d: Date): string {
 function deriveStage(status?: string, startDate?: string, endDate?: string): TripStage {
   if (status === 'completed') return 'past'
   const iso = /^\d{4}-\d{2}-\d{2}$/
-  const today = dateOnly(new Date())
+  const today = localDateOnly(new Date())
   if (startDate && endDate && iso.test(startDate) && iso.test(endDate)) {
     if (today > endDate) return 'past'
     if (today >= startDate) return 'active'
@@ -175,13 +172,13 @@ export function TripDetail() {
     const end = Date.parse(trip.endDate ?? '')
     if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
       const total = Math.round((end - start) / DAY_MS) + 1
-      const dayN = Math.min(Math.max(Math.round((Date.parse(dateOnly(new Date())) - start) / DAY_MS) + 1, 1), total)
+      const dayN = Math.min(Math.max(Math.round((Date.parse(localDateOnly(new Date())) - start) / DAY_MS) + 1, 1), total)
       stageChip = `Day ${dayN} of ${total}`
     } else {
       stageChip = 'On the road'
     }
   } else if (trip.startDate && /^\d{4}-\d{2}-\d{2}$/.test(trip.startDate)) {
-    const daysTo = Math.round((Date.parse(trip.startDate) - Date.parse(dateOnly(new Date()))) / DAY_MS)
+    const daysTo = Math.round((Date.parse(trip.startDate) - Date.parse(localDateOnly(new Date()))) / DAY_MS)
     stageChip = daysTo <= 0 ? 'Starts today' : daysTo === 1 ? 'Starts tomorrow' : `Starts in ${daysTo} days`
   } else {
     stageChip = 'Planning'
@@ -432,7 +429,25 @@ export function TripDetail() {
           </DropdownMenu>
         </div>
       </div>
-      {trip.stops.length > 0 && (
+      {stage === 'active' && (
+        <TodayCard
+          tripId={tripId}
+          startDate={trip.startDate}
+          stops={trip.stops}
+          editable={canEdit}
+          isOwner={isOwner}
+        />
+      )}
+      {stage === 'active' && trip.stops.length > 0 && trip.stops.every(s => s.completedAt) && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="flex flex-wrap items-center gap-3 p-4">
+            <Images className="size-4 shrink-0 text-primary" />
+            <p className="min-w-0 flex-1 text-sm font-medium">Every stop checked off — your trace is ready to relive.</p>
+            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/recap/${tripId}`} />}>View recap</Button>
+          </CardContent>
+        </Card>
+      )}
+      {stage !== 'active' && trip.stops.length > 0 && (
         <Card>
           <CardContent className="max-h-96 overflow-y-auto p-5">
             <TripChecklist tripId={tripId} stops={trip.stops} editable={canEdit} />

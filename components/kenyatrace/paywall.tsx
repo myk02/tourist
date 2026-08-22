@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { formatKES } from '@/lib/kenya-data'
+import { readCache, writeCache } from '@/lib/offline-cache'
 import { loadPaystackScript } from '@/lib/paystack-inline'
 import { PLAN_PRICES } from '@/lib/plans'
 import { cn } from '@/lib/utils'
@@ -285,6 +286,19 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
   const ensureTrial = useMutation(api.subscriptions.ensureTrial)
   // True only while the lazy trial-start mutation is actually in flight.
   const [trialPending, setTrialPending] = useState(false)
+  // Offline tolerance: remember the last known-active access on this browser
+  // so a dead zone (safari park, highway) doesn't trap the traveller behind
+  // an endless skeleton. This is UX gating only — the server re-checks
+  // access on every query and mutation, and the cached copy only ever shows
+  // the user their own previously-loaded data.
+  const [cachedActive, setCachedActive] = useState(false)
+  useEffect(() => {
+    const entry = readCache<boolean>('kt-access-active')
+    if (entry?.value && Date.now() - entry.at < 14 * 86_400_000) setCachedActive(true)
+  }, [])
+  useEffect(() => {
+    if (status?.active) writeCache('kt-access-active', true)
+  }, [status])
 
   // Lazily start the 30-day trial on first gated visit (idempotent). For a
   // brand-new user `ensureTrial` returns `{ started: true }` and status flips
@@ -314,6 +328,18 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
     )
   }
   if (isLoading || status === undefined || status === null) {
+    // Server unreachable but this browser recently had active access: keep
+    // the traveller working against their saved copy instead of a skeleton.
+    if (!isLoading && isAuthenticated && cachedActive) {
+      return (
+        <div className="flex flex-col">
+          <div className="border-b border-amber-500/20 bg-amber-500/10 px-5 py-2 text-center text-xs font-medium text-amber-700 dark:text-amber-300">
+            Offline — showing your saved session. Changes sync when you reconnect.
+          </div>
+          {children}
+        </div>
+      )
+    }
     return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl" /></div>
   }
   // A brand-new signed-in user has no row yet — the trial-start mutation is
