@@ -87,7 +87,7 @@ export function PlanCard({
         <span className="pb-1 text-sm font-medium text-muted-foreground">/ {plan.suffix}</span>
       </div>
       <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
-        <p className="text-xs font-semibold text-primary">{plan.perDay}</p>
+        <p className="text-xs font-semibold text-primary">Pay with M-Pesa · {plan.perDay}</p>
         {'savings' in plan && plan.savings && (
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">{plan.savings}</span>
         )}
@@ -155,7 +155,14 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
             toast.success(`${result.days} days added — welcome aboard!`)
             onPurchased?.(result.days)
           } else {
-            toast.error('Payment could not be confirmed. If you were charged, contact support.')
+            // Support loop: flag the reference for a human instead of leaving
+            // the traveller with only an error toast.
+            void fetch('/api/payment-recovery', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ reference, email }),
+            }).catch(() => {})
+            toast.error('Payment could not be confirmed — we\'ve flagged your reference for support. If you were charged, you won\'t lose out.')
           }
         } catch {
           toast.error('Could not confirm the payment — try again in a moment')
@@ -205,7 +212,7 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
           />
         ))}
       </div>
-      <p className="text-center text-xs text-muted-foreground">One-time payment · Card or M-Pesa · No auto-renewal</p>
+      <p className="text-center text-xs text-muted-foreground">Pay with M-Pesa or card · One-time · No auto-renewal</p>
     </div>
   )
 }
@@ -225,7 +232,7 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
         </span>
         <h1 className={cn('font-serif font-semibold tracking-tight text-balance', compact ? 'text-xl' : 'text-4xl')}>Pick a plan</h1>
         <p className="max-w-md text-muted-foreground">
-          {status.mode === 'none' ? 'Your 30-day free trial has ended.' : 'Your access has ended.'} One-time packs — no auto-renewal.
+          {status.mode === 'none' ? 'Your 30-day free trial has ended.' : 'Your access has ended.'} Pay with M-Pesa — one-time packs, no auto-renewal.
         </p>
       </div>
 

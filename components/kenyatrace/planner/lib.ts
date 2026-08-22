@@ -40,6 +40,9 @@ export interface PlannerModel { label: string; origin: string; traveler: Travele
  *  so repeat pastes replace instead of piling up. */
 export const PASTE_HINT_PREFIX = '[From my notes] '
 
+/** Marker for destination hints handed over from a shared trace page. */
+export const TRACE_HINT_PREFIX = '[From a shared trip] '
+
 export interface MapPoint { id: string; name: string; location: string; lat: number; lng: number }
 export interface PickedFile { file: File; video: boolean }
 

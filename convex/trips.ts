@@ -352,10 +352,30 @@ export const publicTrace = query({ args: { tripId: v.id("trips"), token: v.strin
       origin: trip.origin ?? undefined,
       startDate: trip.startDate,
       endDate: trip.endDate,
+      // The generic cover photo only — used for social embed images. Never
+      // costs, owner identity or booking data.
+      coverImage: trip.coverImage ?? undefined,
     },
     stops: publicStops,
     trace: trace.map(p => ({ lat: p.lat, lng: p.lng, accuracy: p.accuracy, recordedAt: p.recordedAt })),
     distanceKm: Math.round(distanceKm),
     lastRecordedAt,
   }
+}})
+
+/**
+ * Profile travel snapshot: how many itinerary stops the traveller has checked
+ * off across all their trips. Trips-taken and moments-captured already exist
+ * as client-side queries; this is the one number nothing else returns.
+ */
+export const checkedStopCount = query({ args: {}, handler: async ctx => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) return 0
+  const trips = await ctx.db.query("trips").withIndex("by_owner", q => q.eq("ownerId", identity.subject)).collect()
+  let checked = 0
+  for (const t of trips) {
+    const stops = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", t._id)).collect()
+    checked += stops.filter(s => s.completedAt != null).length
+  }
+  return checked
 }})

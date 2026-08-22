@@ -88,7 +88,9 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
           </div>
           <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3">
             <p className="text-xs text-muted-foreground">Made with <span className="font-semibold text-foreground">KenyaTrace</span> — plan your own Kenya trip.</p>
-            <Button size="sm" nativeButton={false} render={<Link href="/plan" />}>Plan a trip</Button>
+            {/* Start-anywhere handoff: the wizard seeds destination + trip length
+                from this trace (no account needed, no costs copied). */}
+            <Button size="sm" nativeButton={false} render={<Link href={`/plan?dest=${encodeURIComponent(data.trip.destination)}&days=${stopDays}`} />}>Plan mine like this</Button>
           </div>
         </div>
       </div>

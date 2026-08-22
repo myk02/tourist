@@ -21,7 +21,7 @@ const FALLBACK: Record<'trace' | 'recap' | 'moments', ShareMeta> = {
 }
 
 interface TraceData {
-  trip?: { name?: string; destination?: string; origin?: string; startDate?: string; endDate?: string }
+  trip?: { name?: string; destination?: string; origin?: string; startDate?: string; endDate?: string; coverImage?: string }
   distanceKm?: number
 }
 
@@ -45,7 +45,7 @@ export async function shareMeta(kind: 'trace' | 'recap' | 'moments', tripId: str
       return {
         title: `Trip trace · ${data.trip.name}`,
         description: `${data.trip.destination ?? 'Kenya'}${data.trip.startDate ? ` · ${data.trip.startDate} → ${data.trip.endDate}` : ''}${data.distanceKm ? ` · ${data.distanceKm} km traced` : ''}. Follow the route with KenyaTrace.`,
-        image: '/kenya-hero.png',
+        image: data.trip.coverImage || '/kenya-hero.png',
       }
     }
     const data = (await query('moments:publicForTrip', { tripId })) as MomentsData | null

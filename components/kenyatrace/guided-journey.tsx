@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SignInButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
@@ -13,7 +13,7 @@ import type { Stop } from './types'
 import { JourneyProvider, type JourneyCtx } from './planner/context'
 import { PlannerProgress } from './planner/bits'
 import {
-  DRAFT_KEY, GENERATION_STEPS, INTERESTS, TOWNS,
+  DRAFT_KEY, GENERATION_STEPS, INTERESTS, TOWNS, TRACE_HINT_PREFIX,
   emptyDraft, enrichStops, pickPlanCandidates, stayPatch, toTripStops,
   type Draft, type PlannerModel, type Stage,
 } from './planner/lib'
@@ -54,6 +54,27 @@ export function GuidedJourney() {
       if (raw) setDraft(prev => ({ ...emptyDraft(), ...JSON.parse(raw) }))
     } catch { /* ignore */ }
   }, [])
+
+  // Start-anywhere handoff: /plan?dest=X&days=N (e.g. from a shared trace)
+  // seeds a fresh journey with the destination hint and trip length. Runs
+  // after the sessionStorage restore, only when no plan is in progress.
+  const searchParams = useSearchParams()
+  const tracePrefillAppliedRef = useRef(false)
+  useEffect(() => {
+    if (tracePrefillAppliedRef.current) return
+    const dest = searchParams.get('dest')?.trim().slice(0, 120)
+    const daysRaw = Number(searchParams.get('days'))
+    const days = Number.isFinite(daysRaw) && daysRaw >= 1 && daysRaw <= 14 ? Math.round(daysRaw) : null
+    if (!dest && days == null) return
+    tracePrefillAppliedRef.current = true
+    setDraft(d => {
+      // A journey already in progress (or restored from sessionStorage) wins.
+      if (d.plan || d.tripId) return d
+      const extra = dest ? `${TRACE_HINT_PREFIX}${dest}` : ''
+      return { ...d, days: days ?? d.days, ...(extra ? { extra } : {}) }
+    })
+    if (dest) toast.success(`Planning around ${dest}`)
+  }, [searchParams])
   const [stage, setStage] = useState<Stage>('where')
   // True when the planner was pre-filled from the signed-in profile's saved
   // preferences — shown as a small "pre-filled from your profile" note.

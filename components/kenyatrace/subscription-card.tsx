@@ -2,10 +2,11 @@
 
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { Gift } from 'lucide-react'
+import { Gift, Info } from 'lucide-react'
 import { CalendarClock, Check, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatKES } from '@/lib/kenya-data'
 import { DayPackCheckout } from './paywall'
 
@@ -43,7 +44,16 @@ export function SubscriptionSection() {
                   {status.mode === 'trial' ? `Trial ends ${formatDate(status.trialEndsAt)}` : `Access until ${formatDate(status.paidUntil)}`}
                 </p>
                 {credit && credit.earnedDays > 0 && (
-                  <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-primary"><Gift className="size-3.5" />Includes {credit.earnedDays} free day{credit.earnedDays === 1 ? '' : 's'} earned from your moments</p>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={<p className="mt-1 flex w-fit items-center gap-1.5 text-xs font-medium text-primary" />}
+                    >
+                      <Gift className="size-3.5" />Includes {credit.earnedDays} free day{credit.earnedDays === 1 ? '' : 's'}<Info className="size-3 opacity-70" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-56 text-left">
+                      Shared moments with photos or videos earn time toward free access days — media counts toward your next earned day.
+                    </TooltipContent>
+                  </Tooltip>
                 )}
               </div>
               <Badge className="bg-primary text-primary-foreground">Active</Badge>
