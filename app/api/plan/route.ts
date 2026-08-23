@@ -47,7 +47,8 @@ const requestSchema = z.object({
 const replanSchema = requestSchema.extend({
   mode: z.literal('day'),
   day: z.number().int().positive(),
-  keptStops: z.array(z.object({ title: z.string(), place: z.string() })).max(10),
+  // A full day of short stops can legitimately exceed 10 locks.
+  keptStops: z.array(z.object({ title: z.string(), place: z.string() })).max(30),
 })
 
 type Candidate = z.infer<typeof candidateSchema>

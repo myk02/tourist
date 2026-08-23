@@ -440,8 +440,10 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
         return out
       })
       toast.success(`Day ${day} re-planned`)
-    } catch {
-      toast.error('Could not re-plan this day')
+    } catch (error) {
+      // /api/plan composes specific rejections (over budget, origin drift) —
+      // surface them instead of a generic failure.
+      toast.error(error instanceof Error && error.message ? error.message : 'Could not re-plan this day')
     } finally {
       setReplanningDay(null)
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Camera, Check, Copy, Flag, Loader2, MapPin, MessageCircle, Send, Share2, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -19,6 +20,18 @@ export function ShareStage() {
     publishing, files, onPickFiles, removeFile, caption, setCaption,
     handlePublish, copied, copyShareLink, shareLink, shareText,
   } = useJourney()
+
+  // One object URL per file, revoked on change/unmount. Created in an effect
+  // (never during render): URL.createObjectURL is a side effect, and a render-
+  // phase version leaked blob handles on StrictMode double-renders.
+  const [fileUrls, setFileUrls] = useState<Map<File, string>>(() => new Map())
+  useEffect(() => {
+    const urls = new Map(files.map(f => [f.file, URL.createObjectURL(f.file)]))
+    setFileUrls(urls)
+    return () => {
+      for (const url of urls.values()) URL.revokeObjectURL(url)
+    }
+  }, [files])
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -85,9 +98,9 @@ export function ShareStage() {
                     {files.map((f, i) => (
                       <div key={i} className="relative aspect-square overflow-hidden rounded-xl border">
                         {f.video ? (
-                          <video src={URL.createObjectURL(f.file)} className="size-full object-cover" muted playsInline />
+                          <video src={fileUrls.get(f.file) ?? ''} className="size-full object-cover" muted playsInline />
                         ) : (
-                          <ListingImage src={URL.createObjectURL(f.file)} alt="" fill className="object-cover" sizes="160px" />
+                          <ListingImage src={fileUrls.get(f.file) ?? ''} alt="" fill className="object-cover" sizes="160px" />
                         )}
                         <button
                           type="button"

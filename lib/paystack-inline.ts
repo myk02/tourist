@@ -31,8 +31,19 @@ export function loadPaystackScript(): Promise<void> {
     const script = document.createElement('script')
     script.src = 'https://js.paystack.co/v1/inline.js'
     script.async = true
-    script.onload = () => resolve()
+    // Some blockers stall the request without firing onerror — without a
+    // timeout the buy button would hang on "Starting…" forever.
+    const timeout = setTimeout(() => {
+      paystackPromise = null
+      script.remove()
+      reject(new Error('The payment provider took too long to load'))
+    }, 15000)
+    script.onload = () => {
+      clearTimeout(timeout)
+      resolve()
+    }
     script.onerror = () => {
+      clearTimeout(timeout)
       paystackPromise = null
       reject(new Error('Could not load the payment provider'))
     }

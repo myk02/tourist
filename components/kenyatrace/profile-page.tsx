@@ -32,6 +32,9 @@ const PACES = [
 ] as const
 const BUDGETS = [20000, 50000, 100000, 200000]
 
+/** Whitelist for ?tab= deep links — a stale/garbage value must not blank the page. */
+const TAB_IDS = ['overview', 'bookings', 'saved', 'preferences', 'subscription', 'settings']
+
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
@@ -63,13 +66,14 @@ export function Profile() {
   const setConsent = useMutation(api.users.setTrackingConsent)
   const params = useSearchParams()
   const router = useRouter()
-  const [tab, setTab] = useState(params.get('tab') || 'overview')
+  const requestedTab = params.get('tab')
+  const [tab, setTab] = useState(requestedTab && TAB_IDS.includes(requestedTab) ? requestedTab : 'overview')
 
   // Keep the tab in sync with ?tab= so deep links and back/forward work even
   // while the profile is already mounted.
   useEffect(() => {
     const t = params.get('tab')
-    if (t) setTab(t)
+    if (t && TAB_IDS.includes(t)) setTab(t)
   }, [params])
 
   const [styles, setStyles] = useState<string[]>([])

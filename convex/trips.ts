@@ -452,5 +452,6 @@ export const removeDayNote = mutation({ args: { noteId: v.id("dayNotes") }, hand
   if (!note) return
   const role = await accessRole(ctx, note.tripId, identity.subject)
   if (!(note.authorId === identity.subject || role === "owner")) throw new Error("Not allowed")
+  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
   await ctx.db.delete(noteId)
 }})

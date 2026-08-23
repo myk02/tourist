@@ -356,6 +356,8 @@ export function GuidedJourney() {
         mode: 'day',
         day,
         origin: draft.origin,
+        originLat: draft.originLat,
+        originLng: draft.originLng,
         traveler: draft.traveler,
         budget: draft.budget,
         days: draft.days,

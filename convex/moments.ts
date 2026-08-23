@@ -2,8 +2,8 @@ import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import { DAY_MS } from "../lib/plans"
-import { requireActiveAccess } from "./subscriptions"
 import { accessRole } from "./trips"
+import { requireActiveAccess } from "./subscriptions"
 
 // The moments growth loop: every MEDIA_PER_DAY photos/videos a traveller
 // uploads earns them one extra free day of access (stacked onto paidUntil
@@ -180,6 +180,9 @@ export const react = mutation({ args: { id: v.id("moments"), emoji: v.string() }
   if (!moment) throw new Error("Moment not found")
   const role = await accessRole(ctx, moment.tripId, identity.subject)
   if (!role || role === "viewer") throw new Error("Only collaborators can react")
+  // Reactions are content writes — expired owners don't get to add them,
+  // matching every other write on the trip.
+  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
   const mine = (moment.reactions ?? []).find(r => r.userId === identity.subject)
   const had = mine?.emoji === emoji
   // One reaction per person: a second tap clears it, a different emoji switches it.

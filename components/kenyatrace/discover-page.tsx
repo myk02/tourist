@@ -365,8 +365,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
   const mapPoints = (filteredItems ?? []).map(toPoint)
   const visible = filteredItems?.slice(0, visibleCount)
-  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || amenities.length > 0
-  const activeFilterCount = [activeFilter !== 'all', rating > 0, priceNarrowed, nearMe, amenities.length > 0].filter(Boolean).length
+  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || amenities.length > 0 || !!activeSource
+  const activeFilterCount = [activeFilter !== 'all', rating > 0, priceNarrowed, nearMe, amenities.length > 0, !!activeSource].filter(Boolean).length
   const hero = VERTICAL_HERO[vertical] ?? VERTICAL_HERO.attractions
   const label = categories.find(c => c.id === vertical)?.label ?? vertical
 
@@ -388,6 +388,22 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Category switcher — every vertical reachable from every other. */}
+      <div className="flex flex-wrap gap-2">
+        {categories.map(c => (
+          <Link
+            key={c.id}
+            href={`/discover/${c.id}`}
+            className={cn(
+              'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+              c.id === vertical ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
+            )}
+          >
+            {c.label}
+          </Link>
+        ))}
       </div>
 
       {/* Compact search bar — filters hide behind the toggle. */}

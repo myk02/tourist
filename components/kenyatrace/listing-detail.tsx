@@ -16,6 +16,7 @@ import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { isValidConvexId } from '@/lib/id'
+import { localDateOnly } from '@/lib/dates'
 import { formatKES } from '@/lib/kenya-data'
 import { toReplaceStopsPayload } from '@/lib/stop-fields'
 import { ListingImage, NotFound, SourceBadge, sourceToFilter } from './shared'
@@ -44,8 +45,10 @@ export function Detail({ id }: { id: string }) {
   const [selectedId, setSelectedId] = useState<Id<'trips'> | null>(null)
   const [reserveOpen, setReserveOpen] = useState(false)
   const [reserveTripId, setReserveTripId] = useState<Id<'trips'> | null>(null)
-  const [checkIn, setCheckIn] = useState(() => new Date().toISOString().slice(0, 10))
-  const [checkOut, setCheckOut] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10))
+  // Local calendar dates — a UTC slice(0,10) near midnight pre-selects
+  // yesterday for East African evening users.
+  const [checkIn, setCheckIn] = useState(() => localDateOnly(new Date()))
+  const [checkOut, setCheckOut] = useState(() => localDateOnly(new Date(Date.now() + 86400000)))
   const [guests, setGuests] = useState(2)
   const selectedTrip = useQuery(api.trips.getWithStops, selectedId ? { id: selectedId } : 'skip')
   // Shared viewer trips can't be edited, and only owned trips can take
@@ -119,7 +122,7 @@ export function Detail({ id }: { id: string }) {
     gate(async () => {
       setCreatingTrip(true)
       try {
-        const id = await create({ name: item.name + ' Trip', destination: item.location, startDate: new Date().toISOString().slice(0, 10), endDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10), budget: Math.max(item.price * 3, 50000), totalCost: item.price, stops: [{ name: item.name, place: item.location, day: 1, time: '09:00', cost: item.price, kind: item.vertical === 'stays' ? 'Stay' : 'Experience', order: 0, lat: item.lat, lng: item.lng }] })
+        const id = await create({ name: item.name + ' Trip', destination: item.location, startDate: localDateOnly(new Date()), endDate: localDateOnly(new Date(Date.now() + 86400000)), budget: Math.max(item.price * 3, 50000), totalCost: item.price, stops: [{ name: item.name, place: item.location, day: 1, time: '09:00', cost: item.price, kind: item.vertical === 'stays' ? 'Stay' : 'Experience', order: 0, lat: item.lat, lng: item.lng }] })
         toast.success('Trip created!')
         router.push(`/trips/${id}`)
         setPickerOpen(false)

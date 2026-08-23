@@ -251,11 +251,22 @@ export function Moments() {
                     <div key={date}>
                       <h2 className="mb-3 font-serif text-xl font-semibold tracking-tight">{date}</h2>
                       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                        {group!.map(m => (
-                          <div key={m._id} className="relative aspect-square overflow-hidden rounded-xl">
-                            <ListingImage src={m.imageUrl || '/placeholder.jpg'} fill alt={m.caption} className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
-                          </div>
-                        ))}
+                        {group!.map(m => {
+                          // Video-only moments get a real <video> tile — a
+                          // generic placeholder read as "broken".
+                          const firstVideo = !m.imageUrl ? m.videoUrls?.[0] : undefined
+                          return (
+                            <div key={m._id} className="relative aspect-square overflow-hidden rounded-xl">
+                              {m.imageUrl ? (
+                                <ListingImage src={m.imageUrl} fill alt={m.caption} className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
+                              ) : firstVideo ? (
+                                <video src={firstVideo} muted playsInline preload="metadata" className="size-full object-cover" />
+                              ) : (
+                                <ListingImage src="/placeholder.jpg" fill alt={m.caption} className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   ))}

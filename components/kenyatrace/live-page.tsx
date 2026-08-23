@@ -164,6 +164,7 @@ export function Track() {
   // Offline with a saved copy renders through; otherwise wait for data.
   if (viewTrip === undefined || (me === undefined && !usingCache)) return <div className="kt-shimmer min-h-screen" />
   if (!viewTrip) return <NotFound />
+  const isViewer = viewTrip.role === 'viewer'
 
   return (
     <RequireSubscription>
@@ -186,7 +187,17 @@ export function Track() {
         )}
         <Card className="absolute bottom-6 left-1/2 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2">
           <CardContent className="p-4">
-            {!consent ? (
+            {/* Viewers can watch the trace but never start it — positions.record
+                rejects non-owners server-side, so offering Start just misleads. */}
+            {isViewer ? (
+              <div className="flex items-center gap-4">
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary"><Navigation /></span>
+                <div className="flex-1">
+                  <p className="font-semibold">Live route for this trip</p>
+                  <p className="text-sm text-muted-foreground">Only the trip owner records this route — you&apos;re watching it live{viewRecorded?.length ? ` · ${viewRecorded.length} points so far` : ''}.</p>
+                </div>
+              </div>
+            ) : !consent ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-4">
                   <span className="flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><MapPin /></span>
@@ -218,8 +229,8 @@ export function Track() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" className="gap-2" onClick={() => void handleShareTrace()}><Route className="size-4" />Share trace</Button>
-                  <Button variant="outline" className="gap-2" nativeButton={false} render={<a href={`/moments?trip=${tripId}`} />}><Share2 className="size-4" />Share your experience</Button>
+                  {!isViewer && <Button variant="outline" className="gap-2" onClick={() => void handleShareTrace()}><Route className="size-4" />Share trace</Button>}
+                  {!isViewer && <Button variant="outline" className="gap-2" nativeButton={false} render={<a href={`/moments?trip=${tripId}`} />}><Share2 className="size-4" />Share your experience</Button>}
                   <Button variant="outline" className="gap-2" nativeButton={false} render={<a href={`/recap/${tripId}`} />}><Images className="size-4" />View recap</Button>
                   <Button variant="outline" nativeButton={false} render={<a href={`/trips/${tripId}`} />}>View trip</Button>
                   <Button variant="ghost" className="gap-2" nativeButton={false} render={<a href="/discover" />}><Compass className="size-4" />Explore more</Button>
