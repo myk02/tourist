@@ -4,6 +4,11 @@ import { seasonGuidance } from '@/lib/seasons'
 import { mapWithConcurrency, drivingLeg } from '@/lib/travel'
 import { z } from 'zod'
 
+// Plan generation legitimately takes a while (multi-attempt model calls plus
+// OSRM legs). Declare the ceiling so the platform doesn't kill the function
+// at the default 60s and return an HTML 504 the client can't parse.
+export const maxDuration = 300
+
 // ─── Request schemas ─────────────────────────────────────────────────────────
 
 const candidateSchema = z.object({
@@ -372,9 +377,10 @@ async function runWithRetry<T extends { stops: { length: number } }>(
   validate?: (result: T) => void,
 ): Promise<T> {
   let lastError: unknown = null
-  // Four attempts so budget enforcement can converge: the model may overshoot,
-  // then undershoot, then land in range.
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // Three attempts so budget enforcement can converge: the model may overshoot,
+  // then undershoot, then land in range. (Four used to risk blowing through
+  // serverless time caps — each attempt can take up to a minute.)
+  for (let attempt = 0; attempt < 3; attempt++) {
     // Retries tell the model exactly what was wrong (e.g. it overshot the
     // budget) so the next attempt fixes the real problem. Keep `reason`
     // code-generated (numbers and fixed strings only) so model output can

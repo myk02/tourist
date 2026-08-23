@@ -239,6 +239,9 @@ export function pickPlanCandidates(
   }
   const hasOrigin = originLat != null && originLng != null
   return listings
+    // The /api/plan schema requires lat/lng/image on every candidate — a
+    // single incomplete row would 400 the whole request. Skip them here.
+    .filter(l => l.lat != null && l.lng != null && !!l.image)
     .map(l => {
       let score = l.rating || 0
       const cap = priceCaps[l.vertical] ?? perDay

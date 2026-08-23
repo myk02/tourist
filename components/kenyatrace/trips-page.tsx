@@ -84,9 +84,12 @@ function TripCard({ trip, onDuplicate, onCopyLink, onDelete, onLeave }: { trip: 
       </CardHeader>
       <CardFooter className="flex gap-2">
         <Button className="flex-1" nativeButton={false} render={<Link href={`/trips/${trip._id}`} />}>Open trip</Button>
-        <Button variant="outline" size="icon" aria-label="Duplicate trip" onClick={() => onDuplicate(trip)}>
-          <CopyPlus className="size-4" />
-        </Button>
+        {/* Server rejects viewers on duplicate — never offer it to them. */}
+        {trip.role !== 'viewer' && (
+          <Button variant="outline" size="icon" aria-label="Duplicate trip" onClick={() => onDuplicate(trip)}>
+            <CopyPlus className="size-4" />
+          </Button>
+        )}
         <Button variant="outline" size="icon" aria-label="Copy trip link" onClick={() => onCopyLink(trip)}>
           <Copy className="size-4" />
         </Button>

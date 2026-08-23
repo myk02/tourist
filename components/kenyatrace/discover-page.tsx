@@ -88,6 +88,10 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const urlMax = params.get('max')
   const urlNear = params.get('near') === '1'
   const urlAmenities = (params.get('amenity') || '').split(',').filter(Boolean)
+  // Provenance dimension (?source=) — set by SourceBadge clicks on listing
+  // cards and profile saves; validated against the known values.
+  const urlSourceRaw = params.get('source')
+  const urlSource = urlSourceRaw === 'firecrawl' || urlSourceRaw === 'live' || urlSourceRaw === 'curated' ? urlSourceRaw : ''
 
   const [searchTerm, setSearchTerm] = useState(urlQ)
   const [debouncedSearch, setDebouncedSearch] = useState(urlQ)
@@ -100,6 +104,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const [nearMe, setNearMe] = useState(urlNear)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [amenities, setAmenities] = useState<string[]>(urlAmenities)
+  const [activeSource, setActiveSource] = useState<'' | 'firecrawl' | 'live' | 'curated'>(urlSource)
   const [locating, setLocating] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
@@ -135,6 +140,28 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const pickerTrip = useQuery(api.trips.getWithStops, pickerTripId ? { id: pickerTripId } : 'skip')
   const signInRef = useRef<HTMLDivElement>(null)
   const [pendingSaveId, setPendingSaveId] = useState<string | null>(null)
+  // Add-to-trip after sign-in: remember which listing the guest wanted so the
+  // picker opens the moment they land back, signed in.
+  const [pendingAddId, setPendingAddId] = useState<Id<'listings'> | null>(null)
+
+  function openTripPicker(listingId: Id<'listings'>) {
+    if (!isSignedIn) {
+      setPendingAddId(listingId)
+      signInRef.current?.click()
+      return
+    }
+    setPickerListingId(listingId)
+    setPickerTripId(null)
+  }
+
+  useEffect(() => {
+    if (isSignedIn && pendingAddId) {
+      const id = pendingAddId
+      setPendingAddId(null)
+      setPickerListingId(id)
+      setPickerTripId(null)
+    }
+  }, [isSignedIn, pendingAddId])
 
   useEffect(() => {
     if (isSignedIn && pendingSaveId) {
@@ -172,6 +199,11 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     }
     if (amenities.includes('freeCancellation')) items = items.filter(i => i.freeCancellation)
     if (amenities.includes('instantConfirm')) items = items.filter(i => i.instantConfirm)
+    // Provenance dimension — mirrors sourceToFilter(): 'live' covers the
+    // http/wikipedia scrapers, 'curated' is anything without a scraper mark.
+    if (activeSource === 'firecrawl') items = items.filter(i => i.source === 'firecrawl')
+    else if (activeSource === 'live') items = items.filter(i => i.source === 'scraper' || i.source === 'wikipedia')
+    else if (activeSource === 'curated') items = items.filter(i => !i.source)
     switch (sort) {
       case 'recent': items.sort((a, b) => (b.scrapedAt ?? b._creationTime) - (a.scrapedAt ?? a._creationTime)); break
       case 'price_asc': items.sort((a, b) => a.price - b.price); break
@@ -179,7 +211,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
       case 'rating': items.sort((a, b) => b.rating - a.rating); break
     }
     return items
-  }, [rawItems, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, amenities])
+  }, [rawItems, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, amenities, activeSource])
 
   useEffect(() => {
     const p = new URLSearchParams()
@@ -189,13 +221,14 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     if (priceNarrowed) { p.set('min', String(activePrice[0])); p.set('max', String(activePrice[1])) }
     if (nearMe) p.set('near', '1')
     if (amenities.length > 0) p.set('amenity', amenities.join(','))
+    if (activeSource) p.set('source', activeSource)
     if (sort !== 'recommended') p.set('sort', sort)
     const qs = p.toString()
     const target = `/discover/${vertical}${qs ? `?${qs}` : ''}`
     if (target !== window.location.pathname + window.location.search) {
       router.replace(target, { scroll: false })
     }
-  }, [debouncedSearch, activeFilter, rating, sort, priceNarrowed, activePrice, nearMe, amenities, vertical, router])
+  }, [debouncedSearch, activeFilter, rating, sort, priceNarrowed, activePrice, nearMe, amenities, activeSource, vertical, router])
 
   useEffect(() => {
     setSearchTerm(urlQ)
@@ -206,9 +239,10 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     setPriceRange(urlMin && urlMax ? [parseInt(urlMin, 10), parseInt(urlMax, 10)] : null)
     setNearMe(urlNear)
     setAmenities((params.get('amenity') || '').split(',').filter(Boolean))
-  }, [urlQ, urlFilter, urlRating, urlSort, urlMin, urlMax, urlNear, params])
+    setActiveSource(urlSourceRaw === 'firecrawl' || urlSourceRaw === 'live' || urlSourceRaw === 'curated' ? urlSourceRaw : '')
+  }, [urlQ, urlFilter, urlRating, urlSort, urlMin, urlMax, urlNear, urlSourceRaw, params])
 
-  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [debouncedSearch, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, amenities])
+  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [debouncedSearch, activeFilter, rating, sort, activePrice[0], activePrice[1], nearMe, coords, amenities, activeSource])
 
   // Auto-refresh stale listings from the scraper — but only once per session
   // per vertical, so a page visit doesn't trigger a paid scrape every time.
@@ -237,6 +271,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     setNearMe(false)
     setCoords(null)
     setAmenities([])
+    setActiveSource('')
   }
 
   function toggleAmenity(value: string) {
@@ -511,6 +546,11 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                       Near me <X className="size-3.5" />
                     </button>
                   )}
+                  {activeSource && (
+                    <button onClick={() => setActiveSource('')} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                      {activeSource === 'firecrawl' ? 'AI-scraped' : activeSource === 'live' ? 'Live-scraped' : 'Curated'} <X className="size-3.5" />
+                    </button>
+                  )}
                   {amenities.map(value => (
                     <button key={value} onClick={() => toggleAmenity(value)} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
                       {value === 'freeCancellation' ? 'Free cancellation' : 'Instant confirmation'} <X className="size-3.5" />
@@ -603,7 +643,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                     </Link>
                     <button
                       aria-label="Add to a trip"
-                      onClick={e => { e.preventDefault(); setPickerListingId(item._id); setPickerTripId(null) }}
+                      onClick={e => { e.preventDefault(); openTripPicker(item._id) }}
                       className="absolute right-12 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/60"
                     >
                       <Plus className="size-4" />

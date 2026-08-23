@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
+import { isValidConvexId } from '@/lib/id'
 import { Camera, LayoutGrid, Map as MapIcon, Sparkles, Timeline } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -56,9 +57,12 @@ export function Moments() {
   // read-only here (the owner's album is private to them), so the dropdown
   // only offers owned trips and shared selections get a notice instead.
   const ownedTrips = (trips ?? []).filter(t => t.role === 'owner')
-  const urlTrip = params.get('trip')
+  // A hand-edited /moments?trip=<garbage> link must fall back to the default
+  // selection instead of feeding a malformed id into Convex (which throws).
+  const urlTripRaw = params.get('trip')
+  const urlTrip = urlTripRaw && isValidConvexId(urlTripRaw) ? (urlTripRaw as Id<'trips'>) : undefined
   const [selectedId, setSelectedId] = useState<Id<'trips'> | undefined>(undefined)
-  const selected = selectedId ?? (urlTrip as Id<'trips'> | undefined) ?? trips?.[0]?._id
+  const selected = selectedId ?? urlTrip ?? trips?.[0]?._id
   const selectedOwned = ownedTrips.some(t => t._id === selected)
   const moments = useQuery(api.moments.list, selected ? { tripId: selected } : 'skip')
 
