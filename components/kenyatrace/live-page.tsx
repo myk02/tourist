@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Switch } from '@/components/ui/switch'
 import { geocodeArea } from '@/lib/geocode'
 import { localDateOnly, timeAgo } from '@/lib/dates'
-import { readCache, writeCache, type CacheEntry } from '@/lib/offline-cache'
+import { readCache, writeCache, readCacheFresh, type CacheEntry } from '@/lib/offline-cache'
 import { cn } from '@/lib/utils'
 import { KenyaMap } from './kenya-map'
 import { NotFound, useTripId } from './shared'
@@ -51,10 +51,10 @@ export function Track() {
   // behind an honest "synced X ago" chip instead of a forever-shimmer.
   const [cached, setCached] = useState<CacheEntry<TrackSnapshot> | null>(null)
   useEffect(() => {
-    if (id) setCached(readCache(`kt-track-${id}`))
+    if (id) setCached(readCacheFresh(`kt-track-${id}`, 7 * 24 * 60 * 60 * 1000) ?? readCache(`kt-track-${id}`))
   }, [id])
   useEffect(() => {
-    if (!id || trip == null || recorded === undefined) return
+    if (!id || trip == null || recorded === undefined || me === undefined) return
     writeCache(`kt-track-${id}`, { trip, recorded, consent: me?.trackingConsent === true } satisfies TrackSnapshot)
   }, [id, trip, recorded, me?.trackingConsent])
 

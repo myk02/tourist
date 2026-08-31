@@ -1,7 +1,8 @@
-import { chatRaw } from '@/lib/ai'
+import { chatRaw, extractJson } from '@/lib/ai'
 import { budgetTierPrompt, validatePlanBudget, validateReplanDayCost } from '@/lib/budget'
 import { seasonGuidance } from '@/lib/seasons'
 import { mapWithConcurrency, drivingLeg } from '@/lib/travel'
+import { rateLimit, getClientKey } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 // Plan generation legitimately takes a while (multi-attempt model calls plus
@@ -232,15 +233,7 @@ function validateOriginStart(legs: { from: string }[], origin: string, originLat
   }
 }
 
-function extractJson(text: string): string {
-  let t = text.trim()
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fence) t = fence[1].trim()
-  const start = t.indexOf('{')
-  const end = t.lastIndexOf('}')
-  if (start === -1 || end <= start) throw new Error('The AI did not return a JSON object')
-  return t.slice(start, end + 1).replace(/[\u0000-\u001F]/g, ' ')
-}
+// extractJson is shared from lib/ai.ts — free-model JSON parsing is tested once.
 
 /** Maps a catalog vertical to an itinerary kind. */
 function kindFromVertical(vertical: string): string {
@@ -354,8 +347,10 @@ async function attachTravelTimes(stops: { day: number; lat?: number; lng?: numbe
   for (let i = 1; i < stops.length; i++) {
     const prev = stops[i - 1]
     const cur = stops[i]
-    if (prev.day === cur.day && prev.lat != null && prev.lng != null && cur.lat != null && cur.lng != null) {
-      legs.push({ index: i, from: { lat: prev.lat, lng: prev.lng }, to: { lat: cur.lat, lng: cur.lng } })
+    const hasCoords = (s: { lat?: number; lng?: number }) =>
+      s.lat != null && s.lng != null && Number.isFinite(s.lat) && Number.isFinite(s.lng) && !(s.lat === 0 && s.lng === 0)
+    if (prev.day === cur.day && hasCoords(prev) && hasCoords(cur)) {
+      legs.push({ index: i, from: { lat: prev.lat!, lng: prev.lng! }, to: { lat: cur.lat!, lng: cur.lng! } })
     }
   }
   const results = await mapWithConcurrency(legs, 3, leg => drivingLeg(leg.from, leg.to))
@@ -416,6 +411,13 @@ function catalogPrompt(candidates: Candidate[]): string {
 
 export async function POST(request: Request) {
   try {
+    const rl = rateLimit(`plan:${getClientKey(request)}`, 10, 60_000)
+    if (!rl.ok) {
+      return Response.json({ error: 'Too many trip requests — please wait a minute and try again.' }, { status: 429 })
+    }
+    if (!process.env.OPENROUTER_API_KEY) {
+      return Response.json({ error: 'Trip planner is temporarily unavailable — try again shortly.' }, { status: 503 })
+    }
     const body = await request.json()
 
     if (body?.mode === 'day') {
@@ -498,6 +500,8 @@ export async function POST(request: Request) {
       )
     }
     const message = error instanceof Error ? error.message : 'Unable to build a plan'
-    return Response.json({ error: message }, { status: 400 })
+    // Surface provider config errors as 503, not 400, so clients don't retry blindly.
+    const isConfig = /OPENROUTER_API_KEY is not configured/i.test(message)
+    return Response.json({ error: message }, { status: isConfig ? 503 : 400 })
   }
 }

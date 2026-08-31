@@ -181,11 +181,13 @@ export const verifyAndConfirmDayPack = action({
     const res = await fetch(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(purchase.reference)}`, {
       headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
     })
+    if (!res.ok) return { verified: false, days: 0 }
     const data = await res.json().catch(() => null)
     const tx = data?.data
     const success =
       data?.status === true &&
       tx?.status === "success" &&
+      tx?.reference === purchase.reference &&
       tx?.amount === purchase.amount * 100 &&
       (tx?.currency ?? "KES") === purchase.currency
     if (!success) return { verified: false, days: 0 }

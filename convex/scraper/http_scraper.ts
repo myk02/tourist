@@ -1,6 +1,6 @@
 import { v } from "convex/values"
 import { internalAction } from "../_generated/server"
-import { api, internal } from "../_generated/api"
+import { internal } from "../_generated/api"
 import { STALE_AFTER_MS } from "./constants"
 
 const USER_AGENT = "KenyaTrace/1.0 (compatible; Bot for scraping Kenya travel data)"
@@ -30,7 +30,7 @@ async function fetchHTML(url: string, retry = 0): Promise<string | null> {
     })
     if (!response.ok) {
       if (retry < MAX_RETRIES) {
-        await sleep(REQUEST_DELAY * retry)
+        await sleep(REQUEST_DELAY * (retry + 1))
         return fetchHTML(url, retry + 1)
       }
       return null
@@ -38,7 +38,7 @@ async function fetchHTML(url: string, retry = 0): Promise<string | null> {
     return await response.text()
   } catch {
     if (retry < MAX_RETRIES) {
-      await sleep(REQUEST_DELAY * retry)
+      await sleep(REQUEST_DELAY * (retry + 1))
       return fetchHTML(url, retry + 1)
     }
     return null
@@ -405,11 +405,16 @@ export const scrapeVertical = internalAction({
     try {
       const items = await scraper(ctx, now)
       if (items.length > 0) {
-        await ctx.runMutation(api.listings.upsertScraped, { vertical, items })
+        await ctx.runMutation(internal.listings.upsertScraped, { vertical, items })
         console.log(`[scraper] ${vertical}: scraped ${items.length} items`)
+      } else {
+        throw new Error(`Scrape for ${vertical} returned no items`)
       }
     } catch (error) {
       console.error(`[scraper] ${vertical}: failed -`, error)
+      // Rethrow so callers report failure instead of claiming a successful
+      // refresh that never wrote anything.
+      throw new Error(`Scrape for ${vertical} failed: ${String(error)}`, { cause: error })
     }
   },
 })

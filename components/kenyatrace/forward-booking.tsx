@@ -55,8 +55,11 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text }),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || 'Could not read this email')
+      }
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not read this email')
       setParsed(data)
       setEdit({ ...data })
     } catch (e) {

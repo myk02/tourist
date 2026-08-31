@@ -96,7 +96,8 @@ export const lastScraped = query({
   },
 })
 
-export const upsertScraped = mutation({
+/** Internal: called by the scraper after a successful scrape run. */
+export const upsertScraped = internalMutation({
   args: {
     vertical: v.string(),
     items: v.array(v.object({
@@ -148,6 +149,36 @@ export const upsertScraped = mutation({
   },
 })
 
+/**
+ * Seeds the curated rows for a single vertical when that vertical has no
+ * listings at all. Called by the Discover page the first time an empty
+ * category is opened (e.g. Taxis), so a fresh database shows real content
+ * instead of "Coming soon". No-op when data already exists.
+ */
+export const seedVertical = mutation({
+  args: { vertical: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Sign in required")
+    const existing = await ctx.db
+      .query("listings")
+      .withIndex("by_vertical", (q) => q.eq("vertical", args.vertical))
+      .collect()
+    if (existing.length > 0) return { seeded: 0 }
+
+    const data = getSeedData().filter((item) => item.vertical === args.vertical)
+    for (const item of data) {
+      await ctx.db.insert("listings", {
+        ...item,
+        image: wikimediaThumb(item.image),
+        ...trustDefaults({ vertical: args.vertical, rating: item.rating, reviews: item.reviews, tags: item.tags }),
+      })
+    }
+    console.log(`[seedVertical] ${args.vertical}: seeded ${data.length} curated listings`)
+    return { seeded: data.length }
+  },
+})
+
 export const backfillTrust = internalMutation({
   handler: async (ctx) => {
     const all = await ctx.db.query("listings").collect()
@@ -173,7 +204,8 @@ function trustDefaults(item: { vertical: string; rating: number; reviews: number
   return { instantConfirm: item.reviews >= 200, freeCancellation: item.reviews >= 100 || tags.includes('cancellation') }
 }
 
-export const clearVertical = mutation({
+/** Internal: wipes a vertical before clearAndRescrape. */
+export const clearVertical = internalMutation({
   args: { vertical: v.string() },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -187,7 +219,8 @@ export const clearVertical = mutation({
   },
 })
 
-export const seed = mutation({
+/** Internal: one-off bootstrap seeding, runnable from the dashboard. */
+export const seed = internalMutation({
   args: {},
   handler: async (ctx) => {
     const existing = await ctx.db.query("listings").collect()
@@ -218,10 +251,9 @@ function taxiImage(item: { name: string; location: string }): string {
  * Normalizes every listing's image to a fast, valid Wikimedia thumbnail
  * (800px and full-size originals both 404/slow) and fills any empty image
  * with a sensible fallback. Run once from the Convex dashboard (Functions →
- * listings → backfillImages) or via the "Upgrade images" button on the
- * Discover page to upgrade live data.
+ * listings → backfillImages). Not callable from the client.
  */
-export const backfillImages = mutation({
+export const backfillImages = internalMutation({
   args: {},
   handler: async (ctx) => {
     const byName = new Map(getSeedData().map((item) => [item.name, wikimediaThumb(item.image)]))

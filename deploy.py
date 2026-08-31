@@ -27,7 +27,7 @@ USAGE
     python3 deploy.py --env-file ../.env.local "msg"
 
 Full behavior, prerequisites, and troubleshooting are documented in
-DEPLOY_AGENT.md — read that first if you're an AI agent invoking this script.
+this file's header + .env.example — DEPLOY_AGENT.md was consolidated here.
 """
 
 from __future__ import annotations

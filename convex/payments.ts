@@ -55,6 +55,7 @@ export const initialize = mutation({
     if (booking.status === "cancelled") throw new Error("Cancelled bookings can't be paid")
     if (booking.status === "paid") throw new Error("This booking is already paid")
     if (booking.amount <= 0) throw new Error("Nothing to pay for this booking")
+    if (!booking.listingId) throw new Error("Email-forwarded bookings can't be paid online — contact support")
 
     // The popup's checkout initializes the transaction client-side with the
     // public key, so the reference must be fresh for every attempt — reusing
@@ -64,14 +65,10 @@ export const initialize = mutation({
     // Every attempt gets its OWN pending row (never patched): a retry after a
     // closed/crashed popup must not overwrite a reference the user may already
     // have paid with, or two successful charges could map to a single payment.
-    // Superseded pending attempts are removed so rows don't accumulate.
+    // Prior pendings are kept so the webhook can still exact-match a charge
+    // for a previous reference that lands after a retry. They self-expire via
+    // the 7-day window in markPaidByCharge and can be GC'd by a cron.
     const reference = `KT-PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
-    const stale = await ctx.db
-      .query("payments")
-      .withIndex("by_booking", q => q.eq("bookingId", bookingId))
-      .filter(q => q.eq(q.field("status"), "pending"))
-      .collect()
-    await Promise.all(stale.map(row => ctx.db.delete(row._id)))
 
     const paymentId = await ctx.db.insert("payments", {
       ownerId: identity.subject,
@@ -102,11 +99,13 @@ export const verifyAndConfirm = action({
     const res = await fetch(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(payment.reference)}`, {
       headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
     })
+    if (!res.ok) return { verified: false }
     const data = await res.json().catch(() => null)
     const tx = data?.data
     const success =
       data?.status === true &&
       tx?.status === "success" &&
+      tx?.reference === payment.reference &&
       tx?.amount === payment.amount * 100 &&
       (tx?.currency ?? "KES") === payment.currency
     if (!success) return { verified: false }

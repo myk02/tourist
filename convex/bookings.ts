@@ -38,7 +38,12 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) throw new Error("Sign in required")
   await requireActiveAccess(ctx.db, identity.subject)
-  if (args.amount < 0) throw new Error("Invalid reservation amount")
+  // Amount must match the marketplace listing exactly — a client-supplied
+  // amount would let anyone understate what it owes (the pay flow trusts
+  // booking.amount when verifying against Paystack).
+  const listing = await ctx.db.get(args.listingId as Id<"listings">)
+  if (!listing) throw new Error("Listing not found")
+  if (args.amount !== listing.price) throw new Error("Reservation price does not match the current listing price")
   const reference = `KT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
 
   // When the reservation is linked to a trip, mirror it as a trip stop so it
@@ -47,11 +52,10 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
   if (args.tripId) {
     const trip = await ctx.db.get(args.tripId)
     if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
-    const listing = await ctx.db.get(args.listingId as Id<"listings">)
     const existing = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", args.tripId!)).collect()
     const day = args.checkIn ? dayFromDate(trip.startDate, args.checkIn) : (existing.length ? Math.max(...existing.map(s => s.day)) : 1)
     // duration is stored in minutes; a stay is 24h per night booked.
-    const kind = listing ? kindFromVertical(listing.vertical) : "Experience"
+    const kind = kindFromVertical(listing.vertical)
     const duration = kind === "Stay" && args.checkIn && args.checkOut
       ? Math.max(Math.round((new Date(`${args.checkOut}T00:00:00`).getTime() - new Date(`${args.checkIn}T00:00:00`).getTime()) / 86400000), 1) * 1440
       : undefined
@@ -99,7 +103,9 @@ export const createFromEmail = mutation({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Sign in required")
     await requireActiveAccess(ctx.db, identity.subject)
-    if (args.amount < 0) throw new Error("Invalid reservation amount")
+    // No marketplace listing backs an email-derived booking, so the amount
+    // can't be cross-checked — but it must be a plausible positive amount.
+    if (!(args.amount > 0) || args.amount > 10_000_000) throw new Error("Invalid reservation amount")
     const reference = args.reference || `KT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
     const kind = args.type === "Stay" ? "Stay" : args.type === "Flight" || args.type === "Transport" ? "Transport" : "Experience"
 

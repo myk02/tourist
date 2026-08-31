@@ -175,6 +175,7 @@ export function WhereStage() {
                   <button
                     key={t.id}
                     type="button"
+                    aria-pressed={draft.traveler === t.id}
                     onClick={() => setDraft(d => ({ ...d, traveler: t.id }))}
                     className={cn(
                       'rounded-xl border p-3 text-left transition-colors',

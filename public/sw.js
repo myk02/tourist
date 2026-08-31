@@ -7,7 +7,7 @@
  * pages, /api/*, Convex, Clerk, map tiles — passes straight through:
  * trip data already has its own offline-lite layer in localStorage.
  */
-const VERSION = 'kt-static-v1'
+const VERSION = 'kt-static-v2'
 
 self.addEventListener('install', () => self.skipWaiting())
 
@@ -32,18 +32,39 @@ self.addEventListener('fetch', event => {
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||
     url.pathname === '/kenya-hero.png' ||
-    url.pathname === '/placeholder.jpg'
-  if (!cacheable) return
-  event.respondWith(
-    caches.open(VERSION).then(async cache => {
-      const cached = await cache.match(req)
-      const network = fetch(req)
-        .then(res => {
-          if (res && res.ok) cache.put(req, res.clone())
-          return res
+    url.pathname === '/placeholder.jpg' ||
+    url.pathname === '/apple-icon.png' ||
+    url.pathname === '/icon.svg'
+  if (cacheable) {
+    event.respondWith(
+      caches.open(VERSION).then(async cache => {
+        const cached = await cache.match(req)
+        const network = fetch(req)
+          .then(res => {
+            if (res && res.ok) cache.put(req, res.clone())
+            return res
+          })
+          .catch(() => cached)
+        return cached || network
+      }),
+    )
+    return
+  }
+  // Offline navigation fallback: when the browser is offline and navigates
+  // (e.g. installed app opened with weak signal), try network then serve
+  // the cached shell hero so the app at least paints instead of dino.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req).catch(async () => {
+        const cache = await caches.open(VERSION)
+        // Try cached hero as minimal shell paint; else generic offline.
+        const fallback = await cache.match('/kenya-hero.png')
+        if (fallback) return fallback
+        return new Response('You are offline — retry when connected.', {
+          status: 503,
+          headers: { 'content-type': 'text/plain' },
         })
-        .catch(() => cached)
-      return cached || network
-    }),
-  )
+      }),
+    )
+  }
 })

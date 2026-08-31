@@ -1,6 +1,7 @@
 import { chatJSON } from '@/lib/ai'
 import { seasonGuidance } from '@/lib/seasons'
 import { z } from 'zod'
+import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
 /**
  * The AI trip brief: a short, honest summary of a *saved* trip. Grounded the
@@ -49,6 +50,10 @@ Rules:
 
 export async function POST(request: Request) {
   try {
+    const rl = rateLimit(`brief:${getClientKey(request)}`, 20, 60_000)
+    if (!rl.ok) {
+      return Response.json({ error: 'Too many requests — try again shortly.' }, { status: 429 })
+    }
     const body = await request.json()
     const input = requestSchema.parse(body)
     const stopsText = input.stops
@@ -72,6 +77,7 @@ export async function POST(request: Request) {
     return Response.json(brief)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not generate the trip brief'
-    return Response.json({ error: message }, { status: 400 })
+    const isConfig = /OPENROUTER_API_KEY is not configured/i.test(message)
+    return Response.json({ error: message }, { status: isConfig ? 503 : 400 })
   }
 }

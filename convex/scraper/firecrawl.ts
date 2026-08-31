@@ -1,6 +1,6 @@
 import { v } from "convex/values"
 import { internalAction } from "../_generated/server"
-import { api } from "../_generated/api"
+import { internal } from "../_generated/api"
 import { VERTICAL_CONFIG } from "./verticalConfig"
 import { wikimediaThumb } from "../../lib/kenya-data"
 
@@ -146,7 +146,7 @@ export const scrapeVertical = internalAction({
     if (items.length === 0) throw new Error("Firecrawl extract returned no data")
 
     console.log(`[firecrawl] ${vertical}: storing ${items.length} items`)
-    const result = await ctx.runMutation(api.listings.upsertScraped, { vertical, items })
+    const result = await ctx.runMutation(internal.listings.upsertScraped, { vertical, items })
     console.log(`[firecrawl] ${vertical}: ${result.inserted} rows upserted`)
     return { status: "completed", stored: items.length }
   },

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { parseBookingEmail } from '@/lib/parse-booking'
 import { aiParseBooking, mergeParsedBooking, regexParseIsWeak } from '@/lib/parse-booking-ai'
+import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -21,8 +22,12 @@ export const runtime = 'nodejs'
  */
 export async function POST(request: Request) {
   try {
+    const rl = rateLimit(`parse-booking:${getClientKey(request)}`, 20, 60_000)
+    if (!rl.ok) {
+      return NextResponse.json({ error: 'Too many requests — try again in a minute.' }, { status: 429 })
+    }
     const body = await request.json().catch(() => ({}))
-    const text = typeof body?.text === 'string' ? body.text : ''
+    const text = typeof body?.text === 'string' ? body.text.slice(0, 20_000) : ''
     if (!text.trim()) {
       return NextResponse.json({ error: 'No email text provided. Paste the full confirmation email.' }, { status: 400 })
     }

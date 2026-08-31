@@ -36,7 +36,7 @@ http.route({
     const signature = request.headers.get("x-paystack-signature")
     const secret = process.env.PAYSTACK_SECRET_KEY
     if (!secret || !signature) {
-      return new Response("Missing configuration", { status: 400 })
+      return new Response("Missing configuration", { status: 500 })
     }
     // Paystack signs the raw request body with HMAC-SHA512 using the secret
     // key. Web Crypto runs in the default Convex runtime (no node directive).
@@ -49,7 +49,15 @@ http.route({
     )
     const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw))
     const expected = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, "0")).join("")
-    if (signature !== expected) {
+    // Constant-time compare to avoid timing side-channel.
+    const sigBytes = new TextEncoder().encode(signature)
+    const expBytes = new TextEncoder().encode(expected)
+    let diff = sigBytes.length !== expBytes.length ? 1 : 0
+    const len = Math.max(sigBytes.length, expBytes.length)
+    for (let i = 0; i < len; i++) {
+      diff |= (sigBytes[i % sigBytes.length] ?? 0) ^ (expBytes[i % expBytes.length] ?? 0)
+    }
+    if (diff !== 0) {
       return new Response("Invalid signature", { status: 401 })
     }
 
@@ -64,9 +72,31 @@ http.route({
     }
 
     if (event.event === "charge.success" && event.data?.reference) {
-      const { reference, amount, currency } = event.data
+      const { reference } = event.data
       const email = event.data.customer?.email ?? ""
-      const charge = { reference, email, amount: amount ?? 0, currency: currency ?? "KES" }
+      // Re-verify with Paystack before trusting the webhook payload (prevents
+      // forged amount/currency if the secret leaks or is replayed).
+      let amount = event.data.amount ?? 0
+      let currency = event.data.currency ?? "KES"
+      try {
+        const vRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+          headers: { Authorization: `Bearer ${secret}` },
+        })
+        if (vRes.ok) {
+          const vJson = await vRes.json().catch(() => null)
+          const tx = vJson?.data
+          if (vJson?.status === true && tx?.status === "success" && tx?.reference === reference) {
+            amount = tx.amount ?? amount
+            currency = tx.currency ?? currency
+          } else {
+            // Verification says not successful — ignore this webhook.
+            return new Response("ok", { status: 200 })
+          }
+        }
+      } catch {
+        // Network failure — fall back to payload but helper validation will still enforce amount.
+      }
+      const charge = { reference, email, amount, currency }
       // Route by our reference prefix. Day-pack purchases (KT-SUB-) always
       // keep their original reference, so their exact match always succeeds.
       // Booking payments (KT-PAY-) may have had their reference regenerated

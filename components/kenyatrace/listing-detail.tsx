@@ -18,10 +18,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { isValidConvexId } from '@/lib/id'
 import { localDateOnly } from '@/lib/dates'
 import { formatKES } from '@/lib/kenya-data'
+import { cn } from '@/lib/utils'
 import { toReplaceStopsPayload } from '@/lib/stop-fields'
 import { ListingImage, NotFound, SourceBadge, sourceToFilter } from './shared'
 import { PaywallDialog } from './paywall'
 import { KenyaMap } from './kenya-map'
+
+/** Trip-stop kind for a listing vertical — transport verticals book as Transport stops, not Experience. */
+function stopKindFor(vertical?: string): string {
+  if (vertical === 'stays') return 'Stay'
+  if (vertical === 'flights' || vertical === 'taxis' || vertical === 'cars') return 'Transport'
+  return 'Experience'
+}
 
 export function Detail({ id }: { id: string }) {
   const { isSignedIn } = useUser()
@@ -95,17 +103,30 @@ export function Detail({ id }: { id: string }) {
     })
   }
 
+  // Transport verticals book one-way (date + passengers) instead of the
+  // stay-style check-in/check-out range.
+  const isOneWayTransport = item?.vertical === 'taxis' || item?.vertical === 'flights'
+
   const [adding, setAdding] = useState(false)
   const [creatingTrip, setCreatingTrip] = useState(false)
 
   async function confirmAdd() {
     if (!item || !selectedId || !selectedTrip || adding) return
+    if (!selectedTrip.stops) {
+      toast.error('Trip data is still loading — try again')
+      return
+    }
     setAdding(true)
     try {
       // Full-fidelity payload — a subset here would wipe completedAt/reason/
       // locks/images off every existing stop (replaceStops is delete+insert).
       const existing = toReplaceStopsPayload(selectedTrip.stops)
-      const newStop = { name: item.name, place: item.location, day: Math.max(...(existing.length ? existing.map(s => s.day) : [0]), 1), time: '09:00', cost: item.price, kind: item.vertical === 'stays' ? 'Stay' : 'Experience', order: existing.length, lat: item.lat, lng: item.lng }
+      if (existing.some(s => s.listingId === item._id)) {
+        toast.error('This place is already in that trip')
+        setAdding(false)
+        return
+      }
+      const newStop = { name: item.name, place: item.location, day: Math.max(...(existing.length ? existing.map(s => s.day) : [0]), 1), time: '09:00', cost: item.price, kind: stopKindFor(item.vertical), order: existing.length, lat: item.lat, lng: item.lng, verified: true, source: 'catalog' as const, listingId: item._id, vertical: item.vertical, unit: item.unit, image: item.image }
       await replaceStops({ tripId: selectedId, stops: [...existing, newStop] })
       toast.success(`Added to ${selectedTrip.name}`)
       setPickerOpen(false)
@@ -122,7 +143,7 @@ export function Detail({ id }: { id: string }) {
     gate(async () => {
       setCreatingTrip(true)
       try {
-        const id = await create({ name: item.name + ' Trip', destination: item.location, startDate: localDateOnly(new Date()), endDate: localDateOnly(new Date(Date.now() + 86400000)), budget: Math.max(item.price * 3, 50000), totalCost: item.price, stops: [{ name: item.name, place: item.location, day: 1, time: '09:00', cost: item.price, kind: item.vertical === 'stays' ? 'Stay' : 'Experience', order: 0, lat: item.lat, lng: item.lng }] })
+        const id = await create({ name: item.name + ' Trip', destination: item.location, startDate: localDateOnly(new Date()), endDate: localDateOnly(new Date(Date.now() + 86400000)), budget: Math.max(item.price * 3, 50000), totalCost: item.price, stops: [{ name: item.name, place: item.location, day: 1, time: '09:00', cost: item.price, kind: stopKindFor(item.vertical), order: 0, lat: item.lat, lng: item.lng }] })
         toast.success('Trip created!')
         router.push(`/trips/${id}`)
         setPickerOpen(false)
@@ -162,6 +183,11 @@ export function Detail({ id }: { id: string }) {
   )
 
   if (!validId) return <NotFound />
+  // undefined = still loading (shimmer), null = well-formed id for a listing
+  // that no longer exists (removed or rescraped away) — show 404, not a
+  // half-empty ghost page with fallback hero and KSh 0.
+  if (item === undefined) return <div className="kt-shimmer min-h-[100svh]" />
+  if (!item) return <NotFound />
 
   return (
     <>
@@ -288,11 +314,11 @@ export function Detail({ id }: { id: string }) {
         <DialogContent>
           <DialogHeader><DialogTitle>Request reservation</DialogTitle><DialogDescription>No payment now — pay later from your bookings.</DialogDescription></DialogHeader>
           <FieldGroup>
-            <div className="grid grid-cols-2 gap-4">
-              <Field><FieldLabel>Check-in</FieldLabel><Input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></Field>
-              <Field><FieldLabel>Check-out</FieldLabel><Input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} /></Field>
+            <div className={cn('grid gap-4', isOneWayTransport ? 'grid-cols-1' : 'grid-cols-2')}>
+              <Field><FieldLabel>{isOneWayTransport ? 'Pickup date' : 'Check-in'}</FieldLabel><Input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></Field>
+              {!isOneWayTransport && <Field><FieldLabel>Check-out</FieldLabel><Input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} /></Field>}
             </div>
-            <Field><FieldLabel>Guests</FieldLabel><Input type="number" min={1} max={20} value={guests} onChange={e => setGuests(parseInt(e.target.value, 10) || 1)} /></Field>
+            <Field><FieldLabel>{isOneWayTransport ? 'Passengers' : 'Guests'}</FieldLabel><Input type="number" min={1} max={20} value={guests} onChange={e => setGuests(parseInt(e.target.value, 10) || 1)} /></Field>
             <Field>
               <FieldLabel>Link to trip (optional)</FieldLabel>
               <Select value={reserveTripId?.toString() || ''} onValueChange={v => setReserveTripId(v ? (v as Id<'trips'>) : null)}>

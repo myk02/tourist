@@ -5,6 +5,7 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -230,7 +231,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
   const [replanningDay, setReplanningDay] = useState<number | null>(null)
   const [hoveredStop, setHoveredStop] = useState<string | null>(null)
   const [mobileView, setMobileView] = useState<'list' | 'map'>(defaultMobileView)
-  const sensors = useSensors(useSensor(PointerSensor))
+  const sensors = useSensors(useSensor(PointerSensor), useSensor(TouchSensor))
 
   useEffect(() => {
     const t = setTimeout(() => setSearchTerm(addTerm), 300)
@@ -356,10 +357,15 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
   /**
    * Reorders stops within each day by a greedy nearest-neighbour walk over
    * their coordinates, cutting backtracking between consecutive stops while
-   * keeping every day's route and day boundaries intact.
+   * keeping every day's route and day boundaries intact. Locked stops stay
+   * pinned in place; only unlocked stops are reordered between them.
    */
   function optimizeRoute() {
     if (stops.length < 2) return
+    if (stops.some(s => s.locked)) {
+      toast.error('Unlock stops first to optimize — locked stops stay pinned')
+      return
+    }
     setStops(prev => {
       const byDay = new Map<number, Stop[]>()
       for (const s of prev) {
@@ -572,6 +578,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
         <div className="mt-3 flex w-fit items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1 lg:hidden">
           <button
             type="button"
+            aria-pressed={mobileView === 'list'}
             onClick={() => setMobileView('list')}
             className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', mobileView === 'list' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}
           >
@@ -579,6 +586,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
           </button>
           <button
             type="button"
+            aria-pressed={mobileView === 'map'}
             onClick={() => setMobileView('map')}
             className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', mobileView === 'map' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}
           >

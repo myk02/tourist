@@ -1,6 +1,7 @@
 import { generateText, Output } from 'ai'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { z } from 'zod'
+import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
 const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY!,
@@ -8,6 +9,13 @@ const openrouter = createOpenRouter({
 
 export async function POST(request: Request) {
   try {
+    const rl = rateLimit(`caption:${getClientKey(request)}`, 15, 60_000)
+    if (!rl.ok) {
+      return Response.json({ error: 'Too many caption requests — try again in a minute.' }, { status: 429 })
+    }
+    if (!process.env.OPENROUTER_API_KEY) {
+      return Response.json({ error: 'Caption service is not configured' }, { status: 503 })
+    }
     const { imageData } = await request.json()
     if (!imageData || typeof imageData !== 'string' || !imageData.startsWith('data:image/') || imageData.length > 15_000_000) {
       return Response.json({ error: 'A valid image is required' }, { status: 400 })

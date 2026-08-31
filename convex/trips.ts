@@ -72,6 +72,21 @@ export const getWithStops = query({ args: { id: v.id("trips") }, handler: async 
 
 const stop = v.object({ name: v.string(), place: v.string(), day: v.number(), time: v.string(), cost: v.number(), kind: v.string(), order: v.number(), lat: v.optional(v.number()), lng: v.optional(v.number()), locked: v.optional(v.boolean()), reason: v.optional(v.string()), verified: v.optional(v.boolean()), duration: v.optional(v.number()), source: v.optional(v.string()), listingId: v.optional(v.string()), vertical: v.optional(v.string()), unit: v.optional(v.string()),    image: v.optional(v.string()), travelKm: v.optional(v.number()), travelMins: v.optional(v.number()), travelRouted: v.optional(v.boolean()), completedAt: v.optional(v.number()) })
 
+function validateStops(stops: typeof stop.type[]) {
+  for (const s of stops) {
+    if (!s.name?.trim() || s.name.length > 200) throw new Error("Stop name must be 1-200 characters")
+    if (!s.place?.trim() || s.place.length > 120) throw new Error("Stop place must be 1-120 characters")
+    if (!(s.kind === "Stay" || s.kind === "Transport" || s.kind === "Experience" || s.kind === "Food")) throw new Error(`Invalid stop kind: ${s.kind}`)
+    if (!Number.isInteger(s.day) || s.day < 1 || s.day > 30) throw new Error("Stop day must be 1-30")
+    if (!Number.isInteger(s.order) || s.order < 0 || s.order > 1000) throw new Error("Stop order is invalid")
+    if (!Number.isFinite(s.cost) || s.cost < 0 || s.cost > 10_000_000) throw new Error("Stop cost is out of range")
+    if (s.lat !== undefined && (!Number.isFinite(s.lat) || s.lat < -90 || s.lat > 90)) throw new Error("Invalid stop latitude")
+    if (s.lng !== undefined && (!Number.isFinite(s.lng) || s.lng < -180 || s.lng > 180)) throw new Error("Invalid stop longitude")
+    if (s.travelKm !== undefined && (!Number.isFinite(s.travelKm) || s.travelKm < 0 || s.travelKm > 20000)) throw new Error("Invalid travel distance")
+    if (s.travelMins !== undefined && (!Number.isFinite(s.travelMins) || s.travelMins < 0 || s.travelMins > 100000)) throw new Error("Invalid travel duration")
+  }
+}
+
 function makeToken(): string {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 24)
 }
@@ -80,6 +95,11 @@ export const create = mutation({ args: { name: v.string(), destination: v.string
   const ownerId = await owner(ctx)
   await requireActiveAccess(ctx.db, ownerId)
   const { stops = [], ...trip } = args
+  if (trip.name.length > 120) throw new Error("Trip name is too long — 120 characters max")
+  if (trip.destination.length > 120) throw new Error("Trip destination is too long")
+  if (trip.budget < 0 || trip.budget > 10_000_000) throw new Error("Budget is out of range")
+  if (stops.length > 100) throw new Error("Too many stops")
+  validateStops(stops)
   // Every new trip gets a secret trace-share token so the owner can publish
   // their live trace with a public link at any time (generated up front, only
   // shared when the owner asks).
@@ -96,6 +116,8 @@ export const replaceStops = mutation({ args: { tripId: v.id("trips"), stops: v.a
   // Owners need active access to edit; invited collaborators ride on the
   // owner's subscription so sharing stays frictionless.
   if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  if (stops.length > 100) throw new Error("Too many stops")
+  validateStops(stops)
   const previous = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", tripId)).collect()
   await Promise.all(previous.map(item => ctx.db.delete(item._id)))
   await Promise.all(stops.map(item => ctx.db.insert("tripStops", { ...item, tripId })))

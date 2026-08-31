@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import { toReplaceStopsPayload } from '@/lib/stop-fields'
 import { KenyaMap, toPoint } from './kenya-map'
 import { ListingImage } from './shared'
+import { TaxiFareEstimator } from './taxi-fare-estimator'
 
 const NEAR_KM = 100
 
@@ -119,6 +120,18 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
   const rawItems = useQuery(api.listings.search, { vertical, term: debouncedSearch || undefined })
   const scrapeAction = useAction(api.scraper.index.searchWithScrape)
+  const seedVertical = useMutation(api.listings.seedVertical)
+
+  // Taxis has no live source worth scraping (ride-hail APIs are closed), so
+  // it runs fully on curated route data. If a fresh database opens the tab
+  // and finds nothing, seed the curated routes once per session.
+  const seedGuardRef = useRef(false)
+  useEffect(() => {
+    if (vertical === 'taxis' && rawItems && rawItems.length === 0 && !seedGuardRef.current) {
+      seedGuardRef.current = true
+      seedVertical({ vertical }).catch(console.error)
+    }
+  }, [vertical, rawItems, seedVertical])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300)
@@ -246,11 +259,15 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
   // Auto-refresh stale listings from the scraper — but only once per session
   // per vertical, so a page visit doesn't trigger a paid scrape every time.
+  // Only catalogs that were actually scraped before are refreshed: seeded /
+  // curated rows carry no scrapedAt on purpose and must never auto-scrape.
   const SCRAPE_GUARD_MS = 60 * 60 * 1000
   useEffect(() => {
+    if (vertical === 'taxis') return // curated-only vertical — no auto-scrape
     if (rawItems && rawItems.length > 0) {
-      const hasStale = rawItems.some(i => !i.scrapedAt || Date.now() - i.scrapedAt > 24 * 60 * 60 * 1000)
-      if (hasStale || (!rawItems.some(i => i.scrapedAt) && vertical !== 'taxis')) {
+      const scrapedAts = rawItems.map(i => i.scrapedAt).filter((t): t is number => typeof t === 'number')
+      const newest = scrapedAts.length ? Math.max(...scrapedAts) : null
+      if (newest !== null && Date.now() - newest > 24 * 60 * 60 * 1000) {
         const key = `kt_scrape_${vertical}`
         let lastScrape = 0
         try { lastScrape = parseInt(sessionStorage.getItem(key) || '0', 10) || 0 } catch { /* ignore */ }
@@ -313,12 +330,23 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   // Appends a listing as a stop on the chosen trip (same flow as the listing
   // detail page) — a one-click "Add to my trip" from the card.
   async function confirmAddToListing() {
-    if (!pickerListingId || !pickerTripId || !pickerTrip) return
+    if (!pickerListingId || !pickerTripId) {
+      toast.error('Choose a trip first')
+      return
+    }
+    if (!pickerTrip) {
+      toast.error('Trip data is still loading — try again')
+      return
+    }
     const item = rawItems?.find(i => i._id === pickerListingId)
     if (!item) return
     // Full-fidelity payload — a subset here would wipe completedAt/reason/
     // locks/images off every existing stop (replaceStops is delete+insert).
     const existing = toReplaceStopsPayload(pickerTrip.stops)
+    if (existing.some(s => s.listingId === item._id)) {
+      toast.error('This place is already in that trip')
+      return
+    }
     const kind = item.vertical === 'stays' ? 'Stay' : item.vertical === 'flights' || item.vertical === 'taxis' || item.vertical === 'cars' ? 'Transport' : 'Experience'
     try {
       await replaceStops({
@@ -483,6 +511,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                   return (
                     <button
                       key={option.value}
+                      type="button"
+                      aria-pressed={active}
                       onClick={() => (option.kind === 'amenity' ? toggleAmenity(option.value) : setActiveFilter(option.value as QuickFilter))}
                       className={cn(
                         'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
@@ -497,6 +527,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                   )
                 })}
                 <button
+                  type="button"
+                  aria-pressed={nearMe}
                   onClick={toggleNearMe}
                   disabled={locating}
                   className={cn(
@@ -604,6 +636,11 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-5">
+          {/* Fare estimator — taxis only. Sits above the route cards. */}
+          {vertical === 'taxis' && (
+            <TaxiFareEstimator routes={(filteredItems ?? []).map(r => ({ _id: r._id, name: r.name, location: r.location }))} />
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visible ? (
               visible.map(item => {
@@ -694,8 +731,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed py-12 text-center">
                 <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><Car className="size-6" /></span>
                 <div>
-                  <p className="font-serif text-2xl font-semibold tracking-tight">Coming soon</p>
-                  <p className="mx-auto mt-1 text-sm text-muted-foreground">Airport transfers and city rides.</p>
+                  <p className="font-serif text-2xl font-semibold tracking-tight">No rides match your filters</p>
+                  <p className="mx-auto mt-1 text-sm text-muted-foreground">Try the fare estimator above, or clear your filters.</p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button variant="outline" nativeButton={false} render={<Link href="/discover/cars" />}>Rent a car</Button>

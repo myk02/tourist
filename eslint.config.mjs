@@ -20,7 +20,7 @@ export default [
     },
     rules: {
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
       // Scrapers/AI-parsing code deliberately works with loosely-typed data.
       '@typescript-eslint/no-explicit-any': 'off',
       // AI output sanitization intentionally strips control characters

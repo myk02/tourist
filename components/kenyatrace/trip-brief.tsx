@@ -95,8 +95,11 @@ export function TripBriefCard({
           doneCount,
         }),
       })
+      if (!response.ok) {
+        const err = await response.json().catch(() => null)
+        throw new Error(err?.error || 'Could not generate the brief')
+      }
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Could not generate the brief')
       await updateTrip({ id: tripId, patch: { aiBrief: JSON.stringify(data) } })
       toast.success('Trip brief generated')
     } catch (error) {

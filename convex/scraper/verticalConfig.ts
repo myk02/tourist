@@ -81,4 +81,14 @@ export const VERTICAL_CONFIG: Record<string, VerticalConfig> = {
     extractPrompt: "Extract every car rental option in Kenya from the page. For each: car model or rental name, pickup city in Kenya, daily rental price in KES, rating, review count, a primary image URL, 2-4 tags (e.g. SUV, Economy, 4x4), and a short description. Include coordinates of the pickup location if shown.",
     schema: SHARED_SCHEMA,
   },
+  taxis: {
+    searchQueries: [
+      "site:uber.com OR site:bolt.eu taxi Nairobi Kenya fares per km",
+      "site:littlecab.co.ke OR site:wasili.co.ke ride prices Kenya",
+      "site:taxi2airport.com OR site:ask-kenya.com airport transfer Nairobi JKIA price",
+    ],
+    resultsPerQuery: 20,
+    extractPrompt: "Extract every taxi, ride-hailing or airport transfer in Kenya. For each: route name (e.g. JKIA to CBD), price in KES, ride type, duration, image URL, 2-3 tags and short description. Include coordinates if shown.",
+    schema: SHARED_SCHEMA,
+  },
 }

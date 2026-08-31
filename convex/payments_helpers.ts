@@ -49,9 +49,14 @@ export const markPaid = internalMutation({
 
 /**
  * Webhook path — matches the payment by reference first, then falls back to a
- * pending payment for the same customer email, amount and currency (covers
- * the rare case where a retry regenerated the reference while a charge for
- * the previous one was still in flight). Amount arrives in minor units.
+ * pending payment for the same customer, amount and currency (covers the rare
+ * case where a retry regenerated the reference while a charge for the previous
+ * one was still in flight). Amount arrives in minor units.
+ *
+ * The fallback is scoped as tightly as the charge allows: prefer payments
+ * whose owner is the account registered with the charge's customer email,
+ * then payments whose checkout email matches. Without the owner scope, two
+ * same-priced bookings on different accounts could settle each other.
  */
 export const markPaidByCharge = internalMutation({
   args: { reference: v.string(), email: v.string(), amount: v.number(), currency: v.string() },
@@ -59,22 +64,36 @@ export const markPaidByCharge = internalMutation({
     let payment = await ctx.db
       .query("payments")
       .withIndex("by_reference", q => q.eq("reference", reference))
-      .unique()
+      .first()
+    if (payment) {
+      // Direct reference match — still validate amount/currency before crediting.
+      if (payment.status === "paid") return { applied: false }
+      if (amount !== payment.amount * 100 || currency !== payment.currency) return { applied: false }
+    }
     if (!payment) {
       // Most recent attempt first — the regenerated reference always belongs
-      // to the latest `initialize` call.
-      payment = await ctx.db
+      // to the latest `initialize` call. Ignore stale pendings older than a
+      // week so abandoned checkouts can't absorb unrelated charges.
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+      const candidates = await ctx.db
         .query("payments")
         .filter(q =>
           q.and(
             q.eq(q.field("status"), "pending"),
-            q.eq(q.field("email"), email),
             q.eq(q.field("amount"), Math.round(amount / 100)),
             q.eq(q.field("currency"), currency),
+            q.gte(q.field("createdAt"), weekAgo),
           ),
         )
         .order("desc")
+        .collect()
+      const account = await ctx.db
+        .query("users")
+        .withIndex("by_email", q => q.eq("email", email))
         .first()
+      const byOwner = account ? candidates.find(p => p.ownerId === account.clerkId) : undefined
+      const byEmail = candidates.find(p => p.email?.toLowerCase() === email.toLowerCase())
+      payment = byOwner ?? byEmail ?? null
     }
     if (!payment || payment.status === "paid") return { applied: false }
     await markPaymentPaid(ctx.db, payment)

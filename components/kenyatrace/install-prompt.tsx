@@ -24,15 +24,19 @@ export function InstallPrompt() {
   const [showIosTip, setShowIosTip] = useState(false)
 
   useEffect(() => {
-    // The service worker only exists to make the installed shell open on weak
-    // connections — production only, never interferes with dev HMR.
-    if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    // Register SW for offline shell: production + localhost (so PWA is testable
+    // in dev) but not on other hosts where it would interfere with HMR.
+    if ('serviceWorker' in navigator) {
+      const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+      if (process.env.NODE_ENV === 'production' || isLocalhost) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {})
+      }
     }
 
+    let dismissedRecently = false
     try {
       const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) ?? 0)
-      if (Number.isFinite(dismissedAt) && Date.now() - dismissedAt < REASK_AFTER_MS) return
+      if (Number.isFinite(dismissedAt) && Date.now() - dismissedAt < REASK_AFTER_MS) dismissedRecently = true
     } catch { /* private mode */ }
 
     // Already installed? Never nag.
@@ -43,22 +47,35 @@ export function InstallPrompt() {
 
     const onPrompt = (e: Event) => {
       e.preventDefault()
+      if (dismissedRecently) return
       setDeferred(e as BeforeInstallPromptEvent)
       setShowNative(true)
     }
     window.addEventListener('beforeinstallprompt', onPrompt)
+    const onInstalled = () => {
+      setShowNative(false)
+      setShowIosTip(false)
+      setDeferred(null)
+    }
+    window.addEventListener('appinstalled', onInstalled)
 
     // iOS Safari has no install event — surface the manual route instead.
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
-    if (isIOS) {
+    // iPadOS 13+ reports as MacIntel with touch points, so check that too.
+    const ua = navigator.userAgent
+    const isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    if (isIOS && !dismissedRecently) {
       const t = setTimeout(() => setShowIosTip(true), 4000)
       return () => {
         clearTimeout(t)
         window.removeEventListener('beforeinstallprompt', onPrompt)
+        window.removeEventListener('appinstalled', onInstalled)
       }
     }
 
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
   }, [])
 
   function dismiss() {

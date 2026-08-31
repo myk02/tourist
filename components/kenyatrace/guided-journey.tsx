@@ -12,6 +12,7 @@ import { formatKES } from '@/lib/kenya-data'
 import type { Stop } from './types'
 import { JourneyProvider, type JourneyCtx } from './planner/context'
 import { PlannerProgress } from './planner/bits'
+import { PaywallDialog } from './paywall'
 import {
   DRAFT_KEY, GENERATION_STEPS, INTERESTS, TOWNS, TRACE_HINT_PREFIX,
   emptyDraft, enrichStops, pickPlanCandidates, stayPatch, toTripStops,
@@ -38,9 +39,11 @@ export function GuidedJourney() {
   const create = useMutation(api.trips.create)
   const replaceStops = useMutation(api.trips.replaceStops)
   const updateTrip = useMutation(api.trips.update)
+  const removeTrip = useMutation(api.trips.remove)
   const uploadUrl = useMutation(api.moments.generateUploadUrl)
   const createMoment = useMutation(api.moments.create)
   const signInRef = useRef<HTMLDivElement>(null)
+  const [paywallOpen, setPaywallOpen] = useState(false)
   const router = useRouter()
   const { session: trackSession, start: startTrack, stop: stopTrack } = useTracking()
 
@@ -323,8 +326,13 @@ export function GuidedJourney() {
           candidates: pickPlanCandidates(allListings, draft.budget, draft.days, draft.originLat, draft.originLng),
         }),
       })
+      // Check ok before parsing: platform errors return HTML bodies that would
+      // otherwise blow up .json() and mask the real status.
+      if (!response.ok) {
+        const err = await response.json().catch(() => null)
+        throw new Error(err?.error || 'Could not generate your plan')
+      }
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error)
       const enriched = { ...data, stops: enrichStops(data.stops as Stop[], allListings) }
       // If the AI's plan still overshoots the budget (the API tolerates ~15%
       // overshoot before rejecting), never land on an over-budget itinerary —
@@ -332,7 +340,11 @@ export function GuidedJourney() {
       // the plan is regenerated to fit.
       const plannedTotal = (enriched.stops as Stop[]).reduce((sum, s) => sum + s.cost, 0)
       if (plannedTotal > draft.budget) {
+        const orphanId = draft.tripId
         setDraft(d => ({ ...d, plan: null, tripId: null, published: false }))
+        if (orphanId) {
+          removeTrip({ id: orphanId }).catch(() => {})
+        }
         goTo('budget', true)
         window.scrollTo({ top: 0, behavior: 'smooth' })
         toast.error(`Your plan came to ${formatKES(plannedTotal)} — ${formatKES(plannedTotal - draft.budget)} over your ${formatKES(draft.budget)} budget. Adjust the budget (or trip length) and we'll replan to fit it.`)
@@ -369,8 +381,11 @@ export function GuidedJourney() {
         candidates: pickPlanCandidates(allListings, draft.budget, draft.days, draft.originLat, draft.originLng),
       }),
     })
+    if (!response.ok) {
+      const err = await response.json().catch(() => null)
+      throw new Error(err?.error || 'Could not regenerate the plan')
+    }
     const data = await response.json()
-    if (!response.ok) throw new Error(data.error)
     return enrichStops(data.stops as Stop[], allListings)
   }
 
@@ -408,7 +423,13 @@ export function GuidedJourney() {
       goTo('track', true)
       toast.success('Trip saved — live tracking is ready')
     } catch (error) {
-      toast.error(error instanceof Error && error.message.includes('access') ? 'Your access has expired — pick a plan to continue' : 'Could not save your trip')
+      const msg = error instanceof Error ? error.message : ''
+      if (msg.toLowerCase().includes('access')) {
+        setPaywallOpen(true)
+        toast.error('Your access has ended — pick a plan to continue')
+      } else {
+        toast.error('Could not save your trip')
+      }
     } finally {
       setSaving(false)
     }
@@ -696,6 +717,7 @@ export function GuidedJourney() {
 
   return (
     <JourneyProvider value={ctx}>
+      <PaywallDialog open={paywallOpen} onOpenChange={setPaywallOpen} />
       <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-8">
         <SignInButton mode="modal"><div ref={signInRef} style={{ display: 'none' }} /></SignInButton>
 

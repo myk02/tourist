@@ -8,7 +8,7 @@ import { useConvexAuth, useQuery } from 'convex/react'
 import { SignInButton } from '@clerk/nextjs'
 import { api } from '@/convex/_generated/api'
 import type { Doc, Id } from '@/convex/_generated/dataModel'
-import { CircleUserRound, Compass, MapPin } from 'lucide-react'
+import { CircleUserRound, MapPin } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -101,7 +101,7 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
           )}>
             {booking.status === 'paid' ? 'Paid' : booking.status}
           </Badge>
-          {booking.status === 'requested' && booking.amount > 0 && <PayNowButton booking={booking} />}
+          {booking.status === 'requested' && booking.amount > 0 && booking.listingId && <PayNowButton booking={booking} />}
           {booking.status !== 'cancelled' && booking.status !== 'paid' && <Button variant="outline" size="sm" onClick={() => onCancel(booking._id)}>Cancel</Button>}
         </div>
       </CardContent>
@@ -109,9 +109,11 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
   )
 }
 
-export function Stat({label,value}:{label:string;value:number}){return <Card><CardHeader><CardDescription>{label}</CardDescription><CardTitle className="text-3xl">{value}</CardTitle></CardHeader></Card>}
-
-const KIND_COLORS: Record<string, string> = { Stay: '#0b6e4f', Transport: '#e8a317', Experience: '#2563eb', Food: '#8b5cf6' }
+// Same category→hue mapping as KIND_STYLE (itinerary-editor) and
+// CATEGORY_COLOR (budget-dashboard): Stay blue, Transport amber,
+// Experience emerald, Food rose — so a category is never green in one
+// component and blue in another.
+const KIND_COLORS: Record<string, string> = { Stay: '#3b82f6', Transport: '#f59e0b', Experience: '#10b981', Food: '#f43f5e' }
 
 /**
  * Compact trip-cost card: total vs budget progress bar, plus a stacked
@@ -156,8 +158,6 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
     </div>
   )
 }
-
-export function Empty({title,text,action}:{title:string;text:string;action?:()=>void}){return <div className="col-span-full flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center"><Compass className="size-8 text-primary"/><h2 className="mt-4 font-serif text-2xl">{title}</h2><p className="mt-2 max-w-md text-muted-foreground">{text}</p>{action&&<Button className="mt-4" variant="outline" onClick={action}>Clear filters</Button>}</div>}
 
 export function NotFound(){return <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary"/><h1 className="font-serif text-4xl">This trail ends here</h1><p className="text-muted-foreground">The page or place you requested could not be found.</p><Button nativeButton={false} render={<Link href="/"/>}>Back to discover</Button></div>}
 

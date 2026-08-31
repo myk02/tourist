@@ -123,8 +123,11 @@ export function Moments() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ imageData: dataUrl }),
       })
+      if (!response.ok) {
+        const err = await response.json().catch(() => null)
+        throw new Error(err?.error || 'Could not suggest a caption')
+      }
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error)
       setCaption(data.caption || '')
       setLocation(data.location || '')
       toast.success('Caption suggested')
@@ -225,9 +228,9 @@ export function Moments() {
           <>
             {moments?.length ? (
               <div className="flex w-fit items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1">
-                <button onClick={() => setView('grid')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'grid' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><LayoutGrid className="size-4" />Album</button>
-                <button onClick={() => setView('map')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'map' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><MapIcon className="size-4" />Map</button>
-                <button onClick={() => setView('timeline')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'timeline' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><Timeline className="size-4" />Timeline</button>
+                <button type="button" aria-pressed={view === 'grid'} onClick={() => setView('grid')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'grid' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><LayoutGrid className="size-4" />Album</button>
+                <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'map' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><MapIcon className="size-4" />Map</button>
+                <button type="button" aria-pressed={view === 'timeline'} onClick={() => setView('timeline')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'timeline' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><Timeline className="size-4" />Timeline</button>
               </div>
             ) : null}
 

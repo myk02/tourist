@@ -17,6 +17,8 @@ export interface PrintableStop {
   travelMins?: number
 }
 
+import { formatKES as KES } from './kenya-data'
+
 export interface PrintableItinerary {
   name: string
   destination: string
@@ -27,8 +29,6 @@ export interface PrintableItinerary {
   totalCost: number
   stops: PrintableStop[]
 }
-
-const KES = (n: number) => `KES ${Math.round(n).toLocaleString('en-KE')}`
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')

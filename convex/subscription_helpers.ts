@@ -61,12 +61,14 @@ export const applyDayPack = internalMutation({
  */
 export const applyDayPackByCharge = internalMutation({
   args: { reference: v.string(), email: v.string(), amount: v.number(), currency: v.string() },
-  handler: async (ctx, { reference }) => {
+  handler: async (ctx, { reference, amount, currency }) => {
     const purchase = await ctx.db
       .query("subscriptionPurchases")
       .withIndex("by_reference", q => q.eq("reference", reference))
-      .unique()
+      .first()
     if (!purchase || purchase.status === "paid") return { applied: false }
+    // Webhook amount is in minor units — validate before crediting.
+    if (amount !== purchase.amount * 100 || currency !== purchase.currency) return { applied: false }
     const now = Date.now()
     await ctx.db.patch(purchase._id, { status: "paid", paidAt: now })
     await extendPaidAccess(ctx.db, purchase.ownerId, purchase.days, now)

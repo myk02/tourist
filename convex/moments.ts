@@ -1,6 +1,7 @@
-import { mutation, query } from "./_generated/server"
+import { mutation, query, internalQuery, type MutationCtx } from "./_generated/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
+import { internal } from "./_generated/api"
 import { DAY_MS } from "../lib/plans"
 import { accessRole } from "./trips"
 import { requireActiveAccess } from "./subscriptions"
@@ -14,11 +15,39 @@ function idsOf(storageId: Id<'_storage'> | undefined, storageIds: Id<'_storage'>
   return [storageId, ...(storageIds ?? [])].filter((x): x is Id<'_storage'> => !!x)
 }
 
+/**
+ * Storage ids already credited to this owner by earlier moments. The reward
+ * counts uploads exactly once — re-passing the same storage ids through
+ * another `create` call must not mint extra free days.
+ */
+async function creditedMediaForOwner(ctx: MutationCtx, ownerId: string): Promise<Set<string>> {
+  const seen = new Set<string>()
+  const trips = await ctx.db.query("trips").withIndex("by_owner", q => q.eq("ownerId", ownerId)).collect()
+  for (const trip of trips) {
+    const moments = await ctx.db.query("moments").withIndex("by_trip", q => q.eq("tripId", trip._id)).collect()
+    for (const moment of moments) {
+      for (const sid of idsOf(moment.storageId, moment.storageIds)) seen.add(sid)
+      for (const vid of moment.videoStorageIds ?? []) seen.add(vid)
+    }
+  }
+  return seen
+}
+
+// Mutations can only write storage, not read it — existence checks run in a
+// query context reading the `_storage` system table instead.
+export const storageAllExist = internalQuery({
+  args: { ids: v.array(v.id("_storage")) },
+  handler: async (ctx, { ids }) => {
+    for (const id of ids) if (!(await ctx.db.system.get("_storage", id))) return false
+    return true
+  },
+})
+
 export const list = query({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) return []
-  const trip = await ctx.db.get(tripId)
-  if (!trip || trip.ownerId !== identity.subject) return []
+  const role = await accessRole(ctx, tripId, identity.subject)
+  if (!role) return []
   const moments = await ctx.db.query("moments").withIndex("by_trip", q => q.eq("tripId", tripId)).order("desc").collect()
   return Promise.all(moments.map(async moment => {
     const ids = idsOf(moment.storageId, moment.storageIds)
@@ -98,10 +127,25 @@ export const create = mutation({ args: { tripId: v.id("trips"), caption: v.strin
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) throw new Error("Sign in required")
   await requireActiveAccess(ctx.db, identity.subject)
+  if (args.caption.length > 500) throw new Error("Caption is too long — 500 characters max")
+  if (args.lat !== undefined && (args.lat < -90 || args.lat > 90 || !Number.isFinite(args.lat))) throw new Error("Invalid latitude")
+  if (args.lng !== undefined && (args.lng < -180 || args.lng > 180 || !Number.isFinite(args.lng))) throw new Error("Invalid longitude")
   const trip = await ctx.db.get(args.tripId)
   if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
   const { storageId, storageIds, videoStorageIds, ...rest } = args
   const ids = idsOf(storageId, storageIds)
+  const videoIds = videoStorageIds ?? []
+  // Every media id must be a real file from `generateUploadUrl` — fabricated
+  // or foreign ids must never count toward the free-day reward.
+  const allMediaIds = [...ids, ...videoIds]
+  if (allMediaIds.length > 0 && !(await ctx.runQuery(internal.moments.storageAllExist, { ids: allMediaIds }))) {
+    throw new Error("Uploaded media not found — try uploading again")
+  }
+  // Reward only media that hasn't been credited before (replaying the same
+  // upload across repeated creates earns nothing), and never count
+  // caption-only moments — the reward is for media, not text.
+  const credited = await creditedMediaForOwner(ctx, identity.subject)
+  const freshMedia = [...new Set([...ids.map(String), ...videoIds.map(String)])].filter(id => !credited.has(id))
   const id = await ctx.db.insert("moments", {
     ...rest,
     ownerId: identity.subject,
@@ -115,7 +159,8 @@ export const create = mutation({ args: { tripId: v.id("trips"), caption: v.strin
   // Moments reward: uploading media earns free days of access. The days stack
   // onto paidUntil (like a day pack) so the reward compounds with paid days
   // and is never lost when a trial is still running.
-  const mediaCount = Math.max(ids.length + (videoStorageIds?.length ?? 0), 1)
+  const mediaCount = freshMedia.length
+  if (mediaCount === 0) return { id, earnedDays: 0 }
   const user = await ctx.db.query("users").withIndex("by_clerk", q => q.eq("clerkId", identity.subject)).unique()
   const prior = user?.momentsMediaTotal ?? 0
   const total = prior + mediaCount

@@ -2,7 +2,7 @@ import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
 export default defineSchema({
-  users: defineTable({ clerkId: v.string(), name: v.string(), email: v.optional(v.string()), emailVerified: v.optional(v.boolean()), image: v.optional(v.string()), trackingConsent: v.optional(v.boolean()), preferences: v.optional(v.object({ styles: v.array(v.string()), interests: v.array(v.string()), destinations: v.array(v.string()), pace: v.optional(v.string()), budget: v.optional(v.number()) })), momentsMediaTotal: v.optional(v.number()), momentsEarnedDays: v.optional(v.number()), createdAt: v.optional(v.number()), updatedAt: v.optional(v.number()) }).index("by_clerk", ["clerkId"]),
+  users: defineTable({ clerkId: v.string(), name: v.string(), email: v.optional(v.string()), emailVerified: v.optional(v.boolean()), image: v.optional(v.string()), trackingConsent: v.optional(v.boolean()), preferences: v.optional(v.object({ styles: v.array(v.string()), interests: v.array(v.string()), destinations: v.array(v.string()), pace: v.optional(v.string()), budget: v.optional(v.number()) })), momentsMediaTotal: v.optional(v.number()), momentsEarnedDays: v.optional(v.number()), createdAt: v.optional(v.number()), updatedAt: v.optional(v.number()) }).index("by_clerk", ["clerkId"]).index("by_email", ["email"]),
   trips: defineTable({ ownerId: v.string(), name: v.string(), destination: v.string(), origin: v.optional(v.string()), traveler: v.optional(v.string()), startDate: v.string(), endDate: v.string(), budget: v.number(), totalCost: v.number(), status: v.string(), rating: v.optional(v.number()), review: v.optional(v.string()), sharedAt: v.optional(v.number()), coverImage: v.optional(v.string()), traceShareToken: v.optional(v.string()), aiBrief: v.optional(v.string()), travelMonth: v.optional(v.string()), travelers: v.optional(v.number()) }).index("by_owner", ["ownerId"]),
   tripStops: defineTable({ tripId: v.id("trips"), name: v.string(), place: v.string(), day: v.number(), time: v.string(), cost: v.number(), kind: v.string(), order: v.number(), lat: v.optional(v.number()), lng: v.optional(v.number()), locked: v.optional(v.boolean()), reason: v.optional(v.string()), verified: v.optional(v.boolean()), duration: v.optional(v.number()), source: v.optional(v.string()), listingId: v.optional(v.string()), vertical: v.optional(v.string()), unit: v.optional(v.string()),    image: v.optional(v.string()), travelKm: v.optional(v.number()), travelMins: v.optional(v.number()), travelRouted: v.optional(v.boolean()), completedAt: v.optional(v.number()) }).index("by_trip", ["tripId"]),
   bookings: defineTable({ ownerId: v.string(), tripId: v.optional(v.id("trips")), stopId: v.optional(v.id("tripStops")), listingId: v.string(), type: v.string(), amount: v.number(), status: v.string(), paymentMethod: v.string(), reference: v.string(), checkIn: v.optional(v.string()), checkOut: v.optional(v.string()), guests: v.optional(v.number()), paidAt: v.optional(v.number()), paymentReference: v.optional(v.string()), r48SentAt: v.optional(v.number()), r24SentAt: v.optional(v.number()) }).index("by_owner", ["ownerId"]).index("by_trip", ["tripId"]),
@@ -40,12 +40,4 @@ export default defineSchema({
     freeCancellation: v.optional(v.boolean()),
     instantConfirm: v.optional(v.boolean()),
   }).index("by_vertical", ["vertical"]).index("by_location", ["location"]).index("by_vertical_scraped", ["vertical", "scrapedAt"]),
-  scrapeJobs: defineTable({
-    vertical: v.string(),
-    status: v.string(),
-    startedAt: v.number(),
-    completedAt: v.optional(v.number()),
-    itemCount: v.int64(),
-    error: v.optional(v.string()),
-  }).index("by_vertical", ["vertical"]).index("by_status", ["status"]),
 })

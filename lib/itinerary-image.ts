@@ -6,6 +6,7 @@
  */
 
 import type { PrintableItinerary } from './itinerary'
+import { formatKES as KES } from './kenya-data'
 
 const W = 1080
 const SCALE = 2
@@ -18,8 +19,6 @@ const INK = '#14211a'
 const MUTED = '#5b6a63'
 const HAIRLINE = '#e4e9e3'
 const BG = '#ffffff'
-
-const KES = (n: number) => `KES ${Math.round(n).toLocaleString('en-KE')}`
 
 const FONT_SERIF = 'Georgia, "Times New Roman", serif'
 const FONT_SANS = '-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif'
