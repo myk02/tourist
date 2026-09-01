@@ -13,11 +13,28 @@ export function extractJson(text: string): string {
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (fence) t = fence[1].trim()
   const start = t.indexOf('{')
-  const end = t.lastIndexOf('}')
-  if (start === -1 || end <= start) throw new Error('The AI did not return a JSON object')
-  // Models sometimes emit raw control characters (e.g. newlines) inside JSON
-  // strings, which JSON.parse rejects. Replacing them with spaces is harmless
-  // outside strings and fixes the ones inside.
+  if (start === -1) throw new Error('The AI did not return a JSON object')
+  // Find matching closing brace for first object to avoid concatenating two objects
+  let depth = 0
+  let inString = false
+  let escape = false
+  let end = -1
+  for (let i = start; i < t.length; i++) {
+    const ch = t[i]
+    if (escape) { escape = false; continue }
+    if (ch === '\\' && inString) { escape = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) { end = i; break }
+    }
+  }
+  if (end === -1) {
+    end = t.lastIndexOf('}')
+    if (end <= start) throw new Error('The AI did not return a JSON object')
+  }
   return t.slice(start, end + 1).replace(/[\u0000-\u001F]/g, ' ')
 }
 
@@ -35,8 +52,6 @@ async function complete(system: string, prompt: string, maxTokens: number): Prom
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-        // Model calls must never hang forever — the free model can stall, so
-        // abort after 60s (three retries then stay within serverless time caps).
         signal: AbortSignal.timeout(60000),
         body: JSON.stringify({
           model,
@@ -50,20 +65,42 @@ async function complete(system: string, prompt: string, maxTokens: number): Prom
       })
       if (!response.ok) {
         const detail = await response.text().catch(() => '')
-        // 429/503 on the free tier are transient — try the fallback model.
-        if ((response.status === 429 || response.status === 503) && model === JOURNEY_MODEL) {
-          lastError = new Error(`AI request failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`)
+        // Log server-side for debugging without leaking details to client
+        if (detail) console.error(`[ai] ${model} ${response.status}: ${detail.slice(0, 300)}`)
+        const transient = [429, 502, 503, 504].includes(response.status)
+        if (transient && model === JOURNEY_MODEL) {
+          lastError = new Error(`AI temporarily unavailable (${response.status}) — retrying`)
           continue
         }
-        throw new Error(`AI request failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`)
+        throw new Error(`AI request failed (${response.status})`)
       }
-      const data = await response.json()
-      const content: string | undefined = data?.choices?.[0]?.message?.content
-      if (!content) throw new Error('The AI returned an empty response')
+      let data: unknown
+      try {
+        data = await response.json()
+      } catch {
+        if (model === JOURNEY_MODEL) {
+          lastError = new Error('AI returned invalid JSON — retrying')
+          continue
+        }
+        throw new Error('AI returned invalid response')
+      }
+      const content: string | undefined = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content
+      if (!content || !content.trim()) {
+        if (model === JOURNEY_MODEL) {
+          lastError = new Error('The AI returned an empty response — retrying')
+          continue
+        }
+        throw new Error('The AI returned an empty response')
+      }
       return content
     } catch (error) {
-      // Network/timeout errors on the primary model fall back once.
-      if (model === JOURNEY_MODEL && error instanceof Error && /timeout|fetch failed/i.test(error.message)) {
+      const msg = error instanceof Error ? error.message : ''
+      const isTransient = /timeout|fetch failed|aborted|network|econnreset/i.test(msg)
+      if (model === JOURNEY_MODEL && isTransient) {
+        lastError = error
+        continue
+      }
+      if (error instanceof Error && error.message.includes('retrying')) {
         lastError = error
         continue
       }
@@ -89,6 +126,7 @@ export async function chatJSON<T>({
   schema: z.ZodType<T>
   maxTokens?: number
 }): Promise<T> {
+  let lastParseError: unknown = null
   for (let attempt = 0; attempt < 2; attempt++) {
     const instruction =
       attempt === 0
@@ -96,12 +134,19 @@ export async function chatJSON<T>({
         : ' Your previous answer was not valid JSON. Return ONLY a single valid JSON object matching the requested shape exactly — no explanations, no markdown, no code fences.'
     try {
       const raw = await complete(system, prompt + instruction, maxTokens)
-      return schema.parse(JSON.parse(extractJson(raw)))
+      const jsonStr = extractJson(raw)
+      const parsed = JSON.parse(jsonStr)
+      return schema.parse(parsed)
     } catch (error) {
-      if (attempt === 1) {
+      const isParseError =
+        error instanceof SyntaxError ||
+        (error instanceof Error && /JSON|Zod|valid JSON|parse/i.test(error.message)) ||
+        (typeof error === 'object' && error !== null && 'issues' in error)
+      if (!isParseError || attempt === 1) {
         throw error instanceof Error ? error : new Error('The AI returned an unreadable response. Please try again.')
       }
+      lastParseError = error
     }
   }
-  throw new Error('Could not generate a plan')
+  throw lastParseError instanceof Error ? lastParseError : new Error('Could not generate a plan')
 }

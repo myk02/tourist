@@ -3,9 +3,13 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { z } from 'zod'
 import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY!,
-})
+export const maxDuration = 60
+
+function getOpenRouter() {
+  const key = process.env.OPENROUTER_API_KEY
+  if (!key) return null
+  return createOpenRouter({ apiKey: key })
+}
 
 export async function POST(request: Request) {
   try {
@@ -13,7 +17,8 @@ export async function POST(request: Request) {
     if (!rl.ok) {
       return Response.json({ error: 'Too many caption requests — try again in a minute.' }, { status: 429 })
     }
-    if (!process.env.OPENROUTER_API_KEY) {
+    const openrouter = getOpenRouter()
+    if (!openrouter) {
       return Response.json({ error: 'Caption service is not configured' }, { status: 503 })
     }
     const { imageData } = await request.json()
@@ -33,7 +38,9 @@ export async function POST(request: Request) {
     })
     return Response.json(output)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not suggest a caption'
+    console.error('[caption] error', error)
+    const raw = error instanceof Error ? error.message : 'Could not suggest a caption'
+    const message = raw.includes('OPENROUTER') || raw.includes('Bearer') ? 'Caption service is temporarily unavailable' : raw
     return Response.json({ error: message }, { status: 400 })
   }
 }

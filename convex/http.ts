@@ -36,7 +36,7 @@ http.route({
     const signature = request.headers.get("x-paystack-signature")
     const secret = process.env.PAYSTACK_SECRET_KEY
     if (!secret || !signature) {
-      return new Response("Missing configuration", { status: 500 })
+      return new Response("Missing configuration", { status: 401 })
     }
     // Paystack signs the raw request body with HMAC-SHA512 using the secret
     // key. Web Crypto runs in the default Convex runtime (no node directive).

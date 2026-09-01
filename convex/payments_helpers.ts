@@ -74,7 +74,10 @@ export const markPaidByCharge = internalMutation({
       // Most recent attempt first — the regenerated reference always belongs
       // to the latest `initialize` call. Ignore stale pendings older than a
       // week so abandoned checkouts can't absorb unrelated charges.
+      // Fallback is deliberately strict: if multiple same-price pendings exist
+      // we do NOT guess — caller must rely on exact reference match.
       const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+      const normalizedEmail = email.toLowerCase().trim()
       const candidates = await ctx.db
         .query("payments")
         .filter(q =>
@@ -86,14 +89,32 @@ export const markPaidByCharge = internalMutation({
           ),
         )
         .order("desc")
-        .collect()
-      const account = await ctx.db
+        .take(50)
+      let account = await ctx.db
         .query("users")
         .withIndex("by_email", q => q.eq("email", email))
         .first()
-      const byOwner = account ? candidates.find(p => p.ownerId === account.clerkId) : undefined
-      const byEmail = candidates.find(p => p.email?.toLowerCase() === email.toLowerCase())
-      payment = byOwner ?? byEmail ?? null
+      if (!account && normalizedEmail !== email) {
+        account = await ctx.db
+          .query("users")
+          .withIndex("by_email", q => q.eq("email", normalizedEmail))
+          .first()
+      }
+      if (!account) {
+        const allUsers = await ctx.db.query("users").collect()
+        account = allUsers.find(u => u.email?.toLowerCase() === normalizedEmail) ?? null
+      }
+      const ownerCandidates = account ? candidates.filter(p => p.ownerId === account!.clerkId) : []
+      const emailCandidates = candidates.filter(p => p.email?.toLowerCase() === normalizedEmail)
+      // Only fallback when uniquely identified — prevents cross-booking settlement
+      if (ownerCandidates.length === 1) {
+        payment = ownerCandidates[0]
+      } else if (emailCandidates.length === 1) {
+        payment = emailCandidates[0]
+      } else {
+        // Ambiguous — require exact reference, do not guess
+        return { applied: false }
+      }
     }
     if (!payment || payment.status === "paid") return { applied: false }
     await markPaymentPaid(ctx.db, payment)

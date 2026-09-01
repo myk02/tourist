@@ -57,9 +57,11 @@ export const list = query({ args: { tripId: v.id("trips") }, handler: async (ctx
   }))
 }})
 
-export const publicForTrip = query({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
+export const publicForTrip = query({ args: { tripId: v.id("trips"), token: v.optional(v.string()) }, handler: async (ctx, { tripId, token }) => {
   const trip = await ctx.db.get(tripId)
   if (!trip) return null
+  // Token gate: if trip has traceShareToken, require matching token; legacy trips without token remain public for backwards compat
+  if (trip.traceShareToken && token !== trip.traceShareToken) return null
   const moments = await ctx.db.query("moments").withIndex("by_trip", q => q.eq("tripId", tripId)).order("desc").collect()
   const publicMoments = moments.filter(m => m.public)
   const withUrls = await Promise.all(publicMoments.map(async moment => {
@@ -135,6 +137,8 @@ export const create = mutation({ args: { tripId: v.id("trips"), caption: v.strin
   const { storageId, storageIds, videoStorageIds, ...rest } = args
   const ids = idsOf(storageId, storageIds)
   const videoIds = videoStorageIds ?? []
+  if (ids.length + videoIds.length > 10) throw new Error("Too many media files — 10 max per moment")
+  if (ids.length + videoIds.length === 0 && !args.caption.trim()) throw new Error("Caption or media required")
   // Every media id must be a real file from `generateUploadUrl` — fabricated
   // or foreign ids must never count toward the free-day reward.
   const allMediaIds = [...ids, ...videoIds]
@@ -209,8 +213,35 @@ export const remove = mutation({ args: { id: v.id("moments") }, handler: async (
   if (!moment || moment.ownerId !== identity.subject) throw new Error("Moment not found")
   const ids = idsOf(moment.storageId, moment.storageIds)
   const videoIds = moment.videoStorageIds ?? []
+  const distinctMediaCount = new Set([...ids.map(String), ...videoIds.map(String)]).size
   await Promise.all([...ids, ...videoIds].map(sid => ctx.storage.delete(sid)))
   await ctx.db.delete(id)
+  // Anti-farming: decrement media total and reclaim earned days/paidUntil proportionally
+  if (distinctMediaCount > 0) {
+    const user = await ctx.db.query("users").withIndex("by_clerk", q => q.eq("clerkId", identity.subject)).unique()
+    if (user) {
+      const prior = user.momentsMediaTotal ?? 0
+      const newTotal = Math.max(0, prior - distinctMediaCount)
+      const earnedBefore = Math.floor(prior / MEDIA_PER_DAY)
+      const earnedAfter = Math.floor(newTotal / MEDIA_PER_DAY)
+      const lostDays = Math.max(0, earnedBefore - earnedAfter)
+      const now = Date.now()
+      if (lostDays > 0) {
+        const sub = await ctx.db.query("subscriptions").withIndex("by_owner", q => q.eq("ownerId", identity.subject)).unique()
+        if (sub && sub.paidUntil && sub.paidUntil > now) {
+          const newPaidUntil = Math.max(now, sub.paidUntil - lostDays * DAY_MS)
+          await ctx.db.patch(sub._id, { paidUntil: newPaidUntil, updatedAt: now })
+        }
+        await ctx.db.patch(user._id, {
+          momentsMediaTotal: newTotal,
+          momentsEarnedDays: Math.max(0, (user.momentsEarnedDays ?? 0) - lostDays),
+          updatedAt: now,
+        })
+      } else {
+        await ctx.db.patch(user._id, { momentsMediaTotal: newTotal, updatedAt: now })
+      }
+    }
+  }
 }})
 
 const REACTION_EMOJIS = ["👍", "❤️", "🔥", "🎉"] as const

@@ -7,6 +7,10 @@ const buckets = new Map<string, { count: number; resetAt: number }>()
 
 export function rateLimit(key: string, limit: number, windowMs: number): { ok: boolean; remaining: number } {
   const now = Date.now()
+  // Prune expired entries opportunistically to avoid unbounded growth
+  if (buckets.size > 1000 && Math.random() < 0.1) {
+    for (const [k, v] of buckets) if (now > v.resetAt) buckets.delete(k)
+  }
   const entry = buckets.get(key)
   if (!entry || now > entry.resetAt) {
     buckets.set(key, { count: 1, resetAt: now + windowMs })
@@ -19,10 +23,17 @@ export function rateLimit(key: string, limit: number, windowMs: number): { ok: b
   return { ok: true, remaining: limit - entry.count }
 }
 
-export function getClientKey(request: Request): string {
-  // Prefer Clerk user id when available via header set by Clerk; fallback to IP.
+export function getClientKey(request: Request, userId?: string | null): string {
+  if (userId) return `uid:${userId}`
+  // x-forwarded-for first entry is client-controllable — use only as fallback
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     || request.headers.get('x-real-ip')
+    || request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim()
     || 'unknown'
-  return ip
+  // Avoid global "unknown" bucket blocking all anonymous users — add tiny randomness bucket
+  if (ip === 'unknown') {
+    const ua = request.headers.get('user-agent')?.slice(0, 40) ?? 'no-ua'
+    return `ip:unknown:${ua}`
+  }
+  return `ip:${ip}`
 }

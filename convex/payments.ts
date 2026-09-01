@@ -68,7 +68,7 @@ export const initialize = mutation({
     // Prior pendings are kept so the webhook can still exact-match a charge
     // for a previous reference that lands after a retry. They self-expire via
     // the 7-day window in markPaidByCharge and can be GC'd by a cron.
-    const reference = `KT-PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+    const reference = `KT-PAY-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`
 
     const paymentId = await ctx.db.insert("payments", {
       ownerId: identity.subject,

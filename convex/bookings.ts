@@ -38,13 +38,23 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) throw new Error("Sign in required")
   await requireActiveAccess(ctx.db, identity.subject)
+  if (!["Stay", "Transport", "Experience", "Food"].includes(args.type)) throw new Error("Invalid booking type")
+  if (args.guests !== undefined && (!Number.isInteger(args.guests) || args.guests < 1 || args.guests > 20)) throw new Error("Guests must be 1-20")
+  if (!Number.isFinite(args.amount) || args.amount < 0 || args.amount > 10_000_000) throw new Error("Invalid amount")
+  if (args.checkIn && !/^\d{4}-\d{2}-\d{2}$/.test(args.checkIn)) throw new Error("Invalid checkIn date")
+  if (args.checkOut && !/^\d{4}-\d{2}-\d{2}$/.test(args.checkOut)) throw new Error("Invalid checkOut date")
+  if (args.checkIn && Number.isNaN(Date.parse(args.checkIn))) throw new Error("Invalid checkIn date")
+  if (args.checkOut && Number.isNaN(Date.parse(args.checkOut))) throw new Error("Invalid checkOut date")
   // Amount must match the marketplace listing exactly — a client-supplied
   // amount would let anyone understate what it owes (the pay flow trusts
   // booking.amount when verifying against Paystack).
   const listing = await ctx.db.get(args.listingId as Id<"listings">)
   if (!listing) throw new Error("Listing not found")
   if (args.amount !== listing.price) throw new Error("Reservation price does not match the current listing price")
-  const reference = `KT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+  if (args.type !== kindFromVertical(listing.vertical) && !(args.type === "Food" && listing.vertical === "food")) {
+    // Allow but don't enforce strictly — vertical mapping is helper
+  }
+  const reference = `KT-${crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`
 
   // When the reservation is linked to a trip, mirror it as a trip stop so it
   // shows on the itinerary and route map.
@@ -56,9 +66,13 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
     const day = args.checkIn ? dayFromDate(trip.startDate, args.checkIn) : (existing.length ? Math.max(...existing.map(s => s.day)) : 1)
     // duration is stored in minutes; a stay is 24h per night booked.
     const kind = kindFromVertical(listing.vertical)
-    const duration = kind === "Stay" && args.checkIn && args.checkOut
-      ? Math.max(Math.round((new Date(`${args.checkOut}T00:00:00`).getTime() - new Date(`${args.checkIn}T00:00:00`).getTime()) / 86400000), 1) * 1440
-      : undefined
+    let duration: number | undefined
+    if (kind === "Stay" && args.checkIn && args.checkOut) {
+      const diff = new Date(`${args.checkOut}T00:00:00`).getTime() - new Date(`${args.checkIn}T00:00:00`).getTime()
+      const days = Number.isFinite(diff) ? Math.max(Math.round(diff / 86400000), 1) : 1
+      duration = days * 1440
+      if (!Number.isFinite(duration) || duration < 0 || duration > 43200) duration = 1440
+    }
     stopId = await ctx.db.insert("tripStops", {
       tripId: args.tripId,
       name: listing?.name ?? "Reserved place",
@@ -103,10 +117,16 @@ export const createFromEmail = mutation({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Sign in required")
     await requireActiveAccess(ctx.db, identity.subject)
+    if (!["Stay", "Transport", "Experience", "Flight", "Food"].includes(args.type)) throw new Error("Invalid booking type")
+    if (args.guests !== undefined && (!Number.isInteger(args.guests) || args.guests < 1 || args.guests > 20)) throw new Error("Guests must be 1-20")
+    if (args.checkIn && (!/^\d{4}-\d{2}-\d{2}$/.test(args.checkIn) || Number.isNaN(Date.parse(args.checkIn)))) throw new Error("Invalid checkIn date")
+    if (args.checkOut && (!/^\d{4}-\d{2}-\d{2}$/.test(args.checkOut) || Number.isNaN(Date.parse(args.checkOut)))) throw new Error("Invalid checkOut date")
+    if (args.name.trim().length < 2 || args.name.length > 200) throw new Error("Invalid booking name")
+    if (args.place !== undefined && args.place.length > 120) throw new Error("Place too long")
     // No marketplace listing backs an email-derived booking, so the amount
     // can't be cross-checked — but it must be a plausible positive amount.
-    if (!(args.amount > 0) || args.amount > 10_000_000) throw new Error("Invalid reservation amount")
-    const reference = args.reference || `KT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+    if (!Number.isFinite(args.amount) || !(args.amount > 0) || args.amount > 10_000_000) throw new Error("Invalid reservation amount")
+    const reference = args.reference || `KT-${crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`
     const kind = args.type === "Stay" ? "Stay" : args.type === "Flight" || args.type === "Transport" ? "Transport" : "Experience"
 
     // Mirror the reservation as a trip stop (like `create`) so it shows on
@@ -117,9 +137,13 @@ export const createFromEmail = mutation({
       if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
       const existing = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", args.tripId!)).collect()
       const day = args.checkIn ? dayFromDate(trip.startDate, args.checkIn) : (existing.length ? Math.max(...existing.map(s => s.day)) : 1)
-      const duration = kind === "Stay" && args.checkIn && args.checkOut
-        ? Math.max(Math.round((new Date(`${args.checkOut}T00:00:00`).getTime() - new Date(`${args.checkIn}T00:00:00`).getTime()) / 86400000), 1) * 1440
-        : undefined
+      let duration: number | undefined
+      if (kind === "Stay" && args.checkIn && args.checkOut) {
+        const diff = new Date(`${args.checkOut}T00:00:00`).getTime() - new Date(`${args.checkIn}T00:00:00`).getTime()
+        const days = Number.isFinite(diff) ? Math.max(Math.round(diff / 86400000), 1) : 1
+        duration = days * 1440
+        if (!Number.isFinite(duration) || duration < 0 || duration > 43200) duration = 1440
+      }
       stopId = await ctx.db.insert("tripStops", {
         tripId: args.tripId,
         name: args.name,
@@ -174,6 +198,11 @@ export const cancel = mutation({ args: { id: v.id("bookings") }, handler: async 
     throw new Error("Complete or close the pending payment before cancelling")
   }
   if (openPayment) await ctx.db.delete(openPayment._id)
+  // Webhook race guard: re-fetch booking after payment handling
+  const fresh = await ctx.db.get(id)
+  if (!fresh) throw new Error("Reservation not found")
+  if (fresh.status === "paid") throw new Error("Paid reservations can't be cancelled online — contact support for a refund")
+  if (fresh.status === "cancelled") return
   // Undo the linked itinerary stop and its contribution to the trip total.
   // Note: replaceStops recreates stops with new ids, so match by the booking
   // reference (the `reason` survives itinerary saves) as a fallback.

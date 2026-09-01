@@ -67,8 +67,29 @@ export function writeCache(key: string, value: unknown): void {
 
 /** Returns null if the entry is missing or older than maxAgeMs. */
 export function readCacheFresh<T>(key: string, maxAgeMs: number): CacheEntry<T> | null {
+  if (!Number.isFinite(maxAgeMs) || maxAgeMs <= 0) return null
   const entry = readCache<T>(key)
   if (!entry) return null
   if (Date.now() - entry.at > maxAgeMs) return null
   return entry
+}
+
+export function clearExpiredCaches(prefix = 'kt-'): void {
+  try {
+    const keys: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k?.startsWith(prefix)) keys.push(k)
+    }
+    for (const k of keys) {
+      try {
+        const raw = localStorage.getItem(k)
+        if (!raw) continue
+        const parsed = JSON.parse(raw) as CacheEntry<unknown>
+        if (typeof parsed?.at !== 'number' || Date.now() - parsed.at > 30 * 24 * 60 * 60 * 1000) {
+          // Keep track snapshots up to 30 days, else evict if corrupt
+        }
+      } catch { localStorage.removeItem(k) }
+    }
+  } catch { /* ignore */ }
 }

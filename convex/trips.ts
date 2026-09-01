@@ -91,15 +91,26 @@ function makeToken(): string {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 24)
 }
 
+function isValidISODate(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s))
+}
+
 export const create = mutation({ args: { name: v.string(), destination: v.string(), origin: v.optional(v.string()), traveler: v.optional(v.string()), startDate: v.string(), endDate: v.string(), budget: v.number(), totalCost: v.number(), travelMonth: v.optional(v.string()), stops: v.optional(v.array(stop)) }, handler: async (ctx, args) => {
   const ownerId = await owner(ctx)
   await requireActiveAccess(ctx.db, ownerId)
   const { stops = [], ...trip } = args
-  if (trip.name.length > 120) throw new Error("Trip name is too long — 120 characters max")
-  if (trip.destination.length > 120) throw new Error("Trip destination is too long")
-  if (trip.budget < 0 || trip.budget > 10_000_000) throw new Error("Budget is out of range")
+  if (!trip.name.trim() || trip.name.length > 120) throw new Error("Trip name must be 1-120 characters")
+  if (!trip.destination.trim() || trip.destination.length > 120) throw new Error("Trip destination must be 1-120 characters")
+  if (trip.budget < 0 || trip.budget > 10_000_000 || !Number.isFinite(trip.budget)) throw new Error("Budget is out of range")
+  if (!Number.isFinite(trip.totalCost) || trip.totalCost < 0 || trip.totalCost > 10_000_000) throw new Error("Total cost is out of range")
+  if (!isValidISODate(trip.startDate) || !isValidISODate(trip.endDate)) throw new Error("Invalid trip dates")
+  if (trip.startDate > trip.endDate) throw new Error("Start date must be before end date")
   if (stops.length > 100) throw new Error("Too many stops")
   validateStops(stops)
+  const computedTotal = stops.reduce((sum, s) => sum + s.cost, 0)
+  if (Math.abs(computedTotal - trip.totalCost) > 1) {
+    trip.totalCost = computedTotal
+  }
   // Every new trip gets a secret trace-share token so the owner can publish
   // their live trace with a public link at any time (generated up front, only
   // shared when the owner asks).
@@ -149,6 +160,16 @@ export const update = mutation({ args: { id: v.id("trips"), patch: v.object({
   // Owners need active access to edit; invited collaborators ride on the
   // owner's subscription so sharing stays frictionless.
   if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  if (patch.name !== undefined && (!patch.name.trim() || patch.name.length > 120)) throw new Error("Trip name must be 1-120 characters")
+  if (patch.destination !== undefined && (!patch.destination.trim() || patch.destination.length > 120)) throw new Error("Trip destination must be 1-120 characters")
+  if (patch.budget !== undefined && (!Number.isFinite(patch.budget) || patch.budget < 0 || patch.budget > 10_000_000)) throw new Error("Budget is out of range")
+  if (patch.status !== undefined && !["planning", "booked", "completed"].includes(patch.status)) throw new Error("Invalid status")
+  if (patch.rating !== undefined && (!Number.isFinite(patch.rating) || patch.rating < 0 || patch.rating > 5)) throw new Error("Rating must be 0-5")
+  if (patch.travelers !== undefined && (!Number.isInteger(patch.travelers) || patch.travelers < 1 || patch.travelers > 50)) throw new Error("Travelers must be 1-50")
+  if (patch.startDate !== undefined && !isValidISODate(patch.startDate)) throw new Error("Invalid startDate")
+  if (patch.endDate !== undefined && !isValidISODate(patch.endDate)) throw new Error("Invalid endDate")
+  if (patch.coverImage !== undefined && patch.coverImage.length > 2048) throw new Error("Cover image URL too long")
+  if (patch.review !== undefined && patch.review.length > 5000) throw new Error("Review too long")
   return ctx.db.patch(id, patch)
 }})
 
@@ -172,7 +193,10 @@ export const duplicate = mutation({ args: { id: v.id("trips") }, handler: async 
     ownerId: identity.subject,
     coverImage: trip.coverImage,
   })
-  await Promise.all(stops.map(item => ctx.db.insert("tripStops", { ...item, tripId: newId })))
+  await Promise.all(stops.map(item => {
+    const { _id, _creationTime, tripId: _oldTripId, ...rest } = item as typeof item & { _id: Id<"tripStops">; _creationTime: number; tripId: Id<"trips"> }
+    return ctx.db.insert("tripStops", { ...rest, tripId: newId })
+  }))
   return newId
 }})
 
@@ -196,6 +220,13 @@ export const remove = mutation({ args: { id: v.id("trips") }, handler: async (ct
     await Promise.all([...storageIds, ...videoIds].map(sid => ctx.storage.delete(sid)))
     await ctx.db.delete(m._id)
   }))
+  // Cascade: bookings + votes + notes otherwise orphaned with dangling tripId
+  const bookings = await ctx.db.query("bookings").withIndex("by_trip", q => q.eq("tripId", id)).collect()
+  await Promise.all(bookings.map(b => ctx.db.delete(b._id)))
+  const votes = await ctx.db.query("stopVotes").withIndex("by_trip", q => q.eq("tripId", id)).collect()
+  await Promise.all(votes.map(v => ctx.db.delete(v._id)))
+  const notes = await ctx.db.query("dayNotes").withIndex("by_trip_day", q => q.eq("tripId", id)).collect()
+  await Promise.all(notes.map(n => ctx.db.delete(n._id)))
   await ctx.db.delete(id)
 }})
 
@@ -212,11 +243,11 @@ export const createShareLink = mutation({ args: { tripId: v.id("trips"), role: v
   const trip = await ctx.db.get(tripId)
   if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
   const roleValue = role === "viewer" ? "viewer" : "editor"
-  const existing = await ctx.db
+  const rows = await ctx.db
     .query("tripShares")
     .withIndex("by_trip", q => q.eq("tripId", tripId))
-    .filter(q => q.and(q.eq(q.field("collaboratorId"), undefined), q.neq(q.field("token"), undefined)))
-    .first()
+    .collect()
+  const existing = rows.find(r => r.collaboratorId === undefined && r.token !== undefined)
   if (existing) {
     if (existing.role !== roleValue) await ctx.db.patch(existing._id, { role: roleValue })
     return { token: existing.token! }

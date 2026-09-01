@@ -82,15 +82,19 @@ function buildRows(ctx: CanvasRenderingContext2D, t: PrintableItinerary): Row[] 
 
 function rowHeight(row: Row): number {
   if (row.kind === 'gap') return row.h
-  if (row.kind === 'day') return 46 + 16
+  if (row.kind === 'day') return 34 + 46 + 16
   const body = Math.max(row.title.length * 32, 30) + row.meta.length * 26
   return 12 + body + (row.travel ? 24 : 0) + 12
 }
 
 export async function renderItineraryImage(t: PrintableItinerary): Promise<Blob> {
+  if (typeof document === 'undefined') throw new Error('Canvas unavailable — browser only')
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Canvas unavailable')
+  // Guard against excessive size (Chrome limit 16384, memory ~ W*H*4)
+  const MAX_H = 12000
+  if (t.stops.length > 50) throw new Error('Itinerary too large to render as image')
 
   const rows = buildRows(ctx, t)
   const headerH = 208
@@ -98,6 +102,7 @@ export async function renderItineraryImage(t: PrintableItinerary): Promise<Blob>
   const footerH = 96
   const contentH = rows.reduce((sum, r) => sum + rowHeight(r), 0)
   const H = headerH + summaryH + contentH + footerH
+  if (H > MAX_H) throw new Error(`Itinerary too tall (${H}px) — try fewer stops`)
 
   canvas.width = W * SCALE
   canvas.height = H * SCALE

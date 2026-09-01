@@ -191,6 +191,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     return { min, max: Math.max(max, min + 1000) }
   }, [rawItems])
 
+  // Reset price range when vertical changes
+  useEffect(() => { setPriceRange(null) }, [vertical])
   useEffect(() => {
     if (rawItems && priceRange === null && rawItems.length > 0) {
       setPriceRange([priceBounds.min, priceBounds.max])

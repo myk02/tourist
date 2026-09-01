@@ -8,7 +8,7 @@ import { TrackerWidget } from '@/components/kenyatrace/tracker-widget'
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <TrackingProvider>
-      <Suspense>
+      <Suspense fallback={null}>
         <KenyaTraceShell>{children}</KenyaTraceShell>
       </Suspense>
       <TrackerWidget />

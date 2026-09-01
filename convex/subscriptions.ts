@@ -57,7 +57,11 @@ export async function requireActiveAccess(db: DatabaseWriter, ownerId: string) {
   if (!sub) {
     const user = await db.query("users").withIndex("by_clerk", q => q.eq("clerkId", ownerId)).unique()
     const trialStart = user?.createdAt ?? now
-    await db.insert("subscriptions", { ownerId, trialEndsAt: trialStart + TRIAL_DAYS * DAY_MS, createdAt: now, updatedAt: now })
+    const trialEndsAt = trialStart + TRIAL_DAYS * DAY_MS
+    await db.insert("subscriptions", { ownerId, trialEndsAt, createdAt: now, updatedAt: now })
+    if (trialEndsAt <= now) {
+      throw new Error("Your access has ended — buy a day pack to keep planning")
+    }
     return
   }
   const deadline = Math.max(sub.trialEndsAt ?? 0, sub.paidUntil ?? 0)
@@ -151,7 +155,7 @@ export const initializeDayPack = mutation({
     const price = PLAN_PRICES[days]
     if (!price) throw new Error("Invalid day pack")
     if (!EMAIL_RE.test(email.trim())) throw new Error("Enter a valid email address")
-    const reference = `KT-SUB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+    const reference = `KT-SUB-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`
     const purchaseId = await ctx.db.insert("subscriptionPurchases", {
       ownerId: identity.subject,
       reference,

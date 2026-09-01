@@ -33,10 +33,14 @@ const CATEGORY_COLOR: Record<string, string> = {
  */
 export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTravelers, canEdit = true }: { stops: Stop[]; budget: number; totalCost: number; tripId?: string; initialTravelers?: number; canEdit?: boolean }) {
   const updateTrip = useMutation(api.trips.update)
-  const [travelers, setTravelers] = useState(Math.max(1, Math.min(initialTravelers ?? 2, 50)))
-  // Only persist after a real user edit — mounting the tab must never write
-  // the default value onto trips that simply haven't set a count yet.
   const [edited, setEdited] = useState(false)
+  const [travelers, setTravelers] = useState(Math.max(1, Math.min(initialTravelers ?? 2, 50)))
+  // Sync when collaborator changes count externally and user hasn't edited locally
+  useEffect(() => {
+    if (!edited && initialTravelers != null) {
+      setTravelers(Math.max(1, Math.min(initialTravelers, 50)))
+    }
+  }, [initialTravelers, edited])
   const persistTimer = useRef<number | null>(null)
 
   // Persist the traveller count so split-cost survives reloads. Debounced —

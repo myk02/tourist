@@ -489,6 +489,7 @@ export async function POST(request: Request) {
       await attachTravelTimes(plan.stops)
       return Response.json(plan)
   } catch (error) {
+    console.error('[plan] error', error)
     // A ZodError's .message is a long multi-line dump — collapse it to the
     // first issue so the 400 body stays human-readable (e.g. a traveller
     // geolocated outside Kenya).
@@ -499,9 +500,10 @@ export async function POST(request: Request) {
         { status: 400 },
       )
     }
-    const message = error instanceof Error ? error.message : 'Unable to build a plan'
+    const raw = error instanceof Error ? error.message : 'Unable to build a plan'
+    const message = raw.includes('OPENROUTER') || raw.includes('Bearer') ? 'Trip planner is temporarily unavailable — try again shortly.' : raw
     // Surface provider config errors as 503, not 400, so clients don't retry blindly.
-    const isConfig = /OPENROUTER_API_KEY is not configured/i.test(message)
+    const isConfig = /OPENROUTER_API_KEY is not configured/i.test(raw)
     return Response.json({ error: message }, { status: isConfig ? 503 : 400 })
   }
 }

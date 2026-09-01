@@ -3,6 +3,8 @@ import { seasonGuidance } from '@/lib/seasons'
 import { z } from 'zod'
 import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
+export const maxDuration = 60
+
 /**
  * The AI trip brief: a short, honest summary of a *saved* trip. Grounded the
  * same way as the planner — the model can only describe the actual stops it
@@ -76,8 +78,10 @@ export async function POST(request: Request) {
     })
     return Response.json(brief)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not generate the trip brief'
-    const isConfig = /OPENROUTER_API_KEY is not configured/i.test(message)
+    console.error('[brief] error', error)
+    const raw = error instanceof Error ? error.message : 'Could not generate the trip brief'
+    const message = raw.includes('OPENROUTER') || raw.includes('Bearer') ? 'Trip brief service is temporarily unavailable' : raw
+    const isConfig = /OPENROUTER_API_KEY is not configured/i.test(raw)
     return Response.json({ error: message }, { status: isConfig ? 503 : 400 })
   }
 }

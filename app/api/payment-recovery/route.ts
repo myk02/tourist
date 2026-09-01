@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { EMAIL_FROM, resend } from '@/lib/resend'
+import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -19,6 +20,8 @@ const REF_RE = /^[a-zA-Z0-9_-]+$/
 export async function POST(request: Request) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Sign in required' }, { status: 401 })
+  const rl = rateLimit(`recovery:${getClientKey(request, userId)}`, 5, 60_000)
+  if (!rl.ok) return NextResponse.json({ error: 'Too many requests — try again shortly.' }, { status: 429 })
 
   let body: Record<string, unknown>
   try {
@@ -27,9 +30,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const reference = typeof body.reference === 'string' ? body.reference.trim() : ''
-  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-  if (!REF_RE.test(reference)) return NextResponse.json({ error: 'Invalid payment reference' }, { status: 400 })
+  const reference = typeof body.reference === 'string' ? body.reference.trim().slice(0, 64) : ''
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : ''
+  if (!reference || !REF_RE.test(reference) || reference.length > 64) return NextResponse.json({ error: 'Invalid payment reference' }, { status: 400 })
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: 'A valid payer email is required' }, { status: 400 })
 
   if (!resend) {

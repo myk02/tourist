@@ -16,7 +16,12 @@ export const record = mutation({ args: { tripId: v.id("trips"), lat: v.number(),
   // The provider may fire record() from any entry path (track page or guided
   // journey) — only write when the user has explicitly opted in.
   const user = await ctx.db.query("users").withIndex("by_clerk", q => q.eq("clerkId", identity.subject)).unique()
-  if (!user || user.trackingConsent !== true) return null
+  if (!user || user.trackingConsent !== true) throw new Error("Tracking consent required — enable it in profile")
+  // Throttle: at most 1 point per 5s to prevent table bloat
+  const recent = await ctx.db.query("positions").withIndex("by_trip_time", q => q.eq("tripId", args.tripId)).order("desc").first()
+  if (recent && Date.now() - recent.recordedAt < 5000) {
+    throw new Error("Too many position updates — please wait")
+  }
   return ctx.db.insert("positions", { ...args, ownerId: identity.subject, recordedAt: Date.now() })
 }})
 

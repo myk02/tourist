@@ -8,7 +8,7 @@ import { api } from '@/convex/_generated/api'
 import { CalendarClock, Camera, Check, CircleUserRound, Compass, Heart, Loader2, Sparkles, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatKES } from '@/lib/kenya-data'
 import { readCache, writeCache } from '@/lib/offline-cache'
 import { loadPaystackScript } from '@/lib/paystack-inline'
@@ -280,9 +280,14 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
 export function PaywallDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const status = useQuery(api.subscriptions.getStatus)
   if (!status) return null
+  if (status === undefined) return null
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[86svh] overflow-y-auto p-5 sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Pick a plan</DialogTitle>
+          <DialogDescription>Choose a day pack to continue planning</DialogDescription>
+        </DialogHeader>
         <PaywallScreen status={status} compact />
       </DialogContent>
     </Dialog>

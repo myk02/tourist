@@ -301,9 +301,12 @@ def check_and_ensure_vercel_deployment(
     fallback_triggered = False
 
     while time.time() < deadline:
+        api_params: dict[str, str] = {"projectId": project_id, "limit": "10"}
+        if org_id:
+            api_params["teamId"] = org_id
         data = vercel_api_get(
             "/v6/deployments", token,
-            params={"projectId": project_id, "teamId": org_id or "", "limit": "10"},
+            params=api_params,
         )
         deployments = data.get("deployments", [])
         match = find_deployment_for_sha(deployments, sha)

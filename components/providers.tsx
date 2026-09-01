@@ -14,7 +14,14 @@ function ClerkWithTheme({ children }: { children: ReactNode }) {
 }
 
 export function Providers({ children }: { children: ReactNode }) {
-  const convex = useMemo(() => new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!), [])
+  const url = process.env.NEXT_PUBLIC_CONVEX_URL
+  const convex = useMemo(() => {
+    if (!url) {
+      console.error('NEXT_PUBLIC_CONVEX_URL is not set')
+      throw new Error('Missing Convex configuration')
+    }
+    return new ConvexReactClient(url)
+  }, [url])
 
   return (
     <ThemeProvider>
