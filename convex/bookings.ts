@@ -87,9 +87,11 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
       duration,
       reason: `Reservation ${reference}`,
     })
-    await ctx.db.patch(args.tripId, { totalCost: trip.totalCost + args.amount })
-    // A trip with a real reservation on the books is no longer just planning.
-    if (trip.status === "planning") await ctx.db.patch(args.tripId, { status: "booked" })
+    const freshTrip = await ctx.db.get(args.tripId)
+    if (freshTrip) {
+      await ctx.db.patch(args.tripId, { totalCost: freshTrip.totalCost + args.amount })
+      if (freshTrip.status === "planning") await ctx.db.patch(args.tripId, { status: "booked" })
+    }
   }
 
   await ctx.db.insert("bookings", { ...args, ownerId: identity.subject, status: "requested", paymentMethod: "not-collected", reference, stopId })
@@ -156,8 +158,11 @@ export const createFromEmail = mutation({
         duration,
         reason: `Reservation ${reference}`,
       })
-      await ctx.db.patch(args.tripId, { totalCost: trip.totalCost + args.amount })
-      if (trip.status === "planning") await ctx.db.patch(args.tripId, { status: "booked" })
+      const freshTrip2 = await ctx.db.get(args.tripId)
+      if (freshTrip2) {
+        await ctx.db.patch(args.tripId, { totalCost: freshTrip2.totalCost + args.amount })
+        if (freshTrip2.status === "planning") await ctx.db.patch(args.tripId, { status: "booked" })
+      }
     }
 
     await ctx.db.insert("bookings", {

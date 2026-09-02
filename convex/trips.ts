@@ -84,6 +84,7 @@ function validateStops(stops: typeof stop.type[]) {
     if (s.lng !== undefined && (!Number.isFinite(s.lng) || s.lng < -180 || s.lng > 180)) throw new Error("Invalid stop longitude")
     if (s.travelKm !== undefined && (!Number.isFinite(s.travelKm) || s.travelKm < 0 || s.travelKm > 20000)) throw new Error("Invalid travel distance")
     if (s.travelMins !== undefined && (!Number.isFinite(s.travelMins) || s.travelMins < 0 || s.travelMins > 100000)) throw new Error("Invalid travel duration")
+    if (s.duration !== undefined && (!Number.isFinite(s.duration) || s.duration < 0 || s.duration > 43200)) throw new Error("Invalid stop duration")
   }
 }
 
@@ -124,9 +125,9 @@ export const replaceStops = mutation({ args: { tripId: v.id("trips"), stops: v.a
   if (!identity) throw new Error("Sign in required")
   const role = await accessRole(ctx, tripId, identity.subject)
   if (!role || role === "viewer") throw new Error("Trip not found")
-  // Owners need active access to edit; invited collaborators ride on the
-  // owner's subscription so sharing stays frictionless.
-  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  const trip = await ctx.db.get(tripId)
+  if (!trip) throw new Error("Trip not found")
+  await requireActiveAccess(ctx.db, trip.ownerId)
   if (stops.length > 100) throw new Error("Too many stops")
   validateStops(stops)
   const previous = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", tripId)).collect()
@@ -157,9 +158,9 @@ export const update = mutation({ args: { id: v.id("trips"), patch: v.object({
   if (!identity) throw new Error("Sign in required")
   const role = await accessRole(ctx, id, identity.subject)
   if (!role || role === "viewer") throw new Error("Trip not found")
-  // Owners need active access to edit; invited collaborators ride on the
-  // owner's subscription so sharing stays frictionless.
-  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  const trip = await ctx.db.get(id)
+  if (!trip) throw new Error("Trip not found")
+  await requireActiveAccess(ctx.db, trip.ownerId)
   if (patch.name !== undefined && (!patch.name.trim() || patch.name.length > 120)) throw new Error("Trip name must be 1-120 characters")
   if (patch.destination !== undefined && (!patch.destination.trim() || patch.destination.length > 120)) throw new Error("Trip destination must be 1-120 characters")
   if (patch.budget !== undefined && (!Number.isFinite(patch.budget) || patch.budget < 0 || patch.budget > 10_000_000)) throw new Error("Budget is out of range")
@@ -185,6 +186,8 @@ export const duplicate = mutation({ args: { id: v.id("trips") }, handler: async 
   const newId = await ctx.db.insert("trips", {
     name: `${trip.name} (copy)`,
     destination: trip.destination,
+    origin: trip.origin,
+    traveler: trip.traveler,
     startDate: trip.startDate,
     endDate: trip.endDate,
     budget: trip.budget,
@@ -192,6 +195,10 @@ export const duplicate = mutation({ args: { id: v.id("trips") }, handler: async 
     status: "planning",
     ownerId: identity.subject,
     coverImage: trip.coverImage,
+    travelMonth: trip.travelMonth,
+    travelers: trip.travelers,
+    aiBrief: trip.aiBrief,
+    traceShareToken: makeToken(),
   })
   await Promise.all(stops.map(item => {
     const { _id, _creationTime, tripId: _oldTripId, ...rest } = item as typeof item & { _id: Id<"tripStops">; _creationTime: number; tripId: Id<"trips"> }
@@ -220,9 +227,13 @@ export const remove = mutation({ args: { id: v.id("trips") }, handler: async (ct
     await Promise.all([...storageIds, ...videoIds].map(sid => ctx.storage.delete(sid)))
     await ctx.db.delete(m._id)
   }))
-  // Cascade: bookings + votes + notes otherwise orphaned with dangling tripId
+  // Cascade: bookings + payments + votes + notes otherwise orphaned with dangling tripId
   const bookings = await ctx.db.query("bookings").withIndex("by_trip", q => q.eq("tripId", id)).collect()
-  await Promise.all(bookings.map(b => ctx.db.delete(b._id)))
+  for (const b of bookings) {
+    const pays = await ctx.db.query("payments").withIndex("by_booking", q => q.eq("bookingId", b._id)).collect()
+    await Promise.all(pays.map(p => ctx.db.delete(p._id)))
+    await ctx.db.delete(b._id)
+  }
   const votes = await ctx.db.query("stopVotes").withIndex("by_trip", q => q.eq("tripId", id)).collect()
   await Promise.all(votes.map(v => ctx.db.delete(v._id)))
   const notes = await ctx.db.query("dayNotes").withIndex("by_trip_day", q => q.eq("tripId", id)).collect()
@@ -366,7 +377,9 @@ export const setStopCompleted = mutation({ args: { tripId: v.id("trips"), stopId
   if (!identity) throw new Error("Sign in required")
   const role = await accessRole(ctx, tripId, identity.subject)
   if (!role || role === "viewer") throw new Error("Trip not found")
-  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  const trip = await ctx.db.get(tripId)
+  if (!trip) throw new Error("Trip not found")
+  await requireActiveAccess(ctx.db, trip.ownerId)
   const stopRow = await ctx.db.get(stopId)
   if (!stopRow || stopRow.tripId !== tripId) throw new Error("Stop not found")
   return ctx.db.patch(stopId, { completedAt: completed ? Date.now() : undefined })
@@ -444,8 +457,10 @@ export const setStopVote = mutation({ args: { stopId: v.id("tripStops"), vote: v
   if (!stop) throw new Error("Trip not found")
   const role = await accessRole(ctx, stop.tripId, identity.subject)
   if (!role || role === "viewer") throw new Error("Trip not found")
-  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
-  const existing = await ctx.db.query("stopVotes").withIndex("by_stop", q => q.eq("stopId", stopId)).filter(q => q.eq(q.field("userId"), identity.subject)).first()
+  const trip = await ctx.db.get(stop.tripId)
+  if (!trip) throw new Error("Trip not found")
+  await requireActiveAccess(ctx.db, trip.ownerId)
+  const existing = await ctx.db.query("stopVotes").withIndex("by_stop_user", q => q.eq("stopId", stopId).eq("userId", identity.subject)).unique()
   if (vote === null) {
     if (existing) await ctx.db.delete(existing._id)
     return
@@ -484,7 +499,10 @@ export const addDayNote = mutation({ args: { tripId: v.id("trips"), day: v.numbe
   if (!identity) throw new Error("Sign in required")
   const role = await accessRole(ctx, tripId, identity.subject)
   if (!role || role === "viewer") throw new Error("Trip not found")
-  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  if (day < 1 || day > 30 || !Number.isInteger(day)) throw new Error("Day must be 1-30")
+  const trip = await ctx.db.get(tripId)
+  if (!trip) throw new Error("Trip not found")
+  await requireActiveAccess(ctx.db, trip.ownerId)
   const text = body.trim().slice(0, 500)
   if (!text) throw new Error("Note is empty")
   await ctx.db.insert("dayNotes", {
@@ -503,8 +521,10 @@ export const removeDayNote = mutation({ args: { noteId: v.id("dayNotes") }, hand
   if (!identity) throw new Error("Sign in required")
   const note = await ctx.db.get(noteId)
   if (!note) return
+  const trip = await ctx.db.get(note.tripId)
+  if (!trip) throw new Error("Trip not found")
   const role = await accessRole(ctx, note.tripId, identity.subject)
   if (!(note.authorId === identity.subject || role === "owner")) throw new Error("Not allowed")
-  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  await requireActiveAccess(ctx.db, trip.ownerId)
   await ctx.db.delete(noteId)
 }})

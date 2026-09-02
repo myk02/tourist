@@ -256,9 +256,9 @@ export const react = mutation({ args: { id: v.id("moments"), emoji: v.string() }
   if (!moment) throw new Error("Moment not found")
   const role = await accessRole(ctx, moment.tripId, identity.subject)
   if (!role || role === "viewer") throw new Error("Only collaborators can react")
-  // Reactions are content writes — expired owners don't get to add them,
-  // matching every other write on the trip.
-  if (role === "owner") await requireActiveAccess(ctx.db, identity.subject)
+  const trip = await ctx.db.get(moment.tripId)
+  if (!trip) throw new Error("Trip not found")
+  await requireActiveAccess(ctx.db, trip.ownerId)
   const mine = (moment.reactions ?? []).find(r => r.userId === identity.subject)
   const had = mine?.emoji === emoji
   // One reaction per person: a second tap clears it, a different emoji switches it.

@@ -80,9 +80,9 @@ export const markPaidByCharge = internalMutation({
       const normalizedEmail = email.toLowerCase().trim()
       const candidates = await ctx.db
         .query("payments")
+        .withIndex("by_status", q => q.eq("status", "pending"))
         .filter(q =>
           q.and(
-            q.eq(q.field("status"), "pending"),
             q.eq(q.field("amount"), Math.round(amount / 100)),
             q.eq(q.field("currency"), currency),
             q.gte(q.field("createdAt"), weekAgo),

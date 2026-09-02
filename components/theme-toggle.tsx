@@ -13,7 +13,15 @@ function ThemeToggle({ className }: { className?: string }) {
   const isDark = theme === "dark"
   if (!mounted) {
     return (
-      <Button type="button" variant="ghost" size="icon" className={className} aria-label="Toggle theme" disabled>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={className}
+        aria-label="Toggle theme"
+        disabled
+        suppressHydrationWarning
+      >
         <MoonIcon />
       </Button>
     )
@@ -27,6 +35,7 @@ function ThemeToggle({ className }: { className?: string }) {
       className={className}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       onClick={toggle}
+      suppressHydrationWarning
     >
       {isDark ? <SunIcon /> : <MoonIcon />}
     </Button>
