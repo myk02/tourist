@@ -210,8 +210,9 @@ export function TripDetail() {
       )
     }
     if (stage === 'past') {
+      const token = (trip as { traceShareToken?: string }).traceShareToken
       return (
-        <Button variant="secondary" nativeButton={false} render={<Link href={`/recap/${trip._id}`} />}>
+        <Button variant="secondary" nativeButton={false} render={<Link href={token ? `/recap/${trip._id}?t=${token}` : `/recap/${trip._id}`} />}>
           <Images data-icon="inline-start" />View recap
         </Button>
       )
@@ -519,6 +520,15 @@ export function TripDetail() {
                 <p className="text-sm text-muted-foreground">Reservations linked to this trip</p>
                 <ForwardBookingDialog tripId={tripId} />
               </div>
+              {bookings !== undefined && (() => {
+                const unpaid = bookings.filter(b => b.status !== 'paid' && b.status !== 'cancelled' && b.amount > 0)
+                const unpaidTotal = unpaid.reduce((s, b) => s + b.amount, 0)
+                return unpaid.length > 0 ? (
+                  <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-800 dark:text-amber-200">
+                    <strong>{formatKES(unpaidTotal)}</strong> outstanding across {unpaid.length} reservation{unpaid.length === 1 ? '' : 's'} — pay below to lock {unpaid.length === 1 ? 'it' : 'them'} in.
+                  </p>
+                ) : null
+              })()}
               {bookings === undefined ? (
                 <div className="kt-shimmer h-28 rounded-xl" />
               ) : bookings.length > 0 ? (
