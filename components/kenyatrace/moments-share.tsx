@@ -13,6 +13,7 @@ import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
 import { EmptyMoments } from '@/components/ui/kt/empty-state'
 import { GradientHero } from '@/components/ui/kt/gradient-hero'
 import { isValidConvexId } from '@/lib/id'
+import { prettyDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
 type Media = { type: 'video' | 'image'; url: string }
@@ -69,7 +70,7 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
       <GradientHero className="px-6 py-10 md:px-10">
         <Badge className="bg-accent text-accent-foreground">Shared with you</Badge>
         <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight">{trip.name}</h1>
-        <p className="mt-2 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {trip.startDate} → {trip.endDate}</p>
+        <p className="mt-2 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {prettyDate(trip.startDate)} → {prettyDate(trip.endDate)}</p>
         {trip.rating ? (
           <div className="mt-4 flex items-center gap-3">
             <span className="flex gap-0.5">

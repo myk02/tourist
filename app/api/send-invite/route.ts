@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { isEmail } from '@/lib/email'
 import { EMAIL_FROM, resend } from '@/lib/resend'
 import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
  * POST /api/send-invite
@@ -38,7 +37,7 @@ export async function POST(request: Request) {
   const senderName = typeof body.senderName === 'string' && body.senderName.trim() ? body.senderName.trim().slice(0, 80) : 'Someone'
   const message = typeof body.message === 'string' ? body.message.trim().slice(0, 500) : ''
 
-  if (!EMAIL_RE.test(to)) return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
+  if (!isEmail(to)) return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
   if (!tripName) return NextResponse.json({ error: 'Missing invite details' }, { status: 400 })
   if (tripId.length > 64 || token.length > 64) return NextResponse.json({ error: 'Invalid invite details' }, { status: 400 })
   // The link base is server-configured, never the client's Origin header — a

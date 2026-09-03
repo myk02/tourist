@@ -20,7 +20,7 @@ import { geocodeArea } from '@/lib/geocode'
 import { buildPrintableItinerary, type PrintableItinerary } from '@/lib/itinerary'
 import { downloadItineraryImage } from '@/lib/itinerary-image'
 import { formatKES } from '@/lib/kenya-data'
-import { localDateOnly } from '@/lib/dates'
+import { localDateOnly, prettyDate } from '@/lib/dates'
 import { ItineraryEditor } from './itinerary-editor'
 import { KenyaMap } from './kenya-map'
 import { MomentAlbum } from './moment-album'
@@ -386,7 +386,7 @@ export function TripDetail() {
     <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-8">
       <GradientHero className="px-6 py-10 md:px-10">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge className="bg-accent text-accent-foreground">{trip.startDate} — {trip.endDate}</Badge>
+          <Badge className="bg-accent text-accent-foreground">{prettyDate(trip.startDate)} — {prettyDate(trip.endDate)}</Badge>
           <Badge className="bg-primary-foreground/20 text-primary-foreground">{stageChip}</Badge>
           {!isOwner && <Badge className="bg-accent text-accent-foreground">{myRole === 'editor' ? 'Shared with you · Editor' : 'Shared with you · Viewer'}</Badge>}
         </div>

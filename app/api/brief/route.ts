@@ -56,6 +56,9 @@ export async function POST(request: Request) {
     if (!rl.ok) {
       return Response.json({ error: 'Too many requests — try again shortly.' }, { status: 429 })
     }
+    if (!process.env.OPENROUTER_API_KEY) {
+      return Response.json({ error: 'Trip brief service is temporarily unavailable — try again shortly.' }, { status: 503 })
+    }
     const body = await request.json()
     const input = requestSchema.parse(body)
     const stopsText = input.stops

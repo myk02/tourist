@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { isEmail, normalizeEmail } from '@/lib/email'
+import { fromMinorKES } from '@/lib/money'
 import { EMAIL_FROM, resend } from '@/lib/resend'
 import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
@@ -34,9 +36,9 @@ export async function POST(request: Request) {
   }
 
   const reference = typeof body.reference === 'string' ? body.reference.trim().slice(0, 64) : ''
-  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : ''
+  const email = typeof body.email === 'string' ? normalizeEmail(body.email).slice(0, 254) : ''
   if (!reference || !REF_RE.test(reference) || reference.length > 64) return NextResponse.json({ error: 'Invalid payment reference' }, { status: 400 })
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: 'A valid payer email is required' }, { status: 400 })
+  if (!isEmail(email)) return NextResponse.json({ error: 'A valid payer email is required' }, { status: 400 })
 
   if (!resend) {
     return NextResponse.json(
@@ -62,7 +64,7 @@ export async function POST(request: Request) {
           return NextResponse.json({
             ok: true,
             verified: true,
-            amount: typeof vJson.data.amount === 'number' ? vJson.data.amount / 100 : undefined,
+            amount: typeof vJson.data.amount === 'number' ? fromMinorKES(vJson.data.amount) : undefined,
             currency: vJson.data.currency ?? 'KES',
             hint: 'Charge settled — call verifyAndConfirm to mark it paid.',
           })

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { ProgressBar } from '@/components/ui/kt/progress-bar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatKES, wikimediaThumb } from '@/lib/kenya-data'
-import { KIND_HEX, kindHex } from '@/lib/kind'
+import { kindHex } from '@/lib/kind'
 import { isValidConvexId } from '@/lib/id'
 import { cn } from '@/lib/utils'
 import { PayNowButton } from './pay-now'
@@ -132,13 +132,10 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
   )
 }
 
-// Kind→hue mapping lives in lib/kind.ts (single source shared with
-// KIND_STYLE in itinerary-editor and CATEGORY_COLOR in budget-dashboard).
-const KIND_COLORS: Record<string, string> = KIND_HEX
-
 /**
  * Compact trip-cost card: total vs budget progress bar, plus a stacked
  * breakdown by spend category. Reused on the plan journey and trip detail.
+ * Category hues come from lib/kind.ts (single source).
  */
 export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost: number; kind: string }[]; budget: number; perDay?: number; className?: string }) {
   const total = stops.reduce((s, x) => s + x.cost, 0)

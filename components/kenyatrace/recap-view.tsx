@@ -14,6 +14,7 @@ import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/kt/empty-state'
 import { GradientHero } from '@/components/ui/kt/gradient-hero'
 import { isValidConvexId } from '@/lib/id'
+import { prettyDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
 type Moment = NonNullable<ReturnType<typeof useQuery<typeof api.moments.publicForTrip>>>['moments'][number]
@@ -84,7 +85,7 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
       <GradientHero>
         <Badge className="bg-accent text-accent-foreground">Trip recap</Badge>
         <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight">{trip.name}</h1>
-        <p className="mt-1 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {trip.startDate} → {trip.endDate}</p>
+        <p className="mt-1 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {prettyDate(trip.startDate)} → {prettyDate(trip.endDate)}</p>
         {trip.rating ? (
           <div className="mt-3 flex items-center gap-2">
             <span className="flex gap-0.5">

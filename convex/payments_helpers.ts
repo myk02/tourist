@@ -2,6 +2,7 @@ import { internalAction, internalMutation, internalQuery, type DatabaseWriter } 
 import { v } from "convex/values"
 import type { Doc } from "./_generated/dataModel"
 import { internal } from "./_generated/api"
+import { chargeMatches, fromMinorKES } from "../lib/money"
 
 /**
  * Internal helpers for `convex/payments.ts`. Kept in a separate module so the
@@ -69,7 +70,7 @@ export const markPaidByCharge = internalMutation({
     if (payment) {
       // Direct reference match — still validate amount/currency before crediting.
       if (payment.status === "paid") return { applied: false }
-      if (amount !== payment.amount * 100 || currency !== payment.currency) return { applied: false }
+      if (!chargeMatches(payment.amount, payment.currency, { amount, currency })) return { applied: false }
     }
     if (!payment) {
       // Most recent attempt first — the regenerated reference always belongs
@@ -84,7 +85,7 @@ export const markPaidByCharge = internalMutation({
         .withIndex("by_status", q => q.eq("status", "pending"))
         .filter(q =>
           q.and(
-            q.eq(q.field("amount"), Math.round(amount / 100)),
+            q.eq(q.field("amount"), fromMinorKES(amount)),
             q.eq(q.field("currency"), currency),
             q.gte(q.field("createdAt"), weekAgo),
           ),
@@ -167,8 +168,7 @@ export const reconcileStale = internalAction({
           data?.status === true &&
           tx?.status === "success" &&
           tx?.reference === p.reference &&
-          tx?.amount === p.amount * 100 &&
-          (tx?.currency ?? "KES") === p.currency
+          chargeMatches(p.amount, p.currency, tx ?? {})
         ) {
           await ctx.runMutation(internal.payments_helpers.markPaid, { paymentId: p._id })
           paid++

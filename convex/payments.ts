@@ -2,6 +2,8 @@ import { action, mutation } from "./_generated/server"
 import { v } from "convex/values"
 import { makeFunctionReference } from "convex/server"
 import type { Doc, Id } from "./_generated/dataModel"
+import { isEmail } from "../lib/email"
+import { chargeMatches } from "../lib/money"
 
 // Real function references for the internal helpers, built by path (the
 // `internal.*` proxy would create a type-inference cycle in this module tree,
@@ -18,7 +20,6 @@ const markPaidRef = makeFunctionReference<
 >("payments_helpers/markPaid")
 
 const PAYSTACK_BASE = "https://api.paystack.co"
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
  * Paystack checkout for reservations.
@@ -49,7 +50,7 @@ export const initialize = mutation({
     // be verified, so starting a popup could take a user's money with no
     // record of the payment on our side.
     if (!process.env.PAYSTACK_SECRET_KEY) throw new Error("Payment provider is not configured — contact support")
-    if (!EMAIL_RE.test(email.trim())) throw new Error("Enter a valid email address")
+    if (!isEmail(email)) throw new Error("Enter a valid email address")
     const booking = await ctx.db.get(bookingId)
     if (!booking || booking.ownerId !== identity.subject) throw new Error("Booking not found")
     if (booking.status === "cancelled") throw new Error("Cancelled bookings can't be paid")
@@ -106,8 +107,7 @@ export const verifyAndConfirm = action({
       data?.status === true &&
       tx?.status === "success" &&
       tx?.reference === payment.reference &&
-      tx?.amount === payment.amount * 100 &&
-      (tx?.currency ?? "KES") === payment.currency
+      chargeMatches(payment.amount, payment.currency, tx ?? {})
     if (!success) return { verified: false }
 
     await ctx.runMutation(markPaidRef, { paymentId })

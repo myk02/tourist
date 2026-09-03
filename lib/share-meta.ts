@@ -1,4 +1,5 @@
 import { ConvexHttpClient } from 'convex/browser'
+import { prettyDate } from './dates'
 
 /**
  * Share-link SEO: resolves real titles, descriptions and images for the
@@ -44,7 +45,7 @@ export async function shareMeta(kind: 'trace' | 'recap' | 'moments', tripId: str
       if (!data?.trip?.name) return FALLBACK.trace
       return {
         title: `Trip trace · ${data.trip.name}`,
-        description: `${data.trip.destination ?? 'Kenya'}${data.trip.startDate ? ` · ${data.trip.startDate} → ${data.trip.endDate}` : ''}${data.distanceKm ? ` · ${data.distanceKm} km traced` : ''}. Follow the route with KenyaTrace.`,
+        description: `${data.trip.destination ?? 'Kenya'}${data.trip.startDate ? ` · ${prettyDate(data.trip.startDate)} → ${data.trip.endDate ? prettyDate(data.trip.endDate) : ''}` : ''}${data.distanceKm ? ` · ${data.distanceKm} km traced` : ''}. Follow the route with KenyaTrace.`,
         image: data.trip.coverImage || '/kenya-hero.png',
       }
     }
@@ -53,7 +54,7 @@ export async function shareMeta(kind: 'trace' | 'recap' | 'moments', tripId: str
     const firstImage = data.moments?.map(m => m.imageUrl ?? m.imageUrls?.[0]).find(Boolean)
     return {
       title: kind === 'recap' ? `Trip recap · ${data.trip.name}` : `${data.trip.name} · shared moments`,
-      description: `${data.trip.destination ?? 'Kenya'}${data.trip.startDate ? ` · ${data.trip.startDate} → ${data.trip.endDate}` : ''}. Made with KenyaTrace.`,
+      description: `${data.trip.destination ?? 'Kenya'}${data.trip.startDate ? ` · ${prettyDate(data.trip.startDate)} → ${data.trip.endDate ? prettyDate(data.trip.endDate) : ''}` : ''}. Made with KenyaTrace.`,
       image: firstImage || '/kenya-hero.png',
     }
   } catch {

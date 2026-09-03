@@ -15,6 +15,7 @@ import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/comp
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { formatKES } from '@/lib/kenya-data'
+import { daysUntil } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { RequireSubscription } from './paywall'
 
@@ -26,13 +27,6 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 type Trip = NonNullable<ReturnType<typeof useQuery<typeof api.trips.list>>>[number]
-
-function daysUntil(dateStr: string) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const target = new Date(`${dateStr}T00:00:00`)
-  return Math.round((target.getTime() - today.getTime()) / 86400000)
-}
 
 function countdown(trip: Trip) {
   if (trip.status === 'completed') return 'Completed trip'

@@ -306,9 +306,10 @@ export function Moments() {
               {tripStops.length > 0 && (
                 <Field>
                   <FieldLabel>Pin to itinerary stop</FieldLabel>
-                  <Select value={stopId} onValueChange={v => setStopId(v ?? '')}>
+                  <Select value={stopId || 'none'} onValueChange={v => setStopId(v === 'none' ? '' : (v ?? ''))}>
                     <SelectTrigger><SelectValue placeholder="Not pinned to a stop" /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Not pinned to a stop</SelectItem>
                       {tripStops.map(s => <SelectItem key={s._id} value={s._id}>{`Day ${s.day} · ${s.name}`}</SelectItem>)}
                     </SelectContent>
                   </Select>

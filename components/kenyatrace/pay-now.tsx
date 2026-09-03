@@ -8,6 +8,7 @@ import type { Doc } from '@/convex/_generated/dataModel'
 import { Loader2, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { toMinorKES } from '@/lib/money'
 import { loadPaystackScript } from '@/lib/paystack-inline'
 
 /**
@@ -81,7 +82,7 @@ export function PayNowButton({ booking }: { booking: Doc<'bookings'> }) {
       const handler = window.PaystackPop.setup({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
         email,
-        amount: amount * 100, // KES → minor units
+        amount: toMinorKES(amount), // KES → minor units
         currency: 'KES',
         ref: reference,
         callback: () => { void confirm() },

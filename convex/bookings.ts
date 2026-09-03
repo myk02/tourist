@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
+import { dayFromDate, stayNights } from "../lib/dates"
 import { requireActiveAccess } from "./subscriptions"
 import { accessRole } from "./trips"
 
@@ -8,14 +9,6 @@ function kindFromVertical(vertical: string): string {
   if (vertical === "stays") return "Stay"
   if (vertical === "flights" || vertical === "taxis" || vertical === "cars") return "Transport"
   return "Experience"
-}
-
-/** Day number (1-based) for a check-in date relative to the trip start date. */
-function dayFromDate(startDate: string, checkIn: string): number {
-  const start = new Date(`${startDate}T00:00:00`).getTime()
-  const check = new Date(`${checkIn}T00:00:00`).getTime()
-  if (!Number.isFinite(start) || !Number.isFinite(check)) return 1
-  return Math.max(Math.round((check - start) / 86400000) + 1, 1)
 }
 
 /** How long a pending checkout may block cancellation before it counts as abandoned. */
@@ -73,8 +66,7 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
     const kind = kindFromVertical(listing.vertical)
     let duration: number | undefined
     if (kind === "Stay" && args.checkIn && args.checkOut) {
-      const diff = new Date(`${args.checkOut}T00:00:00`).getTime() - new Date(`${args.checkIn}T00:00:00`).getTime()
-      const days = Number.isFinite(diff) ? Math.max(Math.round(diff / 86400000), 1) : 1
+      const days = stayNights(args.checkIn, args.checkOut)
       duration = days * 1440
       if (!Number.isFinite(duration) || duration < 0 || duration > 43200) duration = 1440
     }
@@ -148,8 +140,7 @@ export const createFromEmail = mutation({
       const day = args.checkIn ? dayFromDate(trip.startDate, args.checkIn) : (existing.length ? Math.max(...existing.map(s => s.day)) : 1)
       let duration: number | undefined
       if (kind === "Stay" && args.checkIn && args.checkOut) {
-        const diff = new Date(`${args.checkOut}T00:00:00`).getTime() - new Date(`${args.checkIn}T00:00:00`).getTime()
-        const days = Number.isFinite(diff) ? Math.max(Math.round(diff / 86400000), 1) : 1
+        const days = stayNights(args.checkIn, args.checkOut)
         duration = days * 1440
         if (!Number.isFinite(duration) || duration < 0 || duration > 43200) duration = 1440
       }

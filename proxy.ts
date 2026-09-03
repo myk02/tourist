@@ -5,9 +5,12 @@ import { clerkMiddleware } from '@clerk/nextjs/server'
  *
  * Runs on all app/api and page routes (excluding static assets) so any future
  * `await auth()` in a server component won't throw "auth() requires clerkMiddleware".
- * Public AI routes (plan, parse-booking, caption, brief) and public share pages
- * (trace/recap/moments) handle auth at the handler level (optional) but still
- * benefit from the middleware attaching the session cookie.
+ *
+ * NOTE (Phase 3.4): the public AI routes (plan, parse-booking, caption, brief)
+ * and public share pages (trace/recap/moments) intentionally perform NO
+ * `auth()` check — they are anonymous-by-design, spend-gated only by the
+ * per-instance IP rate limit in lib/rate-limit.ts. Do not add auth() to them
+ * without also shipping a guest-quota replacement, or shared links break.
  */
 export default clerkMiddleware()
 

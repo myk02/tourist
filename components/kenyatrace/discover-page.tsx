@@ -129,7 +129,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   useEffect(() => {
     if (vertical === 'taxis' && rawItems && rawItems.length === 0 && !seedGuardRef.current) {
       seedGuardRef.current = true
-      seedVertical({ vertical }).catch(console.error)
+      seedVertical({ vertical }).catch(() => toast.error('Could not load taxi routes — try again shortly'))
     }
   }, [vertical, rawItems, seedVertical])
 
@@ -280,7 +280,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
         try { lastScrape = parseInt(sessionStorage.getItem(key) || '0', 10) || 0 } catch { /* ignore */ }
         if (Date.now() - lastScrape > SCRAPE_GUARD_MS) {
           try { sessionStorage.setItem(key, String(Date.now())) } catch { /* ignore */ }
-          scrapeAction({ vertical }).catch(console.error)
+          scrapeAction({ vertical }).catch(() => toast.error('Live results unavailable — showing saved listings'))
         }
       }
     }

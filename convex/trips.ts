@@ -164,6 +164,10 @@ export const update = mutation({ args: { id: v.id("trips"), patch: v.object({
   if (patch.name !== undefined && (!patch.name.trim() || patch.name.length > 120)) throw new Error("Trip name must be 1-120 characters")
   if (patch.destination !== undefined && (!patch.destination.trim() || patch.destination.length > 120)) throw new Error("Trip destination must be 1-120 characters")
   if (patch.budget !== undefined && (!Number.isFinite(patch.budget) || patch.budget < 0 || patch.budget > 10_000_000)) throw new Error("Budget is out of range")
+  // Status enum (Phase 3.4 decision): planning → booked → travelling → completed.
+  // "travelling" (British spelling) is the canonical in-progress value — kept
+  // for back-compat with existing trip docs and trips-page's STATUS_LABEL.
+  // No "active"/"cancelled" values: adding one needs a data migration plus UI.
   if (patch.status !== undefined && !["planning", "booked", "travelling", "completed"].includes(patch.status)) throw new Error("Invalid status")
   if (patch.rating !== undefined && (!Number.isFinite(patch.rating) || patch.rating < 0 || patch.rating > 5)) throw new Error("Rating must be 0-5")
   if (patch.travelers !== undefined && (!Number.isInteger(patch.travelers) || patch.travelers < 1 || patch.travelers > 50)) throw new Error("Travelers must be 1-50")

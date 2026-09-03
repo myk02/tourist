@@ -12,9 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { isEmail, normalizeEmail } from '@/lib/email'
 import { cn } from '@/lib/utils'
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
  * Share dialog for a trip. The owner (and editors) can copy an invite link
@@ -78,8 +77,8 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
   }
 
   async function sendInvite() {
-    const to = email.trim().toLowerCase()
-    if (!EMAIL_RE.test(to)) { setEmailError('Enter a valid email address'); return }
+    const to = normalizeEmail(email)
+    if (!isEmail(to)) { setEmailError('Enter a valid email address'); return }
     setEmailError(null)
     setSending(true)
     try {

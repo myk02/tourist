@@ -3,9 +3,9 @@ import { v } from "convex/values"
 import { makeFunctionReference } from "convex/server"
 import type { Doc, Id } from "./_generated/dataModel"
 import { PLAN_PRICES, TRIAL_DAYS, DAY_MS } from "../lib/plans"
+import { isEmail } from "../lib/email"
 
 const PAYSTACK_BASE = "https://api.paystack.co"
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
  * Subscription access for KenyaTrace: prepaid packs — KES 100 for 7 days or
@@ -154,7 +154,7 @@ export const initializeDayPack = mutation({
     if (!process.env.PAYSTACK_SECRET_KEY) throw new Error("Payment provider is not configured — contact support")
     const price = PLAN_PRICES[days]
     if (!price) throw new Error("Invalid day pack")
-    if (!EMAIL_RE.test(email.trim())) throw new Error("Enter a valid email address")
+    if (!isEmail(email)) throw new Error("Enter a valid email address")
     const reference = `KT-SUB-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`
     const purchaseId = await ctx.db.insert("subscriptionPurchases", {
       ownerId: identity.subject,
