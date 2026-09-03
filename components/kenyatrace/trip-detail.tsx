@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { GradientHero } from '@/components/ui/kt/gradient-hero'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -130,9 +131,9 @@ export function TripDetail() {
   // declarations, so handlers and JSX below use the guaranteed non-null id.
   if (id == null) return <NotFound />
   const tripId = id
-  if (trip === undefined) return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-72 rounded-2xl" /></div>
+  if (trip === undefined) return <PageLoading label="Loading trip" className="mx-auto max-w-6xl p-8" shimmerClassName="h-72 rounded-2xl" />
   if (!trip) {
-    if (inviteState === 'accepting') return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-72 rounded-2xl" /></div>
+    if (inviteState === 'accepting') return <PageLoading label="Accepting trip invite" className="mx-auto max-w-6xl p-8" shimmerClassName="h-72 rounded-2xl" />
     if (inviteState === 'signin') {
       return (
         <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">

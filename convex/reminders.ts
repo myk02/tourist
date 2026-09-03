@@ -1,7 +1,7 @@
 import { action, internalAction, internalMutation, internalQuery } from "./_generated/server"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
-import { checkInMs, prettyDate } from "../lib/dates"
+import { checkInMs } from "../lib/dates"
 import { EMAIL_FROM, resend } from "../lib/resend"
 import { buildReminderEmail, type ReminderDue } from "../lib/reminder-email"
 
@@ -15,7 +15,7 @@ import { buildReminderEmail, type ReminderDue } from "../lib/reminder-email"
 
 const DAY_MS = 86_400_000
 
-interface Due extends ReminderDue {}
+type Due = ReminderDue
 
 /**
  * Upcoming reservations of one traveller with a reminder window open.

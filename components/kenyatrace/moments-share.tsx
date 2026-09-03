@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
 import { EmptyMoments } from '@/components/ui/kt/empty-state'
 import { GradientHero } from '@/components/ui/kt/gradient-hero'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { isValidConvexId } from '@/lib/id'
 import { prettyDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
@@ -45,7 +46,7 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
 
   const notFound = <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary" /><h1 className="font-serif text-4xl">Trip not found</h1><p className="text-muted-foreground">This share link is not available.</p></div>
   if (!validTripId) return notFound
-  if (data === undefined) return <div className="mx-auto max-w-6xl px-5 py-10"><div className="kt-shimmer h-64 rounded-2xl" /></div>
+  if (data === undefined) return <PageLoading label="Loading shared moments" className="mx-auto max-w-6xl px-5 py-10" shimmerClassName="h-64 rounded-2xl" />
   if (!data) return notFound
 
   const { trip, moments } = data

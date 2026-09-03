@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { BrandMark } from '@/components/ui/kt/brand-mark'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
@@ -149,7 +150,7 @@ export function Trips({ compact = false }: { compact?: boolean }) {
     }
   }
 
-  if (trips === undefined) return <div className="kt-shimmer h-52 rounded-2xl" />
+  if (trips === undefined) return <PageLoading label="Loading trips" shimmerClassName="h-52 rounded-2xl" />
 
   const empty = (
     <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">

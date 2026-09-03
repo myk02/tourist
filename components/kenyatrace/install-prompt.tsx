@@ -98,7 +98,7 @@ export function InstallPrompt() {
 
   return (
     <div className="fixed bottom-20 left-4 z-[700] w-[calc(100%-2rem)] max-w-sm rounded-2xl border bg-card p-4 shadow-pop md:bottom-6">
-      <button type="button" aria-label="Dismiss" onClick={dismiss} className="absolute right-2.5 top-2.5 text-muted-foreground transition-colors hover:text-foreground">
+      <button type="button" aria-label="Dismiss" onClick={dismiss} className="absolute right-1.5 top-1.5 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground">
         <X className="size-4" />
       </button>
       <div className="flex items-start gap-3">

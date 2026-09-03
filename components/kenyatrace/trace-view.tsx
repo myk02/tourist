@@ -7,6 +7,7 @@ import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { CalendarDays, Footprints, MapPin, Radio, Route } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { isValidConvexId } from '@/lib/id'
 import { prettyDate } from '@/lib/dates'
 import { KenyaMap } from './kenya-map'
@@ -49,7 +50,7 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
   )
 
   if (!validTripId) return unavailable
-  if (data === undefined) return <div className="kt-shimmer min-h-[100svh]" />
+  if (data === undefined) return <PageLoading label="Loading live trace" shimmerClassName="min-h-[100svh]" />
 
   if (!data) return unavailable
 

@@ -3,7 +3,7 @@
 **Date:** 2026-09-03
 **Stack:** Next.js 16.2.6 / React 19 / Convex 1.42 / Clerk 7 / Paystack Inline / MapLibre 5 / Tailwind 4 / shadcn + Base-UI
 **Routes:** `/` + `/plan` (GuidedJourney), `/discover` (+ `/discover/[vertical]/[id]`), `/trips/[id]` + `/trips/[id]/track`, `/moments`, `/trace/[id]?t=`, `/recap/[tripId]`, `/api/plan|brief|caption|parse-booking|send-invite|payment-recovery`
-**Status:** Audit complete. No code changed. This is the build blueprint.
+**Status:** Phases 1–8 executed on branch `restructure/phase-1-trust-repair` (see Execution log at the bottom). Ready for review and merge.
 
 ---
 
@@ -442,3 +442,24 @@ Nav (max 5 + center FAB): `Home Plan Discover Track + (Moment)`. Desktop top bar
 ---
 
 *End of plan. Start with Phase 0 repros. If any P0 repro doesn't fail as described, re-audit that path before building — evidence beats assumption.*
+
+---
+
+## 14. Execution log (branch `restructure/phase-1-trust-repair`)
+
+Every entry verified with `tsc --noEmit`, `eslint .` (only pre-existing warnings) and `vitest run` before commit.
+
+| Phase | Commit | What shipped |
+|-------|--------|--------------|
+| 1 — Trust repair | `7e6391a` | Trace token threaded through recap/moments `share-meta` + pages; `disableTraceShare` + `rotateTraceShare`; invite token masked + inline confirm; payment-recovery verify-first + hourly `payments-reconcile` cron; editors can book/upload; booking `type` unified; `parseBookingEmail.provider` fixed + AI merge hardened |
+| 2 — Design system | `9fc6b0a` | `lib/kind.ts` single source; `ui/kt/` library (BrandMark, GradientHero, badges, ProgressBar, PillToggle, EmptyState, Spinner, KindChip, KindChip); all gradient/kind/progress/pill call sites migrated; `placeholder.jpg` → `kenya-hero` + empty states; `svh` viewports; StarRating radiogroup 44px; labelled consent switch; `Link` for internal nav; `home.tsx` deleted |
+| 3 — Workflow unification | `d4cba57` | `lib/email.ts`, `lib/money.ts`, `lib/dates.ts` (+`stayNights`, `daysUntil`), `lib/reminder-email.ts` single sources; `prettyDate` display everywhere incl. embeds; brief 503 guard; proxy comment corrected; `/discover` → `/discover/stays`; stop-pin select clearable; silent catches → toasts; `lib/phase3.test.ts` (10 tests) |
+| 4 — Plan rebuild | `c686ceb` | Day headers with stops/cost/km/min; shared PillToggle for mobile list/map; Move-to-Day select; undo toasts for optimize; aria-live announcements; trip recap link carries `?t=`; outstanding-balance banner in bookings tab |
+| 5 — Discover | `06c1221` | Keyboard-navigable search combobox; bordered cards (no lift-shift); overlay button contrast/rings/hit areas; taxis hero deduped to local asset; scraper insert-then-sweep + no clear-before-scrape + on-demand policy doc; listing loading state with status |
+| 6 — Track/Moments/Recap | `a375ccb` | Positions throttle coalesces instead of throwing; crypto tab ids; permission primer copy; recap stats strip + native Web Share + Check icon; moments save busy guard; two-tap End confirm |
+| 7 — Checkout/Paywall | `9d3d063` | Computed per-day pricing + honest pro-rata savings; blank-modal sign-in CTA; M-Pesa STK guidance toasts; `toMinorKES` in day-pack checkout; `pendingForBooking` query + Check-status retry in booking rows |
+| 8 — Hardening | *(this commit)* | `npm run verify` gate; `PageLoading` status announcements on all page-level shimmers; install-prompt dismiss 44px target; `unoptimized:true` documented (Convex dynamic hostnames); `hono` override documented (dev-only shadcn CLI subtree) |
+
+**Deliberate deferrals (not oversights):** Convex-backed rate limiting (needs schema + migration); cursor pagination for the remaining unbounded `collect()`s (needs server-side filtering UI); Africa's Talking SMS receipts (needs provider credentials); guest checkout (auth-model project); `/` marketing hero split from `/plan` (needs design copy); MapLibre tile packs per park (needs tile-hosting decision); full `AppError` toast-copy map (belongs with future page work).
+
+**Merge checklist:** `npm run verify` green → review the diff (it also contains pre-existing working-tree changes swept into `7e6391a`) → Convex deploy (`payments-reconcile` cron + new `pendingForBooking` query go live together) → smoke-test share links, a day-pack purchase, and a closed-tab payment recovery.

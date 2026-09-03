@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/kt/empty-state'
 import { GradientHero } from '@/components/ui/kt/gradient-hero'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { isValidConvexId } from '@/lib/id'
 import { calendarDayDiff, prettyDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
@@ -62,7 +63,7 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
   )
 
   if (!validTripId) return notFound
-  if (data === undefined) return <div className="mx-auto max-w-3xl px-5 py-10"><div className="kt-shimmer aspect-square rounded-3xl" /></div>
+  if (data === undefined) return <PageLoading label="Loading trip recap" className="mx-auto max-w-3xl px-5 py-10" shimmerClassName="aspect-square rounded-3xl" />
   if (!data) return notFound
 
   const { trip } = data

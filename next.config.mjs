@@ -11,6 +11,11 @@ const nextConfig = {
     root: projectDir,
   },
   images: {
+    // Intentionally unoptimized (Phase 8 decision): moment photos come from
+    // Convex storage on per-deployment hostnames that cannot be enumerated in
+    // remotePatterns, and listing art hotlinks Wikimedia. A custom loader or
+    // remotePatterns allowlist would break one of the three sources — revisit
+    // when media moves to a single CDN hostname.
     unoptimized: true,
   },
 }

@@ -8,6 +8,7 @@ import { Compass, Images, ListChecks, MapPin, Navigation, Route, Share2, ShieldO
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { BrandMark } from '@/components/ui/kt/brand-mark'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { ProgressBar } from '@/components/ui/kt/progress-bar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -174,7 +175,7 @@ export function Track() {
   // A definitive "no such trip" from the server wins over any saved copy.
   if (me !== undefined && trip === null) return <NotFound />
   // Offline with a saved copy renders through; otherwise wait for data.
-  if (viewTrip === undefined || (me === undefined && !usingCache)) return <div className="kt-shimmer min-h-[100svh]" />
+  if (viewTrip === undefined || (me === undefined && !usingCache)) return <PageLoading label="Loading trip tracker" shimmerClassName="min-h-[100svh]" />
   if (!viewTrip) return <NotFound />
   const isViewer = viewTrip.role === 'viewer'
 
