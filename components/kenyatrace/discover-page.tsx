@@ -771,7 +771,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
             <KenyaMap
               points={mapPoints}
               labelMode
-              className="h-[calc(100vh-7rem)]"
+              className="h-[calc(100svh-7rem)]"
               hoveredId={hoveredId}
               onMarkerEnter={setHoveredId}
               onMarkerLeave={() => setHoveredId(null)}

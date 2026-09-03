@@ -12,6 +12,7 @@ import { AlertCircle, Camera, Compass, Download, Heart, Sparkles, TrendingDown }
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { GradientHero } from '@/components/ui/kt/gradient-hero'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
@@ -185,7 +186,7 @@ export function Profile() {
           <TabsContent value="overview" className="flex flex-col gap-7">
             {/* Airbnb-style travel snapshot: what this traveller has actually
                 done, composed from counts that already exist. */}
-            <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-[color-mix(in_oklch,var(--primary),#000_28%)] px-6 py-8 text-primary-foreground shadow-lift ring-1 ring-primary/20 md:px-8">
+            <GradientHero className="md:px-8">
               <p className="text-xs font-semibold uppercase tracking-widest text-accent">Travel snapshot</p>
               <h2 className="mt-1 font-serif text-3xl font-semibold tracking-tight">
                 {(user?.fullName || 'Kenya traveller').split(' ')[0]}&apos;s Kenya story
@@ -204,7 +205,7 @@ export function Profile() {
                   <p className="text-sm opacity-80">moments captured</p>
                 </div>
               </div>
-            </div>
+            </GradientHero>
             {upcoming && (
               <Card>
                 <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">

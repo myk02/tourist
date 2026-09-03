@@ -11,6 +11,7 @@ import { CalendarClock, Camera, Copy, CopyPlus, FileDown, Images, LocateFixed, M
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { GradientHero } from '@/components/ui/kt/gradient-hero'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -383,7 +384,7 @@ export function TripDetail() {
   return (
     <RequireSubscription enabled={requireSubscription}>
     <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-8">
-      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-[color-mix(in_oklch,var(--primary),#000_28%)] px-6 py-10 text-primary-foreground shadow-lift ring-1 ring-primary/20 md:px-10">
+      <GradientHero className="px-6 py-10 md:px-10">
         <div className="flex flex-wrap items-center gap-2">
           <Badge className="bg-accent text-accent-foreground">{trip.startDate} — {trip.endDate}</Badge>
           <Badge className="bg-primary-foreground/20 text-primary-foreground">{stageChip}</Badge>
@@ -456,7 +457,7 @@ export function TripDetail() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
+      </GradientHero>
       {stage === 'active' && (
         <TodayCard
           tripId={tripId}

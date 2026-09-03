@@ -10,6 +10,8 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
+import { EmptyMoments } from '@/components/ui/kt/empty-state'
+import { GradientHero } from '@/components/ui/kt/gradient-hero'
 import { isValidConvexId } from '@/lib/id'
 import { cn } from '@/lib/utils'
 
@@ -22,14 +24,14 @@ function mediaOf(m: { imageUrl: string | null; imageUrls?: string[]; videoUrls?:
     ...videos.map(url => ({ type: 'video' as const, url })),
     ...images.map(url => ({ type: 'image' as const, url })),
   ]
-  return media.length ? media : [{ type: 'image', url: '/placeholder.jpg' }]
+  return media.length ? media : [{ type: 'image', url: '/kenya-hero.png' }]
 }
 
-function MediaTile({ media, className }: { media: Media; className?: string }) {
+function MediaTile({ media, alt, className }: { media: Media; alt: string; className?: string }) {
   if (media.type === 'video') {
-    return <video src={media.url} controls muted playsInline preload="metadata" className={cn('size-full object-cover', className)} />
+    return <video src={media.url} controls muted playsInline preload="metadata" aria-label={alt} className={cn('size-full object-cover', className)} />
   }
-  return <Image src={media.url} fill className={cn('object-cover', className)} alt="" sizes="(max-width: 768px) 50vw, 33vw" />
+  return <Image src={media.url} fill className={cn('object-cover', className)} alt={alt} sizes="(max-width: 768px) 50vw, 33vw" />
 }
 
 export function MomentsShare({ tripId, token }: { tripId: string; token?: string }) {
@@ -64,7 +66,7 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-10">
-      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-[color-mix(in_oklch,var(--primary),#000_28%)] px-6 py-10 text-primary-foreground shadow-lift ring-1 ring-primary/20 md:px-10">
+      <GradientHero className="px-6 py-10 md:px-10">
         <Badge className="bg-accent text-accent-foreground">Shared with you</Badge>
         <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight">{trip.name}</h1>
         <p className="mt-2 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {trip.startDate} → {trip.endDate}</p>
@@ -77,13 +79,10 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
           </div>
         ) : null}
         {trip.review ? <p className="mt-3 max-w-2xl italic opacity-90">“{trip.review}”</p> : null}
-      </div>
+      </GradientHero>
 
       {moments.length === 0 ? (
-        <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
-          <p className="font-serif text-2xl">No shared moments yet</p>
-          <p className="mt-2 max-w-md text-muted-foreground">The traveller hasn&apos;t made any moments public on this trip.</p>
-        </div>
+        <EmptyMoments />
       ) : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           {moments.map((m, mi) => {
@@ -91,7 +90,7 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
             return (
               <div key={m._id} className="group relative aspect-square overflow-hidden rounded-xl">
                 <button className="block size-full" onClick={() => setLightbox({ moment: mi, media: 0 })} aria-label={`View moment: ${m.caption}`}>
-                  <MediaTile media={media[0]} className="transition-transform duration-300 group-hover:scale-105" />
+                  <MediaTile media={media[0]} alt={m.caption} className="transition-transform duration-300 group-hover:scale-105" />
                 </button>
                 {media.length > 1 && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{media.length} media</Badge>}
                 {m.best && <Badge className="absolute left-2 top-2 bg-accent text-accent-foreground">Best moment</Badge>}

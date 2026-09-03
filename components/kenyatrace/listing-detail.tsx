@@ -10,6 +10,7 @@ import { Check, MapPin, Star, TrendingDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/kt/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -282,7 +283,7 @@ export function Detail({ id }: { id: string }) {
                   </p>
                 )}
                 <Button size="lg" className="w-full" onClick={handleReserveClick} disabled={!item || (isSignedIn && subscriptionStatus === undefined)}>
-                  {isSignedIn && subscriptionStatus === undefined ? 'Checking access…' : 'Reserve'}
+                  {isSignedIn && subscriptionStatus === undefined ? <Spinner label="Checking access" /> : 'Reserve'}
                 </Button>
                 <Button variant="outline" className="w-full" onClick={handleAddToTrip} disabled={!item}>
                   Add to a trip

@@ -3,15 +3,17 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useConvexAuth, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Doc, Id } from '@/convex/_generated/dataModel'
 import { CircleUserRound, MapPin } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ProgressBar } from '@/components/ui/kt/progress-bar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatKES, wikimediaThumb } from '@/lib/kenya-data'
+import { KIND_HEX, kindHex } from '@/lib/kind'
 import { isValidConvexId } from '@/lib/id'
 import { cn } from '@/lib/utils'
 import { PayNowButton } from './pay-now'
@@ -81,7 +83,21 @@ export function SourceBadge({ source, className, onClick }: { source?: string | 
   )
 }
 
-export function RequireAuth({children}:{children:React.ReactNode}){const {isAuthenticated,isLoading}=useConvexAuth();if(isLoading)return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl"/></div>;if(!isAuthenticated)return <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center"><span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8"/></span><h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1><p className="text-muted-foreground">Sign in to save routes, reservations, live traces and moments.</p><Button size="lg" nativeButton={false} render={<Link href="/sign-in" />}>Sign in to continue</Button></div>;return <>{children}</>}
+export function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  if (isLoading) return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl" /></div>
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
+        <span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8" /></span>
+        <h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1>
+        <p className="text-muted-foreground">Sign in to save routes, reservations, live traces and moments.</p>
+        <Button size="lg" nativeButton={false} render={<Link href="/sign-in" />}>Sign in to continue</Button>
+      </div>
+    )
+  }
+  return <>{children}</>
+}
 
 /**
  * One reservation row, resolving the listing by id. Used on the Profile
@@ -104,6 +120,7 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
           <Badge className={cn(
             booking.status === 'cancelled' && 'bg-card text-card-foreground',
             booking.status === 'paid' && 'bg-emerald-600 text-white',
+            (booking.status === 'requested' || booking.status === 'pending') && 'bg-secondary text-secondary-foreground',
           )}>
             {booking.status === 'paid' ? 'Paid' : booking.status}
           </Badge>
@@ -115,11 +132,9 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
   )
 }
 
-// Same category→hue mapping as KIND_STYLE (itinerary-editor) and
-// CATEGORY_COLOR (budget-dashboard): Stay blue, Transport amber,
-// Experience emerald, Food rose — so a category is never green in one
-// component and blue in another.
-const KIND_COLORS: Record<string, string> = { Stay: '#3b82f6', Transport: '#f59e0b', Experience: '#10b981', Food: '#f43f5e' }
+// Kind→hue mapping lives in lib/kind.ts (single source shared with
+// KIND_STYLE in itinerary-editor and CATEGORY_COLOR in budget-dashboard).
+const KIND_COLORS: Record<string, string> = KIND_HEX
 
 /**
  * Compact trip-cost card: total vs budget progress bar, plus a stacked
@@ -142,19 +157,17 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
           {over && <span className="ml-2 text-xs font-semibold text-destructive">over budget</span>}
         </span>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-        <div className={cn('h-full rounded-full transition-all', over ? 'bg-destructive' : 'bg-primary')} style={{ width: `${pct}%` }} />
-      </div>
+      <ProgressBar value={pct} label="Trip cost against budget" barClassName={over ? 'bg-destructive' : undefined} className="mt-2" />
       <p className="mt-1 text-xs text-muted-foreground">{pct}% of your budget used{perDay != null ? ` · ≈ ${formatKES(perDay)} per day` : ''}</p>
       {kinds.length > 0 && (
         <div className="mt-3 border-t pt-3">
           <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-            {kinds.map(k => <div key={k.kind} style={{ width: `${(k.total / Math.max(total, 1)) * 100}%`, backgroundColor: KIND_COLORS[k.kind] }} />)}
+            {kinds.map(k => <div key={k.kind} style={{ width: `${(k.total / Math.max(total, 1)) * 100}%`, backgroundColor: kindHex(k.kind) }} />)}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
             {kinds.map(k => (
               <span key={k.kind} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="size-2.5 rounded-full" style={{ backgroundColor: KIND_COLORS[k.kind] }} />
+                <span className="size-2.5 rounded-full" style={{ backgroundColor: kindHex(k.kind) }} />
                 {k.kind} · {formatKES(k.total)}
               </span>
             ))}
@@ -165,8 +178,13 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
   )
 }
 
-export function NotFound(){return <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary"/><h1 className="font-serif text-4xl">This trail ends here</h1><p className="text-muted-foreground">The page or place you requested could not be found.</p><Button nativeButton={false} render={<Link href="/"/>}>Back to discover</Button></div>}
+export function NotFound(){return <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary"/><h1 className="font-serif text-4xl">This trail ends here</h1><p className="text-muted-foreground">The page or place you requested could not be found.</p><Button nativeButton={false} render={<Link href="/"/>}>Back home</Button></div>}
 
-export function useTripId(){const pathname=usePathname();const id=pathname.split('/')[2];// Validate the route param before querying — a malformed id would make
-// Convex throw and crash the page instead of showing NotFound.
-return isValidConvexId(id) ? id as Id<'trips'> : null}
+export function useTripId() {
+  const params = useParams<{ id?: string | string[] }>()
+  const raw = params?.id
+  const id = Array.isArray(raw) ? raw[0] : raw
+  // Validate the route param before querying — a malformed id would make
+  // Convex throw and crash the page instead of showing NotFound.
+  return isValidConvexId(id) ? id as Id<'trips'> : null
+}

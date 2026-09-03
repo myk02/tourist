@@ -26,7 +26,7 @@ function mediaOf(m: Moment): Media[] {
     ...videos.map(url => ({ type: 'video' as const, url })),
     ...images.map(url => ({ type: 'image' as const, url })),
   ]
-  return media.length ? media : [{ type: 'image', url: '/placeholder.jpg' }]
+  return media.length ? media : [{ type: 'image', url: '/kenya-hero.png' }]
 }
 
 export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; onUploadClick?: () => void }) {

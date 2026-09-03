@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { ArrowRight, Check, ClipboardPaste, LocateFixed, MapPin, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
+import { Spinner } from '@/components/ui/kt/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
@@ -148,7 +150,7 @@ export function WhereStage() {
                   <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground"><MapPin /></span>
+                        <BrandMark icon={MapPin} size="sm" />
                         <div className="min-w-0">
                           <p className="truncate font-semibold">{draft.origin}</p>
                           <p className="text-xs text-muted-foreground">
@@ -160,7 +162,7 @@ export function WhereStage() {
                       </div>
                       <div className="flex shrink-0 gap-2">
                         <Button variant="outline" size="sm" onClick={() => setDraft(d => ({ ...d, origin: '', originLat: undefined, originLng: undefined }))}>Change</Button>
-                        <Button variant="outline" size="sm" onClick={locate} disabled={locating}>{locating ? '…' : 'Re-locate'}</Button>
+                        <Button variant="outline" size="sm" onClick={locate} disabled={locating}>{locating ? <Spinner label="Locating" /> : 'Re-locate'}</Button>
                       </div>
                     </div>
                   </div>

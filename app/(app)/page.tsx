@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
-import { Home } from '@/components/kenyatrace/home'
+import { GuidedJourney } from '@/components/kenyatrace/guided-journey'
 
 export const metadata: Metadata = { title: 'Plan your Kenya trip' }
 
 export default function HomePage() {
-  return <Home />
+  return <GuidedJourney />
 }

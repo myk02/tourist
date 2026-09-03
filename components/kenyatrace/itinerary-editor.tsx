@@ -22,23 +22,20 @@ import { api } from '@/convex/_generated/api'
 import { KenyaMap } from './kenya-map'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SuggestedBadge, VerifiedBadge } from '@/components/ui/kt/badges'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Car, Clock, GripVertical, List, Lock, LockOpen, Map as MapIcon, Pencil, Plus, RefreshCw, Route, Search, TriangleAlert, Utensils, Wallet, X } from 'lucide-react'
+import { Car, Clock, GripVertical, List, Lock, LockOpen, Map as MapIcon, Pencil, Plus, RefreshCw, Route, Search, TriangleAlert, Wallet, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatKES } from '@/lib/kenya-data'
+import { KIND_CHIP, kindChip } from '@/lib/kind'
 import { dayOptimizationHint } from '@/lib/route-optimize'
 import { cn } from '@/lib/utils'
 import type { Stop } from './types'
 
-export const KIND_STYLE: Record<string, string> = {
-  Stay: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  Transport: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  Experience: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  Food: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
-}
+export const KIND_STYLE: Record<string, string> = KIND_CHIP
 
 function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371
@@ -114,11 +111,11 @@ function SortableStopRow({ stop, active, editing, readOnly, onEditingChange, onU
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className={cn('font-semibold', stop.locked && 'opacity-60')}>{stop.title}</p>
-          <Badge className={cn('shrink-0 text-[10px]', KIND_STYLE[stop.kind] ?? 'bg-secondary text-muted-foreground')}>{stop.kind}</Badge>
+          <Badge className={cn('shrink-0 text-[10px]', kindChip(stop.kind))}>{stop.kind}</Badge>
           {stop.verified ? (
-            <Badge className="shrink-0 bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300">Verified</Badge>
+            <VerifiedBadge className="shrink-0 text-[10px]" />
           ) : stop.source === 'gap' ? (
-            <Badge variant="outline" className="shrink-0 border-amber-500/40 text-[10px] text-amber-700 dark:text-amber-300">Suggested</Badge>
+            <SuggestedBadge className="shrink-0 text-[10px]" />
           ) : null}
           {stop.locked && <Lock className="size-3 shrink-0 text-primary" />}
         </div>
@@ -168,13 +165,13 @@ function SortableStopRow({ stop, active, editing, readOnly, onEditingChange, onU
       </div>
       {!readOnly && (
         <div className="flex items-center gap-0.5">
-          <Button size="icon" variant="ghost" className="size-8" aria-label={stop.locked ? 'Unlock this stop' : 'Lock this stop'} onClick={() => onUpdate({ locked: !stop.locked })}>
+          <Button size="icon" variant="ghost" className="min-h-11 min-w-11" aria-label={stop.locked ? 'Unlock this stop' : 'Lock this stop'} onClick={() => onUpdate({ locked: !stop.locked })}>
             {stop.locked ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
           </Button>
-          <Button size="icon" variant="ghost" className="size-8" aria-label="Edit time and cost" onClick={() => onEditingChange(!editing)}>
+          <Button size="icon" variant="ghost" className="min-h-11 min-w-11" aria-label="Edit time and cost" onClick={() => onEditingChange(!editing)}>
             {editing ? <X className="size-4" /> : <Pencil className="size-4" />}
           </Button>
-          <Button size="icon" variant="ghost" className="size-8 text-destructive" aria-label={`Remove ${stop.title}`} onClick={onRemove}>
+          <Button size="icon" variant="ghost" className="min-h-11 min-w-11 text-destructive" aria-label={`Remove ${stop.title}`} onClick={onRemove}>
             <X className="size-4" />
           </Button>
         </div>
@@ -379,7 +376,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
         byDay.set(s.day, arr)
       }
       const result: Stop[] = []
-      for (const [day, dayStops] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
+      for (const [, dayStops] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
         // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
         const withCoords = dayStops.filter(s => s.lat != null && s.lng != null)
         const withoutCoords = dayStops.filter(s => s.lat == null || s.lng == null)
@@ -397,7 +394,6 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
           ordered.push(remaining.splice(best, 1)[0])
         }
         result.push(...ordered, ...withoutCoords)
-        void day
       }
       return result
     })
@@ -664,7 +660,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">By category</p>
               {kindTotals.map(([kind, value]) => (
                 <div key={kind} className="flex items-center gap-2 text-xs">
-                  <span className="flex w-24 shrink-0 items-center gap-1"><Utensils className="size-3 hidden" />{kind}</span>
+                  <span className="w-24 shrink-0">{kind}</span>
                   <Progress className="h-1.5 flex-1" value={Math.min((value / Math.max(total, 1)) * 100, 100)} />
                   <span className="w-16 shrink-0 text-right text-muted-foreground">{formatKES(value)}</span>
                 </div>

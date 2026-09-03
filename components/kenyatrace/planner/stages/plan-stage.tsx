@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Check, FileDown, Loader2, Navigation, Printer, Route, Sparkles } from 'lucide-react'
+import { ArrowRight, FileDown, Loader2, Navigation, Printer, Route, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SuggestedBadge, VerifiedBadge } from '@/components/ui/kt/badges'
 import { Card } from '@/components/ui/card'
 import { dailyAllowance } from '@/lib/budget'
 import { buildPrintableItinerary, type PrintableItinerary } from '@/lib/itinerary'
@@ -55,10 +56,14 @@ export function PlanStage() {
     try {
       doc = buildPrintableItinerary(exportData())
     } catch {
+      toast.error('Could not build the printable itinerary')
       return
     }
     const win = window.open('', '_blank', 'width=860,height=1000')
-    if (!win) return
+    if (!win) {
+      toast.error('Popup blocked — allow popups to print the itinerary')
+      return
+    }
     win.document.write(doc)
     win.document.close()
     setTimeout(() => win.print(), 350)
@@ -148,7 +153,7 @@ export function PlanStage() {
                     <div className="flex gap-3.5">
                       {s.image && (
                         <div className="relative hidden size-16 shrink-0 overflow-hidden rounded-xl sm:block">
-                          <ListingImage src={s.image} alt="" fill className="object-cover" sizes="64px" />
+                          <ListingImage src={s.image} alt={s.title} fill className="object-cover" sizes="64px" />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
@@ -162,9 +167,9 @@ export function PlanStage() {
                           </p>
                           <Badge className="text-[10px]">{s.kind}</Badge>
                           {s.verified ? (
-                            <Badge className="bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300"><Check className="size-3" />Verified</Badge>
+                            <VerifiedBadge className="text-[10px]" />
                           ) : (
-                            <Badge variant="outline" className="border-amber-500/40 text-[10px] text-amber-700 dark:text-amber-300">Suggested</Badge>
+                            <SuggestedBadge className="text-[10px]" />
                           )}
                         </div>
                         <p className="mt-0.5 text-sm text-muted-foreground">{s.time} · {s.place}</p>

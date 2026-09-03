@@ -8,6 +8,7 @@ import type { Id } from '@/convex/_generated/dataModel'
 import { Check, ChevronRight, GripVertical, Route, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { ProgressBar } from '@/components/ui/kt/progress-bar'
 import { cn } from '@/lib/utils'
 import { useTracking } from './tracking-provider'
 
@@ -165,9 +166,7 @@ export function TrackerWidget() {
             <X className="size-4" />
           </Button>
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-          <div className={cn('h-full rounded-full transition-all', arrived ? 'bg-emerald-600' : 'bg-primary')} style={{ width: `${session.progressPct}%` }} />
-        </div>
+        <ProgressBar value={session.progressPct} label="Trip progress" barClassName={arrived ? 'bg-emerald-600' : undefined} className="mt-2" />
         {arrived ? (
           <div className="mt-3 flex gap-2">
             <Button size="sm" className="flex-1 gap-1" onClick={() => router.push(trackPath)}>

@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -10,6 +11,8 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
+import { EmptyState } from '@/components/ui/kt/empty-state'
+import { GradientHero } from '@/components/ui/kt/gradient-hero'
 import { isValidConvexId } from '@/lib/id'
 import { cn } from '@/lib/utils'
 
@@ -23,7 +26,7 @@ function mediaOf(m: Moment): Media[] {
     ...videos.map(url => ({ type: 'video' as const, url })),
     ...images.map(url => ({ type: 'image' as const, url })),
   ]
-  return media.length ? media : [{ type: 'image', url: '/placeholder.jpg' }]
+  return media.length ? media : [{ type: 'image', url: '/kenya-hero.png' }]
 }
 
 const GRID_SIZE = 9
@@ -52,7 +55,7 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
         <MapPin className="size-10 text-primary" />
         <h1 className="font-serif text-3xl font-semibold tracking-tight">Recap not found</h1>
         <p className="text-sm text-muted-foreground">This recap link isn&apos;t available.</p>
-        <Button variant="outline" nativeButton={false} render={<a href="/" />}>Back to KenyaTrace</Button>
+        <Button variant="outline" nativeButton={false} render={<Link href="/" />}>Back to KenyaTrace</Button>
       </div>
     </div>
   )
@@ -78,7 +81,7 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-7 px-5 py-10">
-      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-[color-mix(in_oklch,var(--primary),#000_28%)] px-6 py-8 text-primary-foreground shadow-lift ring-1 ring-primary/20">
+      <GradientHero>
         <Badge className="bg-accent text-accent-foreground">Trip recap</Badge>
         <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight">{trip.name}</h1>
         <p className="mt-1 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {trip.startDate} → {trip.endDate}</p>
@@ -90,14 +93,10 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
             <span className="text-sm font-medium">{trip.rating}/5</span>
           </div>
         ) : null}
-      </div>
+      </GradientHero>
 
       {moments.length === 0 ? (
-        <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
-          <Share2 className="size-8 text-primary" />
-          <p className="mt-4 font-serif text-2xl">Nothing shared yet</p>
-          <p className="mt-2 max-w-md text-muted-foreground">The traveller hasn&apos;t made any moments public on this trip, so there&apos;s no recap to show.</p>
-        </div>
+        <EmptyState icon={Share2} title="Nothing shared yet" body="The traveller hasn't made any moments public on this trip, so there's no recap to show." />
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -129,7 +128,7 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
             </div>
           </div>
 
-          <p className="text-center text-sm text-muted-foreground">Made with <span className="font-semibold text-foreground">KenyaTrace</span> — <a href="/plan" className="underline underline-offset-2 transition-colors hover:text-primary">plan your own Kenya trip</a>.</p>
+          <p className="text-center text-sm text-muted-foreground">Made with <span className="font-semibold text-foreground">KenyaTrace</span> — <Link href="/plan" className="underline underline-offset-2 transition-colors hover:text-primary">plan your own Kenya trip</Link>.</p>
         </>
       )}
 

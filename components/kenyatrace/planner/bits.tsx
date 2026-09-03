@@ -6,10 +6,21 @@ import { GENERATION_STEPS, STAGES, type Stage } from './lib'
 
 export function StarRating({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return (
-    <div className="flex gap-1">
+    <div role="radiogroup" aria-label="Rate your experience" className="flex gap-1" onKeyDown={e => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); onChange(Math.min(5, (value || 0) + 1)) }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); onChange(Math.max(1, (value || 0) - 1)) }
+    }}>
       {[1, 2, 3, 4, 5].map(n => (
-        <button key={n} type="button" aria-label={`Rate ${n} star${n > 1 ? 's' : ''}`} onClick={() => onChange(n)} className="transition-transform hover:scale-110">
-          <Star className={cn('size-7', n <= value ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground')} />
+        <button
+          key={n}
+          type="button"
+          role="radio"
+          aria-checked={n === value}
+          aria-label={`Rate ${n} star${n > 1 ? 's' : ''}`}
+          onClick={() => onChange(n)}
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-lg transition-transform hover:scale-110 focus-visible:outline-none"
+        >
+          <Star className={cn('size-6', n <= value ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground')} />
         </button>
       ))}
     </div>

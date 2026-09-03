@@ -8,6 +8,7 @@ import { api } from '@/convex/_generated/api'
 import { CalendarClock, Camera, Check, CircleUserRound, Compass, Heart, Loader2, Sparkles, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatKES } from '@/lib/kenya-data'
 import { readCache, writeCache } from '@/lib/offline-cache'
@@ -234,9 +235,7 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
   return (
     <div className={cn('mx-auto flex w-full flex-col', compact ? 'gap-4 max-w-3xl' : 'max-w-3xl gap-6 px-5 py-16')}>
       <div className="flex flex-col items-center gap-2.5 text-center">
-        <span className={cn('flex items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-pop', compact ? 'size-10' : 'size-14')}>
-          <Sparkles className={compact ? 'size-5' : 'size-7'} />
-        </span>
+        <BrandMark icon={Sparkles} size={compact ? 'sm' : 'lg'} className="shadow-pop" />
         <h1 className={cn('font-serif font-semibold tracking-tight text-balance', compact ? 'text-xl' : 'text-4xl')}>Pick a plan</h1>
         <p className="max-w-md text-muted-foreground">
           {status.mode === 'none' ? 'Your 30-day free trial has ended.' : 'Your access has ended.'} Pay with M-Pesa — one-time packs, no auto-renewal.

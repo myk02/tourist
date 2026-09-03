@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Compass, Images, ListChecks, MapPin, Navigation, Route, Share2, ShieldOff, Square, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
+import { ProgressBar } from '@/components/ui/kt/progress-bar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
@@ -162,13 +165,13 @@ export function Track() {
   // A definitive "no such trip" from the server wins over any saved copy.
   if (me !== undefined && trip === null) return <NotFound />
   // Offline with a saved copy renders through; otherwise wait for data.
-  if (viewTrip === undefined || (me === undefined && !usingCache)) return <div className="kt-shimmer min-h-screen" />
+  if (viewTrip === undefined || (me === undefined && !usingCache)) return <div className="kt-shimmer min-h-[100svh]" />
   if (!viewTrip) return <NotFound />
   const isViewer = viewTrip.role === 'viewer'
 
   return (
     <RequireSubscription>
-      <div className="relative min-h-[calc(100vh-4rem)]">
+      <div className="relative min-h-[calc(100svh-4rem)]">
         <KenyaMap
           points={trackPoints}
           highlight={trackHighlight}
@@ -177,10 +180,10 @@ export function Track() {
           live={active?.lastPoint ?? null}
           livePath={trace.length >= 2 ? trace : undefined}
           followLive={tracking}
-          className="h-[calc(100vh-4rem)] rounded-none"
+          className="h-[calc(100svh-4rem)] rounded-none"
         />
         {usingCache && (
-          <div className="absolute left-4 top-4 z-[600] flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-100/95 px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm dark:bg-amber-500/90 dark:text-amber-950">
+          <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-100/95 px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm dark:bg-amber-500/90 dark:text-amber-950">
             <WifiOff className="size-3.5" />
             Saved copy · synced {cached ? timeAgo(cached.at) : 'earlier'}
           </div>
@@ -200,7 +203,7 @@ export function Track() {
             ) : !consent ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-4">
-                  <span className="flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><MapPin /></span>
+                  <BrandMark icon={MapPin} />
                   <div className="flex-1">
                     <p className="font-semibold">Share your live location?</p>
                     <p className="text-sm text-muted-foreground">We record your route to build a trace of your trip. Only you can see it, and you can turn it off anytime.</p>
@@ -230,10 +233,10 @@ export function Track() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {!isViewer && <Button variant="outline" className="gap-2" onClick={() => void handleShareTrace()}><Route className="size-4" />Share trace</Button>}
-                  {!isViewer && <Button variant="outline" className="gap-2" nativeButton={false} render={<a href={`/moments?trip=${tripId}`} />}><Share2 className="size-4" />Share your experience</Button>}
-                  <Button variant="outline" className="gap-2" nativeButton={false} render={<a href={`/recap/${tripId}`} />}><Images className="size-4" />View recap</Button>
-                  <Button variant="outline" nativeButton={false} render={<a href={`/trips/${tripId}`} />}>View trip</Button>
-                  <Button variant="ghost" className="gap-2" nativeButton={false} render={<a href="/discover" />}><Compass className="size-4" />Explore more</Button>
+                  {!isViewer && <Button variant="outline" className="gap-2" nativeButton={false} render={<Link href={`/moments?trip=${tripId}`} />}><Share2 className="size-4" />Share your experience</Button>}
+                  <Button variant="outline" className="gap-2" nativeButton={false} render={<Link href={(viewTrip as { traceShareToken?: string }).traceShareToken ? `/recap/${tripId}?t=${(viewTrip as { traceShareToken?: string }).traceShareToken}` : `/recap/${tripId}`} />}><Images className="size-4" />View recap</Button>
+                  <Button variant="outline" nativeButton={false} render={<Link href={`/trips/${tripId}`} />}>View trip</Button>
+                  <Button variant="ghost" className="gap-2" nativeButton={false} render={<Link href="/discover" />}><Compass className="size-4" />Explore more</Button>
                 </div>
               </div>
             ) : active ? (
@@ -246,9 +249,7 @@ export function Track() {
                       ? `${active.distanceKm.toFixed(1)} km to ${viewTrip.destination} · ${active.path.length} point${active.path.length === 1 ? '' : 's'} recorded`
                       : `${active.path.length} point${active.path.length === 1 ? '' : 's'} recorded`}
                   </p>
-                  <div className="mt-2 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${active.progressPct}%` }} />
-                  </div>
+                  <ProgressBar value={active.progressPct} label="Trip progress" className="mt-2 w-full max-w-sm" />
                   <p className="mt-1 text-xs text-muted-foreground">{active.progressPct}% of the way there</p>
                   {staleForMs > STALE_AFTER_MS && (
                     <p className="mt-1.5 w-fit rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">

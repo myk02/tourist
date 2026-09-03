@@ -9,16 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatKES } from '@/lib/kenya-data'
+import { kindChip } from '@/lib/kind'
 import { cn } from '@/lib/utils'
 import { SAMPLE_TRACE, sampleTraceCosts } from '@/lib/sample-trace'
 import { KenyaMap } from './kenya-map'
-
-const KIND_STYLE: Record<string, string> = {
-  Stay: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  Transport: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  Experience: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  Food: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
-}
 
 /** Solid dot colors for the budget legend (text colors don't paint backgrounds). */
 const KIND_DOT: Record<string, string> = {
@@ -110,7 +104,7 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold">{stop.title}</p>
-                        <Badge className={cn('text-[10px]', KIND_STYLE[stop.kind] ?? 'bg-secondary text-muted-foreground')}>{stop.kind}</Badge>
+                        <Badge className={cn('text-[10px]', kindChip(stop.kind))}>{stop.kind}</Badge>
                       </div>
                       <p className="mt-0.5 text-sm text-muted-foreground">{stop.place}</p>
                       {stop.reason && <p className="mt-1 text-xs italic text-muted-foreground/80">“{stop.reason}”</p>}
@@ -132,7 +126,7 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{stop.title}</p>
-                      <Badge className={cn('text-[10px]', KIND_STYLE[stop.kind] ?? 'bg-secondary text-muted-foreground')}>{stop.kind}</Badge>
+                      <Badge className={cn('text-[10px]', kindChip(stop.kind))}>{stop.kind}</Badge>
                     </div>
                     <p className="mt-0.5 text-sm text-muted-foreground">{stop.place}</p>
                     {stop.reason && <p className="mt-1 text-xs italic text-muted-foreground/80">“{stop.reason}”</p>}

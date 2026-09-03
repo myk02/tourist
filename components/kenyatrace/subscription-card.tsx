@@ -5,6 +5,7 @@ import { api } from '@/convex/_generated/api'
 import { Gift, Info } from 'lucide-react'
 import { CalendarClock, Check, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatKES } from '@/lib/kenya-data'
@@ -35,7 +36,7 @@ export function SubscriptionSection() {
             <div className="kt-shimmer h-20 rounded-xl" />
           ) : status.active ? (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><Check className="size-5" /></span>
+              <BrandMark icon={Check} size="sm" />
               <div className="flex-1">
                 <p className="font-semibold">
                   {status.daysRemaining} day{status.daysRemaining === 1 ? '' : 's'} left

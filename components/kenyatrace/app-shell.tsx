@@ -9,6 +9,7 @@ import { api } from '@/convex/_generated/api'
 import { CalendarClock, Camera, CircleUserRound, Compass, Map, MapPin, Navigation, Sparkles, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { InstallPrompt } from './install-prompt'
@@ -49,9 +50,7 @@ export function KenyaTraceShell({ children }: { children: React.ReactNode }) {
 function Brand() {
   return (
     <Link href="/" className="group flex shrink-0 items-center gap-2.5">
-      <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs transition-transform group-hover:scale-[1.03]">
-        <Navigation className="size-5" />
-      </span>
+      <span className="transition-transform group-hover:scale-[1.03]"><BrandMark icon={Navigation} size="sm" /></span>
       <span className="font-serif text-xl font-semibold tracking-tight">KenyaTrace</span>
     </Link>
   )
@@ -228,9 +227,7 @@ function HeaderAccount() {
       <Dialog open={plansOpen} onOpenChange={setPlansOpen}>
         <DialogContent className="max-h-[86svh] overflow-y-auto p-5 sm:max-w-xl">
           <DialogHeader className="gap-2 items-center text-center">
-            <span className="mx-auto flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs">
-              <Sparkles className="size-5" />
-            </span>
+            <BrandMark icon={Sparkles} size="sm" className="mx-auto" />
             <DialogTitle className="font-serif text-xl tracking-tight">
               <span suppressHydrationWarning>
                 {isHydrating ? 'Unlock KenyaTrace' : ended ? 'Pick a plan to continue' : 'Unlock KenyaTrace'}
