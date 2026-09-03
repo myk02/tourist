@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { BrandMark } from '@/components/ui/kt/brand-mark'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatKES } from '@/lib/kenya-data'
+import { toMinorKES } from '@/lib/money'
 import { readCache, writeCache } from '@/lib/offline-cache'
 import { loadPaystackScript } from '@/lib/paystack-inline'
 import { PLAN_PRICES } from '@/lib/plans'
@@ -20,13 +21,21 @@ type Status = NonNullable<ReturnType<typeof useQuery<typeof api.subscriptions.ge
 
 // Prices come from lib/plans.ts (single source of truth shared with the
 // Convex backend), so what the UI shows is always what gets charged.
+// Per-day and savings lines are DERIVED, never hardcoded — a price change in
+// plans.ts flows through automatically instead of silently drifting.
+function perDay(price: number, days: number): string {
+  return `≈ KES ${Math.round(price / days)}/day`
+}
+// Monthly vs the pro-rata weekly rate for the same 30 days.
+const MONTHLY_SAVINGS = Math.max(0, Math.round((30 * (PLAN_PRICES[7] / 7)) - PLAN_PRICES[30]))
+
 export const PLANS = [
   {
     days: 7,
     name: 'Weekly pack',
     price: PLAN_PRICES[7],
     suffix: '7 days',
-    perDay: '≈ KES 14/day',
+    perDay: perDay(PLAN_PRICES[7], 7),
     duration: '7 days of full access',
     benefits: ['Plan unlimited Kenya trips', 'Live tracking & share traces', 'Save spots & moments'],
     popular: false,
@@ -36,8 +45,8 @@ export const PLANS = [
     name: 'Monthly pack',
     price: PLAN_PRICES[30],
     suffix: 'month',
-    perDay: '≈ KES 13/day',
-    savings: 'Save KES 70',
+    perDay: perDay(PLAN_PRICES[30], 30),
+    savings: MONTHLY_SAVINGS > 0 ? `Save KES ${MONTHLY_SAVINGS}` : undefined,
     duration: '30 days of full access',
     benefits: ['Everything in Weekly', 'More than 4× the days', 'Best per-day value', 'No auto-renewal'],
     popular: true,
@@ -182,7 +191,7 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
       const handler = window.PaystackPop.setup({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
         email,
-        amount: amount * 100, // KES → minor units
+        amount: toMinorKES(amount), // KES → minor units
         currency: 'KES',
         ref: reference,
         callback: () => { void confirm() },
@@ -192,6 +201,9 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
         },
       })
       handler.openIframe()
+      // M-Pesa STK guidance: the prompt lands on the payer's phone, not in
+      // this tab — tell them where to look or first-time payers stall here.
+      toast.info('Check your phone — enter your M-Pesa PIN to complete payment')
     } catch (error) {
       busyRef.current = false
       setBusy(null)
@@ -287,7 +299,12 @@ export function PaywallDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         </DialogHeader>
         {status === undefined ? (
           <div className="kt-shimmer h-48 rounded-2xl" />
-        ) : status === null ? null : (
+        ) : status === null ? (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-sm text-muted-foreground">Sign in to pick a day pack and continue planning.</p>
+            <Button nativeButton={false} render={<Link href="/sign-in" />}>Sign in to continue</Button>
+          </div>
+        ) : (
           <PaywallScreen status={status} compact />
         )}
       </DialogContent>

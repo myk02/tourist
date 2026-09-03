@@ -4,10 +4,11 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { useConvexAuth, useQuery } from 'convex/react'
+import { useAction, useConvexAuth, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Doc, Id } from '@/convex/_generated/dataModel'
-import { CircleUserRound, MapPin } from 'lucide-react'
+import { CircleUserRound, Loader2, MapPin } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ProgressBar } from '@/components/ui/kt/progress-bar'
@@ -108,12 +109,31 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
   // skip the lookup so Convex doesn't reject the empty id.
   const listing = useQuery(api.listings.get, booking.listingId ? { id: booking.listingId as Id<'listings'> } : 'skip')
   const item = listing
+  // A pending attempt from a closed-tab checkout: offer re-confirmation
+  // against the SAME reference instead of a new checkout (no double charge).
+  const pending = useQuery(api.payments.pendingForBooking, (booking.status === 'requested' || booking.status === 'pending') && booking.amount > 0 ? { bookingId: booking._id } : 'skip')
+  const verifyAndConfirm = useAction(api.payments.verifyAndConfirm)
+  const [confirming, setConfirming] = useState(false)
+  async function checkStatus() {
+    if (!pending || confirming) return
+    setConfirming(true)
+    try {
+      const result = await verifyAndConfirm({ paymentId: pending.paymentId })
+      if (result.verified) toast.success(`Payment received — ${booking.reference} is confirmed`)
+      else toast.error('Not confirmed yet — if you paid, wait a minute and try again')
+    } catch {
+      toast.error('Could not check the payment — try again shortly')
+    } finally {
+      setConfirming(false)
+    }
+  }
   return (
     <Card>
       <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
         <div className="min-w-0">
           <p className="font-semibold">{item?.name || 'Reserved place'}</p>
           <p className="text-sm text-muted-foreground">{booking.reference} · {item ? `${item.location} · ` : ''}{booking.checkIn ? `${booking.checkIn} → ${booking.checkOut}` : ''}{booking.guests ? ` · ${booking.guests} guest${booking.guests === 1 ? '' : 's'}` : ''}</p>
+          {pending && <p className="mt-1 text-xs text-muted-foreground">A payment attempt is pending — paid already? Check its status instead of paying again.</p>}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <strong>{formatKES(booking.amount)}</strong>
@@ -124,6 +144,12 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
           )}>
             {booking.status === 'paid' ? 'Paid' : booking.status}
           </Badge>
+          {pending && (
+            <Button variant="outline" size="sm" onClick={checkStatus} disabled={confirming} className="gap-1.5">
+              {confirming && <Loader2 className="size-3.5 animate-spin" />}
+              {confirming ? 'Checking' : 'Check status'}
+            </Button>
+          )}
           {(booking.status === 'requested' || booking.status === 'pending') && booking.amount > 0 && booking.listingId && <PayNowButton booking={booking} />}
           {booking.status !== 'cancelled' && booking.status !== 'paid' && <Button variant="outline" size="sm" onClick={() => onCancel(booking._id)}>Cancel</Button>}
         </div>

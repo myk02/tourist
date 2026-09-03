@@ -1,4 +1,4 @@
-import { action, mutation } from "./_generated/server"
+import { action, mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { makeFunctionReference } from "convex/server"
 import type { Doc, Id } from "./_generated/dataModel"
@@ -82,6 +82,30 @@ export const initialize = mutation({
       createdAt: Date.now(),
     })
     return { paymentId, reference, amount: booking.amount }
+  },
+})
+
+/**
+ * Latest still-pending payment attempt for a booking (owner-only). Powers the
+ * "Check status" retry in the bookings UI: a traveller who paid but closed
+ * the tab before verification can re-confirm without starting a new checkout
+ * (which would mint a second reference and risk a double charge).
+ */
+export const pendingForBooking = query({
+  args: { bookingId: v.id("bookings") },
+  handler: async (ctx, { bookingId }) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    const booking = await ctx.db.get(bookingId)
+    if (!booking || booking.ownerId !== identity.subject) return null
+    if (booking.status === "paid" || booking.status === "cancelled") return null
+    const pending = await ctx.db
+      .query("payments")
+      .withIndex("by_booking", q => q.eq("bookingId", bookingId))
+      .filter(q => q.eq(q.field("status"), "pending"))
+      .order("desc")
+      .first()
+    return pending ? { paymentId: pending._id, reference: pending.reference, createdAt: pending.createdAt } : null
   },
 })
 

@@ -92,6 +92,9 @@ export function PayNowButton({ booking }: { booking: Doc<'bookings'> }) {
         },
       })
       handler.openIframe()
+      // M-Pesa STK guidance: the prompt lands on the payer's phone, not in
+      // this tab — tell them where to look or first-time payers stall here.
+      toast.info('Check your phone — enter your M-Pesa PIN to complete payment')
     } catch (error) {
       busyRef.current = false
       setBusy(false)
