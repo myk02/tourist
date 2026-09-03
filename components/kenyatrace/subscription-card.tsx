@@ -3,7 +3,7 @@
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Gift, Info } from 'lucide-react'
-import { CalendarClock, Check, Sparkles } from 'lucide-react'
+import { CalendarClock, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { BrandMark } from '@/components/ui/kt/brand-mark'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,7 +36,7 @@ export function SubscriptionSection() {
             <div className="kt-shimmer h-20 rounded-xl" />
           ) : status.active ? (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
-              <BrandMark icon={Check} size="sm" />
+              <BrandMark icon="check" size="sm" />
               <div className="flex-1">
                 <p className="font-semibold">
                   {status.daysRemaining} day{status.daysRemaining === 1 ? '' : 's'} left

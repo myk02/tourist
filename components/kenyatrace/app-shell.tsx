@@ -50,7 +50,7 @@ export function KenyaTraceShell({ children }: { children: React.ReactNode }) {
 function Brand() {
   return (
     <Link href="/" className="group flex shrink-0 items-center gap-2.5">
-      <span className="transition-transform group-hover:scale-[1.03]"><BrandMark icon={Navigation} size="sm" /></span>
+      <span className="transition-transform group-hover:scale-[1.03]"><BrandMark icon="navigation" size="sm" /></span>
       <span className="font-serif text-xl font-semibold tracking-tight">KenyaTrace</span>
     </Link>
   )
@@ -227,7 +227,7 @@ function HeaderAccount() {
       <Dialog open={plansOpen} onOpenChange={setPlansOpen}>
         <DialogContent className="max-h-[86svh] overflow-y-auto p-5 sm:max-w-xl">
           <DialogHeader className="gap-2 items-center text-center">
-            <BrandMark icon={Sparkles} size="sm" className="mx-auto" />
+            <BrandMark icon="sparkles" size="sm" className="mx-auto" />
             <DialogTitle className="font-serif text-xl tracking-tight">
               <span suppressHydrationWarning>
                 {isHydrating ? 'Unlock KenyaTrace' : ended ? 'Pick a plan to continue' : 'Unlock KenyaTrace'}

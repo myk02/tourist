@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Navigation } from 'lucide-react'
 import { SignUp } from '@clerk/nextjs'
 import { BrandMark } from '@/components/ui/kt/brand-mark'
 
@@ -17,7 +16,7 @@ export default function SignUpPage() {
         {/* Brand — top-left like Base44 */}
         <div className="px-6 py-6 lg:px-8">
           <Link href="/" className="group inline-flex items-center gap-2.5">
-            <BrandMark icon={Navigation} size="sm" />
+            <BrandMark icon="navigation" size="sm" />
             <span className="font-serif text-xl font-semibold tracking-tight">KenyaTrace</span>
           </Link>
         </div>

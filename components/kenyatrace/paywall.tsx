@@ -247,7 +247,7 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
   return (
     <div className={cn('mx-auto flex w-full flex-col', compact ? 'gap-4 max-w-3xl' : 'max-w-3xl gap-6 px-5 py-16')}>
       <div className="flex flex-col items-center gap-2.5 text-center">
-        <BrandMark icon={Sparkles} size={compact ? 'sm' : 'lg'} className="shadow-pop" />
+        <BrandMark icon="sparkles" size={compact ? 'sm' : 'lg'} className="shadow-pop" />
         <h1 className={cn('font-serif font-semibold tracking-tight text-balance', compact ? 'text-xl' : 'text-4xl')}>Pick a plan</h1>
         <p className="max-w-md text-muted-foreground">
           {status.mode === 'none' ? 'Your 30-day free trial has ended.' : 'Your access has ended.'} Pay with M-Pesa — one-time packs, no auto-renewal.

@@ -150,7 +150,7 @@ export function WhereStage() {
                   <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
-                        <BrandMark icon={MapPin} size="sm" />
+                        <BrandMark icon="mapPin" size="sm" />
                         <div className="min-w-0">
                           <p className="truncate font-semibold">{draft.origin}</p>
                           <p className="text-xs text-muted-foreground">

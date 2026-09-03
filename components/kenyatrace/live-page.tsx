@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { Compass, Images, ListChecks, MapPin, Navigation, Route, Share2, ShieldOff, Square, WifiOff } from 'lucide-react'
+import { Compass, Images, ListChecks, Navigation, Route, Share2, ShieldOff, Square, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { BrandMark } from '@/components/ui/kt/brand-mark'
@@ -213,7 +213,7 @@ export function Track() {
             ) : !consent ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-4">
-                  <BrandMark icon={MapPin} />
+                  <BrandMark icon="mapPin" />
                   <div className="flex-1">
                     <p className="font-semibold">Share your live location?</p>
                     <p className="text-sm text-muted-foreground">

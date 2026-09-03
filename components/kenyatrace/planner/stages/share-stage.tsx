@@ -52,7 +52,7 @@ export function ShareStage() {
       ) : draft.published ? (
         <div className="flex flex-col gap-5">
           <div className="flex items-center gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-5 shadow-soft">
-            <BrandMark icon={Check} />
+            <BrandMark icon="check" />
             <div>
               <p className="font-semibold">Your experience is live</p>
               <p className="text-sm text-muted-foreground">Anyone with the link can see your photos, videos and {draft.rating}/5 rating.</p>
@@ -153,7 +153,7 @@ export function DoneStage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 py-6 text-center">
-      <BrandMark icon={Flag} size="lg" className="rounded-full shadow-pop" />
+      <BrandMark icon="flag" size="lg" className="rounded-full shadow-pop" />
       <h1 className="font-serif text-4xl font-semibold tracking-tight">Session complete</h1>
       <p className="max-w-md text-muted-foreground">
         {plan ? `You planned ${plan.destination} from ${draft.origin} over ${draft.days} day${draft.days === 1 ? '' : 's'} on a ${formatKES(draft.budget)} budget${draft.rating ? `, and rated it ${draft.rating}/5` : ''}.` : 'Your Kenya journey is complete.'}

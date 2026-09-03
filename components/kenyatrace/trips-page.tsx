@@ -214,7 +214,7 @@ export function Trips({ compact = false }: { compact?: boolean }) {
         {planningTrips.length > 0 && mostUrgentPlanning && daysUntil(mostUrgentPlanning.startDate) <= 14 && (
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
             <div className="flex items-center gap-3">
-              <BrandMark icon={Compass} size="sm" />
+              <BrandMark icon="compass" size="sm" />
               <div>
                 <p className="font-semibold">{countdown(mostUrgentPlanning)} — {planningTrips.length === 1 ? 'it' : `${planningTrips.length} trips`} still need{planningTrips.length === 1 ? 's' : ''} planning</p>
                 <p className="text-sm text-muted-foreground">Finish the itinerary before you head out and your trip will be ready to book, track and share.</p>

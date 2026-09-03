@@ -218,7 +218,7 @@ export function Moments() {
 
         {credit && (
           <div className="flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-4 shadow-soft">
-            <BrandMark icon={Sparkles} size="sm" />
+            <BrandMark icon="sparkles" size="sm" />
             <div className="min-w-0 flex-1">
               <p className="font-semibold">Your moments earn free days</p>
               <p className="text-sm text-muted-foreground">
