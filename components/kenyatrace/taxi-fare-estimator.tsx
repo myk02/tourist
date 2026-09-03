@@ -1,11 +1,11 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { SignInButton, useUser } from '@clerk/nextjs'
+import { useClerk, useUser } from '@clerk/nextjs'
 import { toast } from 'sonner'
 import { ArrowLeftRight, BadgeCheck, Car, Info, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -26,10 +26,10 @@ import { toReplaceStopsPayload } from '@/lib/stop-fields'
  */
 export function TaxiFareEstimator({ routes }: { routes: { _id: string; name: string; location: string }[] }) {
   const { isSignedIn } = useUser()
+  const clerk = useClerk()
   const [pickupName, setPickupName] = useState('JKIA (NBO)')
   const [dropoffName, setDropoffName] = useState('Nairobi CBD')
   const [addingService, setAddingService] = useState<string | null>(null)
-  const signInRef = useRef<HTMLDivElement>(null)
   const trips = useQuery(api.trips.list)
   const replaceStops = useMutation(api.trips.replaceStops)
   const editableTrips = (trips ?? []).filter(t => t.role !== 'viewer')
@@ -89,7 +89,7 @@ export function TaxiFareEstimator({ routes }: { routes: { _id: string; name: str
 
   function handleAddQuote(service: string, price: number) {
     if (!isSignedIn) {
-      signInRef.current?.click()
+      clerk.openSignIn()
       return
     }
     if (!tripId) {
@@ -202,7 +202,6 @@ export function TaxiFareEstimator({ routes }: { routes: { _id: string; name: str
           )}
         </div>
       </CardContent>
-      <SignInButton mode="modal"><div ref={signInRef} style={{ display: 'none' }} /></SignInButton>
     </Card>
   )
 }

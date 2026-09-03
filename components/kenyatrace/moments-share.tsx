@@ -32,11 +32,11 @@ function MediaTile({ media, className }: { media: Media; className?: string }) {
   return <Image src={media.url} fill className={cn('object-cover', className)} alt="" sizes="(max-width: 768px) 50vw, 33vw" />
 }
 
-export function MomentsShare({ tripId }: { tripId: string }) {
+export function MomentsShare({ tripId, token }: { tripId: string; token?: string }) {
   // A malformed /moments/<garbage> route must show the not-found state, not
   // make Convex throw on an invalid id.
   const validTripId = isValidConvexId(tripId)
-  const data = useQuery(api.moments.publicForTrip, validTripId ? { tripId: tripId as Id<'trips'> } : 'skip')
+  const data = useQuery(api.moments.publicForTrip, validTripId ? { tripId: tripId as Id<'trips'>, token: token ?? '' } : 'skip')
   const [lightbox, setLightbox] = useState<{ moment: number; media: number } | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -49,7 +49,7 @@ export function MomentsShare({ tripId }: { tripId: string }) {
   const active = lightbox ? moments[lightbox.moment] : null
   const activeMedia = active ? mediaOf(active) : []
   const activeIndex = active ? Math.min(lightbox!.media, activeMedia.length - 1) : 0
-  const shareLink = typeof window !== 'undefined' ? `${window.location.origin}/moments/${tripId}` : ''
+  const shareLink = typeof window !== 'undefined' ? `${window.location.origin}/moments/${tripId}${token ? `?t=${token}` : ''}` : ''
   const shareText = `I just explored ${trip.destination} with KenyaTrace${trip.rating ? ` and rated it ${trip.rating}/5` : ''}. Plan your own trip: ${shareLink}`
 
   async function copy() {
@@ -111,7 +111,7 @@ export function MomentsShare({ tripId }: { tripId: string }) {
           <Button variant="outline" nativeButton={false} render={<a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><MessageCircle className="size-4" />WhatsApp</Button>
           <Button variant="outline" nativeButton={false} render={<a href={`https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Send className="size-4" />Telegram</Button>
           <Button variant="outline" nativeButton={false} render={<a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareLink)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Share2 className="size-4" />Post</Button>
-          <Button variant="outline" nativeButton={false} render={<a href={`/recap/${tripId}`} />} className="gap-1.5"><LayoutGrid className="size-4" />Open the 9-grid recap</Button>
+          <Button variant="outline" nativeButton={false} render={<a href={`/recap/${tripId}${token ? `?t=${token}` : ''}`} />} className="gap-1.5"><LayoutGrid className="size-4" />Open the 9-grid recap</Button>
         </div>
       </div>
 

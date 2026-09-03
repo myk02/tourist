@@ -32,11 +32,11 @@ const GRID_SIZE = 9
  * The 9-grid recap: up to nine of the trip's public moments arranged as a
  * shareable card. Prefers the traveller's "best" picks, then the newest.
  */
-export function RecapView({ tripId }: { tripId: string }) {
+export function RecapView({ tripId, token }: { tripId: string; token?: string }) {
   // A malformed /recap/<garbage> route must show the not-found state, not
   // make Convex throw on an invalid id.
   const validTripId = isValidConvexId(tripId)
-  const data = useQuery(api.moments.publicForTrip, validTripId ? { tripId: tripId as Id<'trips'> } : 'skip')
+  const data = useQuery(api.moments.publicForTrip, validTripId ? { tripId: tripId as Id<'trips'>, token: token ?? '' } : 'skip')
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -62,7 +62,7 @@ export function RecapView({ tripId }: { tripId: string }) {
   if (!data) return notFound
 
   const { trip } = data
-  const shareLink = typeof window !== 'undefined' ? `${window.location.origin}/recap/${tripId}` : ''
+  const shareLink = typeof window !== 'undefined' ? `${window.location.origin}/recap/${tripId}${token ? `?t=${token}` : ''}` : ''
   const shareText = `A recap of ${trip.destination} with KenyaTrace — plan your own trip: ${shareLink}`
   const active = lightbox != null ? moments[lightbox] : null
 

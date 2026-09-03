@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { SignInButton, useUser } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
 import { useAction, useConvexAuth, useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { CalendarClock, Camera, Check, CircleUserRound, Compass, Heart, Loader2, Sparkles, Wallet } from 'lucide-react'
@@ -279,8 +279,6 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
  */
 export function PaywallDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const status = useQuery(api.subscriptions.getStatus)
-  if (!status) return null
-  if (status === undefined) return null
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[86svh] overflow-y-auto p-5 sm:max-w-xl">
@@ -288,7 +286,11 @@ export function PaywallDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <DialogTitle>Pick a plan</DialogTitle>
           <DialogDescription>Choose a day pack to continue planning</DialogDescription>
         </DialogHeader>
-        <PaywallScreen status={status} compact />
+        {status === undefined ? (
+          <div className="kt-shimmer h-48 rounded-2xl" />
+        ) : status === null ? null : (
+          <PaywallScreen status={status} compact />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -356,7 +358,9 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
         <span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8" /></span>
         <h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1>
         <p className="text-muted-foreground">Sign in to plan routes, save reservations, live traces and moments.</p>
-        <SignInButton mode="redirect"><Button size="lg">Sign in to continue</Button></SignInButton>
+        <Button size="lg" nativeButton={false} render={<Link href="/sign-in" />}>
+          Sign in to continue
+        </Button>
       </div>
     )
   }

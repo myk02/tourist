@@ -8,7 +8,7 @@ import { Check, Link2, Loader2, Mail, Send, Trash2, UserRound, Users } from 'luc
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
@@ -171,8 +171,8 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
               {!isOwner && <Badge variant="outline" className="text-[10px] text-muted-foreground">Visible to editors</Badge>}
             </div>
             {link && (
-              <p className="truncate rounded-lg bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">
-                {window.location.origin}/trips/{tripId}?invite={link.token}
+              <p className="truncate rounded-lg bg-muted px-3 py-2 font-mono text-xs text-muted-foreground" title="Full link hidden — use Copy link">
+                {typeof window !== 'undefined' ? `${window.location.origin}/trips/${tripId}?invite=…${link.token.slice(-4)}` : `Invite link ending …${link.token.slice(-4)}`}
               </p>
             )}
             <div className="flex flex-wrap items-center gap-2">
@@ -225,7 +225,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
               disabled={!emailReady}
             />
             {emailError && <p className="text-xs text-destructive">{emailError}</p>}
-            {sentTo && <p className="text-xs font-medium text-primary">Invite sent to {sentTo} ✓</p>}
+            {sentTo && <p className="flex items-center gap-1 text-xs font-medium text-primary">Invite sent to {sentTo} <Check className="size-3" /></p>}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Button size="sm" className="gap-1.5" onClick={sendInvite} disabled={sending || !emailReady}>
                 {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
@@ -246,7 +246,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
             {shares?.collaborators.map(c => (
               <div key={c.shareId} className={cn('flex items-center gap-3 rounded-xl border p-2.5', busy === c.shareId && 'opacity-60')}>
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold text-primary">
-                  {c.image ? <img src={c.image} alt="" className="size-9 rounded-full object-cover" /> : <UserRound className="size-4" />}
+                  {c.image ? <img src={c.image} alt={c.name} referrerPolicy="no-referrer" className="size-9 rounded-full object-cover" /> : <UserRound className="size-4" />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{c.name}</p>
@@ -273,28 +273,27 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
           </div>
         </div>
 
-        <Dialog open={pendingRemove !== null} onOpenChange={o => { if (!o) setPendingRemove(null) }}>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{pendingRemove?.label === 'Invite link' ? 'Revoke the invite link?' : `Remove ${pendingRemove?.label}?`}</DialogTitle>
-              <DialogDescription>
-                {pendingRemove?.label === 'Invite link'
-                  ? 'Anyone who hasn\u2019t opened it yet will lose access. You can create a new link afterwards.'
-                  : 'They will immediately lose access to this trip. The owner can re-invite them any time.'}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setPendingRemove(null)}>Cancel</Button>
+        {pendingRemove && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+            <p className="text-sm font-semibold">{pendingRemove.label === 'Invite link' ? 'Revoke the invite link?' : `Remove ${pendingRemove.label}?`}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {pendingRemove.label === 'Invite link'
+                ? 'Anyone who hasn\u2019t opened it yet will lose access. You can create a new link afterwards.'
+                : 'They will immediately lose access to this trip. The owner can re-invite them any time.'}
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPendingRemove(null)}>Cancel</Button>
               <Button
                 variant="destructive"
-                disabled={busy === pendingRemove?.shareId}
-                onClick={() => { if (pendingRemove) void remove(pendingRemove.shareId, pendingRemove.label) }}
+                size="sm"
+                disabled={busy === pendingRemove.shareId}
+                onClick={() => { void remove(pendingRemove.shareId, pendingRemove.label) }}
               >
-                {busy === pendingRemove?.shareId ? 'Working…' : 'Confirm'}
+                {busy === pendingRemove.shareId ? 'Working…' : 'Confirm'}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

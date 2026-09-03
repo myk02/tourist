@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { formatKES } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
+import type { Id } from '@/convex/_generated/dataModel'
 import type { Stop } from './types'
 
 const CATEGORY_ORDER = ['Stay', 'Transport', 'Experience', 'Food'] as const
@@ -31,7 +32,7 @@ const CATEGORY_COLOR: Record<string, string> = {
  * is persisted back onto the trip record (debounced) so the split survives
  * reloads and is visible to collaborators.
  */
-export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTravelers, canEdit = true }: { stops: Stop[]; budget: number; totalCost: number; tripId?: string; initialTravelers?: number; canEdit?: boolean }) {
+export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTravelers, canEdit = true }: { stops: Stop[]; budget: number; totalCost: number; tripId?: Id<'trips'>; initialTravelers?: number; canEdit?: boolean }) {
   const updateTrip = useMutation(api.trips.update)
   const [edited, setEdited] = useState(false)
   const [travelers, setTravelers] = useState(Math.max(1, Math.min(initialTravelers ?? 2, 50)))
@@ -50,7 +51,7 @@ export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTrave
     if (persistTimer.current !== null) window.clearTimeout(persistTimer.current)
     persistTimer.current = window.setTimeout(() => {
       persistTimer.current = null
-      updateTrip({ id: tripId as never, patch: { travelers } }).catch(() => { /* retried on next change */ })
+      updateTrip({ id: tripId, patch: { travelers } }).catch(() => { /* retried on next change */ })
     }, 700)
     return () => {
       if (persistTimer.current !== null) window.clearTimeout(persistTimer.current)

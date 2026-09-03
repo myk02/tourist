@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { SignInButton, useUser } from '@clerk/nextjs'
+import { useClerk, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
@@ -33,6 +33,7 @@ function stopKindFor(vertical?: string): string {
 
 export function Detail({ id }: { id: string }) {
   const { isSignedIn } = useUser()
+  const clerk = useClerk()
   // A malformed /discover/<vertical>/<garbage> route must show NotFound, not
   // make Convex throw on an invalid id.
   const validId = isValidConvexId(id)
@@ -45,7 +46,6 @@ export function Detail({ id }: { id: string }) {
   const replaceStops = useMutation(api.trips.replaceStops)
   const reserve = useMutation(api.bookings.create)
   const router = useRouter()
-  const signInRef = useRef<HTMLDivElement>(null)
   const subscriptionStatus = useQuery(api.subscriptions.getStatus)
   const [paywallOpen, setPaywallOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -78,7 +78,7 @@ export function Detail({ id }: { id: string }) {
   function gate(action: () => void) {
     if (!isSignedIn) {
       setPendingAction(() => action)
-      signInRef.current?.click()
+      clerk.openSignIn()
       return
     }
     action()
@@ -332,7 +332,6 @@ export function Detail({ id }: { id: string }) {
       </Dialog>
 
       <PaywallDialog open={paywallOpen} onOpenChange={setPaywallOpen} />
-      <SignInButton mode="modal"><div ref={signInRef} style={{ display: 'none' }} /></SignInButton>
     </>
   )
 }

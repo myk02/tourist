@@ -1,4 +1,4 @@
-import { action, internalMutation, internalQuery } from "./_generated/server"
+import { action, internalAction, internalMutation, internalQuery } from "./_generated/server"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import { EMAIL_FROM, resend } from "../lib/resend"
@@ -149,6 +149,95 @@ export const markSent = internalMutation({ args: { id: v.id("bookings"), which: 
   const now = Date.now()
   await ctx.db.patch(id, which === "r48" ? { r48SentAt: now } : { r24SentAt: now })
 }})
+
+/**
+ * Lists the clerkIds of every user with at least one upcoming, non-cancelled
+ * booking. Used by the cron sweepAll action so reminders fire even when the
+ * traveller hasn't opened the app in days. O(bookings) but bounded — only
+ * runs from crons.ts, not on the hot path.
+ */
+export const ownersWithUpcomingBookings = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const seen = new Set<string>()
+    const now = Date.now()
+    const all = await ctx.db.query("bookings").collect()
+    for (const b of all) {
+      if (b.status === "cancelled" || !b.checkIn) continue
+      const t = checkInMs(b.checkIn)
+      if (!t || t <= now) continue
+      seen.add(b.ownerId)
+    }
+    return Array.from(seen)
+  },
+})
+
+/**
+ * Cron entry point: iterates every owner with an upcoming booking and runs
+ * the same per-user sweep as the app-shell trigger. Idempotent via
+ * r48SentAt/r24SentAt markers on the booking. Run from crons.ts once per
+ * day so travellers who don't open the app still get their reminders.
+ */
+export const sweepAll = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ sent: number; scanned: number }> => {
+    if (!resend) return { sent: 0, scanned: 0 }
+    const clerkIds: string[] = await ctx.runQuery(internal.reminders.ownersWithUpcomingBookings, {})
+    let sent = 0
+    for (const clerkId of clerkIds) {
+      const dues = await ctx.runQuery(internal.reminders.dueForUser, { clerkId })
+      for (const d of dues as Due[]) {
+        const whenLabel = d.which === "r48" ? "In 2 days" : "Tomorrow"
+        const subject = `${whenLabel}: ${d.label} · check-in ${prettyDate(d.checkIn)}`
+        const link = `${process.env.NEXT_PUBLIC_APP_URL || "https://kenyatrace.vercel.app"}${d.tripId ? `/trips/${d.tripId}` : "/profile?tab=bookings"}`
+        const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f5f3ef;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ef;padding:32px 16px;">
+      <tr><td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e7e2da;">
+          <tr>
+            <td style="background:#0f6b4f;padding:24px 32px;">
+              <p style="margin:0;font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#c8f0df;">KenyaTrace</p>
+              <p style="margin:8px 0 0;font-size:22px;font-weight:600;color:#ffffff;">${escapeHtml(whenLabel)} — ${escapeHtml(d.tripName ?? "your Kenya trip")}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1c1917;">
+                <strong>${escapeHtml(d.label)}</strong> starts on <strong>${prettyDate(d.checkIn)}</strong>${d.place ? ` in ${escapeHtml(d.place)}` : ""}.
+              </p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f5f3ef;border-radius:8px;margin:0 0 20px;">
+                <tr><td style="padding:14px 18px;font-size:14px;color:#44403c;line-height:1.9;">
+                  <strong>Reference:</strong> ${escapeHtml(d.reference)}<br/>
+                  <strong>Type:</strong> ${escapeHtml(d.type)}${d.guests != null ? `<br/><strong>Guests:</strong> ${d.guests}` : ""}<br/>
+                  <strong>Amount:</strong> KES ${d.amount.toLocaleString("en-KE")}
+                </td></tr>
+              </table>
+              <p style="margin:0 0 24px;text-align:center;">
+                <a href="${link}" style="display:inline-block;padding:13px 28px;background:#0f6b4f;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">Open your trip</a>
+              </p>
+              <p style="margin:0;font-size:12px;color:#78716c;">You get this because you added this reservation to KenyaTrace. Cancelled reservations never remind.</p>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`
+        try {
+          const { error } = await resend.emails.send({ from: EMAIL_FROM, to: d.to, subject, html })
+          if (error) throw new Error(error.message)
+          await ctx.runMutation(internal.reminders.markSent, { id: d.bookingId as never, which: d.which })
+          sent++
+        } catch (e) {
+          console.error("[reminders] cron send failed:", e)
+        }
+      }
+    }
+    return { sent, scanned: clerkIds.length }
+  },
+})
 
 function escapeHtml(value: string) {
   return value

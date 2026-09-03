@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useQuery, useMutation, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { SignInButton, useUser } from '@clerk/nextjs'
+import { useClerk, useUser } from '@clerk/nextjs'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -20,7 +20,7 @@ import { categories, formatKES, type Vertical } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
 import { toReplaceStopsPayload } from '@/lib/stop-fields'
 import { KenyaMap, toPoint } from './kenya-map'
-import { ListingImage } from './shared'
+import { ListingImage, isLiveSource } from './shared'
 import { TaxiFareEstimator } from './taxi-fare-estimator'
 
 const NEAR_KM = 100
@@ -139,6 +139,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   }, [searchTerm])
 
   const { isSignedIn } = useUser()
+  const clerk = useClerk()
   const savedListings = useQuery(api.saved.list)
   const saveListing = useMutation(api.saved.save)
   const removeListing = useMutation(api.saved.remove)
@@ -151,7 +152,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const [pickerListingId, setPickerListingId] = useState<Id<'listings'> | null>(null)
   const [pickerTripId, setPickerTripId] = useState<Id<'trips'> | null>(null)
   const pickerTrip = useQuery(api.trips.getWithStops, pickerTripId ? { id: pickerTripId } : 'skip')
-  const signInRef = useRef<HTMLDivElement>(null)
   const [pendingSaveId, setPendingSaveId] = useState<string | null>(null)
   // Add-to-trip after sign-in: remember which listing the guest wanted so the
   // picker opens the moment they land back, signed in.
@@ -160,7 +160,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   function openTripPicker(listingId: Id<'listings'>) {
     if (!isSignedIn) {
       setPendingAddId(listingId)
-      signInRef.current?.click()
+      clerk.openSignIn()
       return
     }
     setPickerListingId(listingId)
@@ -217,7 +217,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     // Provenance dimension — mirrors sourceToFilter(): 'live' covers the
     // http/wikipedia scrapers, 'curated' is anything without a scraper mark.
     if (activeSource === 'firecrawl') items = items.filter(i => i.source === 'firecrawl')
-    else if (activeSource === 'live') items = items.filter(i => i.source === 'scraper' || i.source === 'wikipedia')
+    else if (activeSource === 'live') items = items.filter(i => isLiveSource(i.source))
     else if (activeSource === 'curated') items = items.filter(i => !i.source)
     switch (sort) {
       case 'recent': items.sort((a, b) => (b.scrapedAt ?? b._creationTime) - (a.scrapedAt ?? a._creationTime)); break
@@ -241,7 +241,12 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     const qs = p.toString()
     const target = `/discover/${vertical}${qs ? `?${qs}` : ''}`
     if (target !== window.location.pathname + window.location.search) {
-      router.replace(target, { scroll: false })
+      // Debounce slider/amenity drags so a rapid scrub fires one RSC
+      // navigation instead of one per pointer move.
+      const t = window.setTimeout(() => {
+        router.replace(target, { scroll: false })
+      }, 250)
+      return () => window.clearTimeout(t)
     }
   }, [debouncedSearch, activeFilter, rating, sort, priceNarrowed, activePrice, nearMe, amenities, activeSource, vertical, router])
 
@@ -317,7 +322,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   }
 
   async function toggleSave(listingId: string) {
-    if (!isSignedIn) { setPendingSaveId(listingId); signInRef.current?.click(); return }
+    if (!isSignedIn) { setPendingSaveId(listingId); clerk.openSignIn(); return }
     try {
       if (savedIds.has(listingId as Id<'listings'>)) { await removeListing({ listingId: listingId as Id<'listings'> }); toast.success('Removed from saved') }
       else { await saveListing({ listingId: listingId as Id<'listings'> }); toast.success('Saved to your list') }
@@ -444,7 +449,11 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               <Search className="absolute left-3 top-3.5 size-4 text-muted-foreground" />
               <Input
                 className="h-11 pl-10"
-                aria-label="Search"
+                role="combobox"
+                aria-label="Search listings"
+                aria-autocomplete="list"
+                aria-expanded={searchTerm.length > 0}
+                aria-controls="discover-search-suggestions"
                 placeholder="Mara, Nairobi, Diani..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -462,7 +471,11 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                 }
                 if (suggestions.length === 0) return null
                 return (
-                  <div className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border bg-popover p-1 shadow-pop">
+                  <div
+                    className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border bg-popover p-1 shadow-pop"
+                    id="discover-search-suggestions"
+                    role="listbox"
+                  >
                     {suggestions.map(s => (
                       <button
                         key={s.name}
@@ -811,7 +824,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
         </DialogContent>
       </Dialog>
 
-      <SignInButton mode="modal"><div ref={signInRef} style={{ display: 'none' }} /></SignInButton>
     </div>
   )
 }

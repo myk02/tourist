@@ -53,30 +53,42 @@ export default function SignInPage() {
                       'h-[44px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] placeholder:text-[#9ca3af] focus:border-[#0e7a55] focus:ring-2 focus:ring-[#0e7a55]/15',
                     formButtonPrimary:
                       'h-[44px] rounded-lg bg-[#0e7a55] hover:bg-[#0c6b4a] text-white text-[14px] font-semibold shadow-sm disabled:bg-[#f3f4f6] disabled:text-[#9ca3af] disabled:border disabled:border-[#e5e7eb] disabled:shadow-none',
-                    footerAction: 'text-center',
-                    footerActionText: 'text-sm text-[#6b7280]',
-                    footerActionLink: 'font-medium text-[#111827] underline underline-offset-4 hover:text-[#0e7a55]',
                     identityPreview: 'rounded-lg border border-[#e5e7eb] bg-[#f9fafb]',
                     formFieldAction: 'text-sm font-medium text-[#0e7a55] hover:underline',
                     alert: 'rounded-lg',
                     loaderIcon: 'text-[#0e7a55]',
+                    logoBox: 'hidden',
+                    footer: 'hidden',
+                    footerAction: 'hidden',
+                    footerActionText: 'hidden',
+                    footerActionLink: 'hidden',
+                    clerkBadge: 'hidden',
+                    developmentModeBadge: 'hidden',
+                    badge: 'hidden',
                   },
                   layout: {
                     socialButtonsPlacement: 'top',
                     socialButtonsVariant: 'blockButton',
+                    unsafe_disableDevelopmentModeWarnings: true,
                   },
                 } as any
               }
             />
-            <p className="mt-8 text-center text-[11px] leading-relaxed text-[#9ca3af]">
-              By signing in, you agree to our{' '}
-              <Link href="/terms" className="underline underline-offset-4 hover:text-[#0e7a55]">
-                Terms of Service
-              </Link>{' '}
-              and{' '}
-              <Link href="/privacy" className="underline underline-offset-4 hover:text-[#0e7a55]">
-                Privacy Policy
+            <p className="mt-6 text-center text-sm text-[#6b7280]">
+              Don&apos;t have an account?{' '}
+              <Link href="/sign-up" className="font-medium text-[#111827] underline underline-offset-4 hover:text-[#0e7a55]">
+                Sign up
               </Link>
+            </p>
+            <p className="mt-6 text-center text-[11px] leading-relaxed text-[#9ca3af]">
+              By signing in, you agree to our{' '}
+              <a href={`${process.env.NEXT_PUBLIC_APP_URL ?? ''}/terms`} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-[#0e7a55]">
+                Terms of Service
+              </a>{' '}
+              and{' '}
+              <a href={`${process.env.NEXT_PUBLIC_APP_URL ?? ''}/privacy`} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-[#0e7a55]">
+                Privacy Policy
+              </a>
               .
             </p>
           </div>
@@ -159,7 +171,6 @@ export default function SignInPage() {
         </div>
 
         <div className="absolute bottom-0 right-0 h-[44%] w-[38%] overflow-hidden rounded-tl-[20px] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.18)] border-t border-l border-white/70">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/naivasha-lake.png" alt="Lake Naivasha, Kenya" className="h-full w-full object-cover" loading="eager" />
           <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/15 to-transparent" />
           <div className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-[#0e7a55] shadow-sm backdrop-blur">

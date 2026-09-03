@@ -133,7 +133,9 @@ export const create = mutation({ args: { tripId: v.id("trips"), caption: v.strin
   if (args.lat !== undefined && (args.lat < -90 || args.lat > 90 || !Number.isFinite(args.lat))) throw new Error("Invalid latitude")
   if (args.lng !== undefined && (args.lng < -180 || args.lng > 180 || !Number.isFinite(args.lng))) throw new Error("Invalid longitude")
   const trip = await ctx.db.get(args.tripId)
-  if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
+  if (!trip) throw new Error("Trip not found")
+  const role = await accessRole(ctx, args.tripId, identity.subject)
+  if (!role || role === "viewer") throw new Error("Trip not found")
   const { storageId, storageIds, videoStorageIds, ...rest } = args
   const ids = idsOf(storageId, storageIds)
   const videoIds = videoStorageIds ?? []

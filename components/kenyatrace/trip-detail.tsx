@@ -340,6 +340,9 @@ export function TripDetail() {
   }
 
   async function handleSave(stops: Stop[]) {
+    const completionByKey = Object.fromEntries(
+      trip!.stops.map(s => [`${s.day}|${s.reason ?? s.name}`, s.completedAt]),
+    )
     try {
       await replaceStops({
         tripId,
@@ -365,7 +368,7 @@ export function TripDetail() {
           travelKm: s.travelKm,
           travelMins: s.travelMins,
           travelRouted: s.travelRouted,
-          completedAt: s.completedAt,
+          completedAt: s.completedAt ?? completionByKey[`${s.day}|${s.reason ?? s.title}`],
         })),
       })
       toast.success('Itinerary saved')
@@ -374,7 +377,7 @@ export function TripDetail() {
     }
   }
 
-  const stops = trip.stops.map(s => ({ day: s.day, time: s.time, title: s.name, place: s.place, cost: s.cost, kind: s.kind, lat: s.lat, lng: s.lng, locked: s.locked, reason: s.reason, verified: s.verified, duration: s.duration, source: s.source as 'catalog' | 'gap' | undefined, listingId: s.listingId, vertical: s.vertical, unit: s.unit, image: s.image, travelKm: s.travelKm, travelMins: s.travelMins, travelRouted: s.travelRouted }))
+  const stops = trip.stops.map(s => ({ day: s.day, time: s.time, title: s.name, place: s.place, cost: s.cost, kind: s.kind, lat: s.lat, lng: s.lng, locked: s.locked, reason: s.reason, verified: s.verified, duration: s.duration, source: s.source as 'catalog' | 'gap' | undefined, listingId: s.listingId, vertical: s.vertical, unit: s.unit, image: s.image, travelKm: s.travelKm, travelMins: s.travelMins, travelRouted: s.travelRouted, completedAt: s.completedAt }))
   const activeBookings = (bookings ?? []).filter(b => b.status !== 'cancelled')
   const bookingsTotal = activeBookings.reduce((sum, b) => sum + b.amount, 0)
   return (

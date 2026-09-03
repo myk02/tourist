@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import { requireActiveAccess } from "./subscriptions"
+import { accessRole } from "./trips"
 
 function kindFromVertical(vertical: string): string {
   if (vertical === "stays") return "Stay"
@@ -30,7 +31,9 @@ export const forTrip = query({ args: { tripId: v.id("trips") }, handler: async (
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) return []
   const trip = await ctx.db.get(tripId)
-  if (!trip || trip.ownerId !== identity.subject) return []
+  if (!trip) return []
+  const role = await accessRole(ctx, tripId, identity.subject)
+  if (!role) return []
   return ctx.db.query("bookings").withIndex("by_trip", q => q.eq("tripId", tripId)).order("desc").collect()
 }})
 
@@ -38,7 +41,7 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) throw new Error("Sign in required")
   await requireActiveAccess(ctx.db, identity.subject)
-  if (!["Stay", "Transport", "Experience", "Food"].includes(args.type)) throw new Error("Invalid booking type")
+  if (!["Stay", "Transport", "Experience", "Food", "Flight"].includes(args.type)) throw new Error("Invalid booking type")
   if (args.guests !== undefined && (!Number.isInteger(args.guests) || args.guests < 1 || args.guests > 20)) throw new Error("Guests must be 1-20")
   if (!Number.isFinite(args.amount) || args.amount < 0 || args.amount > 10_000_000) throw new Error("Invalid amount")
   if (args.checkIn && !/^\d{4}-\d{2}-\d{2}$/.test(args.checkIn)) throw new Error("Invalid checkIn date")
@@ -51,7 +54,7 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
   const listing = await ctx.db.get(args.listingId as Id<"listings">)
   if (!listing) throw new Error("Listing not found")
   if (args.amount !== listing.price) throw new Error("Reservation price does not match the current listing price")
-  if (args.type !== kindFromVertical(listing.vertical) && !(args.type === "Food" && listing.vertical === "food")) {
+  if (args.type !== kindFromVertical(listing.vertical) && !(args.type === "Food" && listing.vertical === "taxis")) {
     // Allow but don't enforce strictly — vertical mapping is helper
   }
   const reference = `KT-${crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`
@@ -61,7 +64,9 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
   let stopId: Id<"tripStops"> | undefined
   if (args.tripId) {
     const trip = await ctx.db.get(args.tripId)
-    if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
+    if (!trip) throw new Error("Trip not found")
+    const role = await accessRole(ctx, args.tripId, identity.subject)
+    if (!role || role === "viewer") throw new Error("Trip not found")
     const existing = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", args.tripId!)).collect()
     const day = args.checkIn ? dayFromDate(trip.startDate, args.checkIn) : (existing.length ? Math.max(...existing.map(s => s.day)) : 1)
     // duration is stored in minutes; a stay is 24h per night booked.
@@ -136,7 +141,9 @@ export const createFromEmail = mutation({
     let stopId: Id<"tripStops"> | undefined
     if (args.tripId) {
       const trip = await ctx.db.get(args.tripId)
-      if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
+      if (!trip) throw new Error("Trip not found")
+      const role = await accessRole(ctx, args.tripId, identity.subject)
+      if (!role || role === "viewer") throw new Error("Trip not found")
       const existing = await ctx.db.query("tripStops").withIndex("by_trip", q => q.eq("tripId", args.tripId!)).collect()
       const day = args.checkIn ? dayFromDate(trip.startDate, args.checkIn) : (existing.length ? Math.max(...existing.map(s => s.day)) : 1)
       let duration: number | undefined

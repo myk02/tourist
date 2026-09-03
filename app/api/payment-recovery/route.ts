@@ -11,9 +11,12 @@ const REF_RE = /^[a-zA-Z0-9_-]+$/
  * POST /api/payment-recovery
  *
  * Failed-payment support loop: when a Paystack checkout closes but server-side
- * verification can't confirm the charge, the client queues the reference here
- * so a human gets an email with everything needed to reconcile it in the
- * Paystack dashboard — instead of the traveller being stuck with only a toast.
+ * verification can't confirm the charge, the client posts the reference here.
+ * The route first re-verifies with Paystack — settled charges return
+ * `{ verified: true }` so the client can run verifyAndConfirm instead of
+ * bothering support. Only unverified references queue a human email with
+ * everything needed to reconcile in the Paystack dashboard, and the hourly
+ * `payments-reconcile` cron keeps retrying stale pendings server-side.
  *
  * Body: { reference, email }
  */
@@ -42,6 +45,34 @@ export async function POST(request: Request) {
     )
   }
 
+  // Reconcile first: if Paystack says the charge settled, tell the client to
+  // run verifyAndConfirm instead of queueing a support email for a payment
+  // that is actually fine. Only unverified references reach a human.
+  let paystackStatus: string | null = null
+  const secret = process.env.PAYSTACK_SECRET_KEY
+  if (secret) {
+    try {
+      const vRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+        headers: { Authorization: `Bearer ${secret}` },
+      })
+      if (vRes.ok) {
+        const vJson = await vRes.json().catch(() => null)
+        paystackStatus = vJson?.data?.status ?? null
+        if (vJson?.status === true && vJson?.data?.status === 'success' && vJson?.data?.reference === reference) {
+          return NextResponse.json({
+            ok: true,
+            verified: true,
+            amount: typeof vJson.data.amount === 'number' ? vJson.data.amount / 100 : undefined,
+            currency: vJson.data.currency ?? 'KES',
+            hint: 'Charge settled — call verifyAndConfirm to mark it paid.',
+          })
+        }
+      }
+    } catch {
+      // Verification network failure — fall through to support email.
+    }
+  }
+
   // Support goes to the operator inbox; RECOVERY_EMAIL overrides the default.
   const supportTo = process.env.RECOVERY_EMAIL || process.env.EMAIL_FROM || 'KenyaTrace <onboarding@resend.dev>'
   const paidAt = new Date().toISOString()
@@ -68,14 +99,15 @@ export async function POST(request: Request) {
               <p style="margin:0 0 12px;font-size:16px;line-height:1.6;color:#1c1917;">
                 A checkout closed but verification could not confirm the charge. The traveller was told to wait for follow-up.
               </p>
-              <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f5f3ef;border-radius:8px;margin:0 0 20px;">
-                <tr><td style="padding:14px 18px;font-size:14px;color:#44403c;line-height:1.9;">
-                  <strong>Reference:</strong> ${escapeHtml(reference)}<br/>
-                  <strong>Payer email:</strong> ${escapeHtml(email)}<br/>
-                  <strong>Clerk user:</strong> ${escapeHtml(userId)}<br/>
-                  <strong>Flagged at:</strong> ${escapeHtml(paidAt)}
-                </td></tr>
-              </table>
+                <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f5f3ef;border-radius:8px;margin:0 0 20px;">
+                  <tr><td style="padding:14px 18px;font-size:14px;color:#44403c;line-height:1.9;">
+                    <strong>Reference:</strong> ${escapeHtml(reference)}<br/>
+                    <strong>Payer email:</strong> ${escapeHtml(email)}<br/>
+                    <strong>Clerk user:</strong> ${escapeHtml(userId)}<br/>
+                    <strong>Paystack status:</strong> ${escapeHtml(paystackStatus ?? 'unverified')}<br/>
+                    <strong>Flagged at:</strong> ${escapeHtml(paidAt)}
+                  </td></tr>
+                </table>
               <p style="margin:0;font-size:13px;line-height:1.6;color:#78716c;">
                 Check this reference in the Paystack dashboard. If it settled, grant access or confirm the booking manually; if not, reply to the traveller with next steps.
               </p>
@@ -91,7 +123,7 @@ export async function POST(request: Request) {
       console.error('[payment-recovery] Resend error:', error)
       return NextResponse.json({ error: 'Could not queue the recovery email' }, { status: 502 })
     }
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, verified: false })
   } catch (e) {
     console.error('[payment-recovery] Failed to send:', e)
     return NextResponse.json({ error: 'Could not queue the recovery email' }, { status: 502 })

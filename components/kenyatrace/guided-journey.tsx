@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { SignInButton, useUser } from '@clerk/nextjs'
+import { useClerk, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
@@ -42,7 +42,7 @@ export function GuidedJourney() {
   const removeTrip = useMutation(api.trips.remove)
   const uploadUrl = useMutation(api.moments.generateUploadUrl)
   const createMoment = useMutation(api.moments.create)
-  const signInRef = useRef<HTMLDivElement>(null)
+  const clerk = useClerk()
   const [paywallOpen, setPaywallOpen] = useState(false)
   const router = useRouter()
   const { session: trackSession, start: startTrack, stop: stopTrack } = useTracking()
@@ -438,7 +438,7 @@ export function GuidedJourney() {
   function handleSaveTrip() {
     if (!isSignedIn) {
       pendingFnRef.current = () => { void createTrip() }
-      signInRef.current?.click()
+      clerk.openSignIn()
       return
     }
     void createTrip()
@@ -609,7 +609,7 @@ export function GuidedJourney() {
   function handlePublish() {
     if (!isSignedIn) {
       pendingFnRef.current = () => { void publish() }
-      signInRef.current?.click()
+      clerk.openSignIn()
       return
     }
     void publish()
@@ -719,8 +719,6 @@ export function GuidedJourney() {
     <JourneyProvider value={ctx}>
       <PaywallDialog open={paywallOpen} onOpenChange={setPaywallOpen} />
       <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-8">
-        <SignInButton mode="modal"><div ref={signInRef} style={{ display: 'none' }} /></SignInButton>
-
         <PlannerProgress stage={stage} planName={plan?.name} />
 
         <div key={stage} className={animPhase ? `kt-step-${animPhase}` : `kt-step-${enterAnim}`}>

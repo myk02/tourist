@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useConvexAuth, useQuery } from 'convex/react'
-import { SignInButton } from '@clerk/nextjs'
 import { api } from '@/convex/_generated/api'
 import type { Doc, Id } from '@/convex/_generated/dataModel'
 import { CircleUserRound, MapPin } from 'lucide-react'
@@ -32,7 +31,14 @@ export function ListingImage({ src, alt, ...props }: Omit<React.ComponentProps<t
 const SOURCE_META: Record<string, { label: string; dot: string }> = {
   firecrawl: { label: 'Firecrawl', dot: 'bg-emerald-400' },
   scraper: { label: 'Live web', dot: 'bg-sky-400' },
+  'scraper:estimated': { label: 'Estimated', dot: 'bg-sky-400' },
   wikipedia: { label: 'Wikipedia', dot: 'bg-amber-400' },
+}
+
+/** True for http-scraped or Wikipedia-sourced listings (incl. scraper:estimated). */
+export function isLiveSource(source?: string | null): boolean {
+  if (!source) return false
+  return source === 'wikipedia' || source === 'scraper' || source.startsWith('scraper:')
 }
 
 /** The source dimension used by the Discover filter (?source=). */
@@ -41,7 +47,7 @@ export type SourceFilterValue = 'all' | 'firecrawl' | 'live' | 'curated'
 /** Maps a listing's `source` field to its Discover filter value (null when curated/unknown). */
 export function sourceToFilter(source?: string | null): Exclude<SourceFilterValue, 'all' | 'curated'> | null {
   if (source === 'firecrawl') return 'firecrawl'
-  if (source === 'scraper' || source === 'wikipedia') return 'live'
+  if (isLiveSource(source)) return 'live'
   return null
 }
 
@@ -75,7 +81,7 @@ export function SourceBadge({ source, className, onClick }: { source?: string | 
   )
 }
 
-export function RequireAuth({children}:{children:React.ReactNode}){const {isAuthenticated,isLoading}=useConvexAuth();if(isLoading)return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl"/></div>;if(!isAuthenticated)return <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center"><span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8"/></span><h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1><p className="text-muted-foreground">Sign in to save routes, reservations, live traces and moments.</p><SignInButton mode="redirect"><Button size="lg">Sign in to continue</Button></SignInButton></div>;return <>{children}</>}
+export function RequireAuth({children}:{children:React.ReactNode}){const {isAuthenticated,isLoading}=useConvexAuth();if(isLoading)return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl"/></div>;if(!isAuthenticated)return <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center"><span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8"/></span><h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1><p className="text-muted-foreground">Sign in to save routes, reservations, live traces and moments.</p><Button size="lg" nativeButton={false} render={<Link href="/sign-in" />}>Sign in to continue</Button></div>;return <>{children}</>}
 
 /**
  * One reservation row, resolving the listing by id. Used on the Profile
@@ -101,7 +107,7 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
           )}>
             {booking.status === 'paid' ? 'Paid' : booking.status}
           </Badge>
-          {booking.status === 'requested' && booking.amount > 0 && booking.listingId && <PayNowButton booking={booking} />}
+          {(booking.status === 'requested' || booking.status === 'pending') && booking.amount > 0 && booking.listingId && <PayNowButton booking={booking} />}
           {booking.status !== 'cancelled' && booking.status !== 'paid' && <Button variant="outline" size="sm" onClick={() => onCancel(booking._id)}>Cancel</Button>}
         </div>
       </CardContent>

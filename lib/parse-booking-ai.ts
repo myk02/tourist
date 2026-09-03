@@ -102,7 +102,7 @@ export function mergeParsedBooking(base: ParsedBooking, ai: Partial<ParsedBookin
     checkIn: base.checkIn ?? ai.checkIn,
     checkOut: base.checkOut ?? ai.checkOut,
     guests: base.guests ?? ai.guests,
-    provider: base.provider !== 'Reserved booking' ? base.provider : ai.provider ?? ai.name ?? base.provider,
+    provider: base.provider && base.provider !== 'Reserved booking' ? base.provider : ai.provider ?? ai.name ?? base.provider,
   }
 }
 

@@ -3,9 +3,10 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
-  closestCenter,
+  KeyboardSensor,
   PointerSensor,
   TouchSensor,
+  closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -231,7 +232,11 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
   const [replanningDay, setReplanningDay] = useState<number | null>(null)
   const [hoveredStop, setHoveredStop] = useState<string | null>(null)
   const [mobileView, setMobileView] = useState<'list' | 'map'>(defaultMobileView)
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(TouchSensor))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
+    useSensor(KeyboardSensor),
+  )
 
   useEffect(() => {
     const t = setTimeout(() => setSearchTerm(addTerm), 300)

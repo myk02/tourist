@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
+import type { Id } from '@/convex/_generated/dataModel'
 import { useChecklistToggle } from './use-checklist'
 
 export interface ChecklistStop {
@@ -33,13 +34,13 @@ export interface ChecklistStop {
  * on a day; everyone with access sees counts and threads live. Viewers are
  * read-only — the mutations enforce it server-side too.
  */
-export function TripChecklist({ tripId, stops, editable = true, collab = false, isOwner = false }: { tripId: string; stops: ChecklistStop[]; editable?: boolean; collab?: boolean; isOwner?: boolean }) {
+export function TripChecklist({ tripId, stops, editable = true, collab = false, isOwner = false }: { tripId: Id<'trips'>; stops: ChecklistStop[]; editable?: boolean; collab?: boolean; isOwner?: boolean }) {
   const { user } = useUser()
   const myId = user?.id
   const { overrides, toggle } = useChecklistToggle(tripId)
   const setVote = useMutation(api.trips.setStopVote)
-  const votes = useQuery(api.trips.votesForTrip, collab ? { tripId: tripId as never } : 'skip')
-  const notes = useQuery(api.trips.dayNotesForTrip, collab ? { tripId: tripId as never } : 'skip')
+  const votes = useQuery(api.trips.votesForTrip, collab ? { tripId } : 'skip')
+  const notes = useQuery(api.trips.dayNotesForTrip, collab ? { tripId } : 'skip')
 
   const isDone = (s: ChecklistStop) => overrides[s._id] ?? !!s.completedAt
   const done = stops.filter(isDone).length
@@ -58,7 +59,7 @@ export function TripChecklist({ tripId, stops, editable = true, collab = false, 
   async function vote(stopId: string) {
     if (!collab || !editable) return
     try {
-      await setVote({ stopId: stopId as never, vote: myVotes.has(stopId) ? null : 'up' })
+      await setVote({ stopId: stopId as Id<'tripStops'>, vote: myVotes.has(stopId) ? null : 'up' })
     } catch {
       toast.error('Could not save your thumb')
     }

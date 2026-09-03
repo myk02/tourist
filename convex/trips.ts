@@ -164,7 +164,7 @@ export const update = mutation({ args: { id: v.id("trips"), patch: v.object({
   if (patch.name !== undefined && (!patch.name.trim() || patch.name.length > 120)) throw new Error("Trip name must be 1-120 characters")
   if (patch.destination !== undefined && (!patch.destination.trim() || patch.destination.length > 120)) throw new Error("Trip destination must be 1-120 characters")
   if (patch.budget !== undefined && (!Number.isFinite(patch.budget) || patch.budget < 0 || patch.budget > 10_000_000)) throw new Error("Budget is out of range")
-  if (patch.status !== undefined && !["planning", "booked", "completed"].includes(patch.status)) throw new Error("Invalid status")
+  if (patch.status !== undefined && !["planning", "booked", "travelling", "completed"].includes(patch.status)) throw new Error("Invalid status")
   if (patch.rating !== undefined && (!Number.isFinite(patch.rating) || patch.rating < 0 || patch.rating > 5)) throw new Error("Rating must be 0-5")
   if (patch.travelers !== undefined && (!Number.isInteger(patch.travelers) || patch.travelers < 1 || patch.travelers > 50)) throw new Error("Travelers must be 1-50")
   if (patch.startDate !== undefined && !isValidISODate(patch.startDate)) throw new Error("Invalid startDate")
@@ -363,6 +363,33 @@ export const enableTraceShare = mutation({ args: { tripId: v.id("trips") }, hand
   const trip = await ctx.db.get(tripId)
   if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
   if (trip.traceShareToken) return { token: trip.traceShareToken }
+  const token = makeToken()
+  await ctx.db.patch(tripId, { traceShareToken: token })
+  return { token }
+}})
+
+/**
+ * Owner only: revokes the public trace/recap/moments link. Clears the token
+ * so every previously shared `?t=` URL immediately stops working.
+ */
+export const disableTraceShare = mutation({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Sign in required")
+  const trip = await ctx.db.get(tripId)
+  if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
+  await ctx.db.patch(tripId, { traceShareToken: undefined })
+  return { disabled: true }
+}})
+
+/**
+ * Owner only: rotates the public link token. The old `?t=` URL stops working
+ * and a fresh one is issued — use after a leak instead of disabling sharing.
+ */
+export const rotateTraceShare = mutation({ args: { tripId: v.id("trips") }, handler: async (ctx, { tripId }) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Sign in required")
+  const trip = await ctx.db.get(tripId)
+  if (!trip || trip.ownerId !== identity.subject) throw new Error("Trip not found")
   const token = makeToken()
   await ctx.db.patch(tripId, { traceShareToken: token })
   return { token }

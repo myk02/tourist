@@ -87,7 +87,7 @@ export function clearExpiredCaches(prefix = 'kt-'): void {
         if (!raw) continue
         const parsed = JSON.parse(raw) as CacheEntry<unknown>
         if (typeof parsed?.at !== 'number' || Date.now() - parsed.at > 30 * 24 * 60 * 60 * 1000) {
-          // Keep track snapshots up to 30 days, else evict if corrupt
+          localStorage.removeItem(k)
         }
       } catch { localStorage.removeItem(k) }
     }

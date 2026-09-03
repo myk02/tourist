@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { MapPin } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,7 +38,7 @@ export function SampleTraceDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <Button variant="secondary" size="lg" className="gap-2" onClick={() => setOpen(true)}>
-        <MapPinIcon />
+        <MapPin />
         View sample trace
       </Button>
       {open && (
@@ -47,10 +48,6 @@ export function SampleTraceDialog() {
       )}
     </Dialog>
   )
-}
-
-function MapPinIcon() {
-  return <span className="text-primary">◦</span>
 }
 
 export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {

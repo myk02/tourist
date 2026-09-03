@@ -1,6 +1,7 @@
-import { internalMutation, internalQuery, type DatabaseWriter } from "./_generated/server"
+import { internalAction, internalMutation, internalQuery, type DatabaseWriter } from "./_generated/server"
 import { v } from "convex/values"
 import type { Doc } from "./_generated/dataModel"
+import { internal } from "./_generated/api"
 
 /**
  * Internal helpers for `convex/payments.ts`. Kept in a separate module so the
@@ -101,8 +102,11 @@ export const markPaidByCharge = internalMutation({
           .first()
       }
       if (!account) {
-        const allUsers = await ctx.db.query("users").collect()
-        account = allUsers.find(u => u.email?.toLowerCase() === normalizedEmail) ?? null
+        // No indexed match — refuse to guess rather than scanning every user.
+        // The exact-reference path above is the trusted path; a fallback that
+        // walks the whole users table is O(N) per webhook and risks cross-
+        // account settlement if two users share an email prefix.
+        return { applied: false }
       }
       const ownerCandidates = account ? candidates.filter(p => p.ownerId === account!.clerkId) : []
       const emailCandidates = candidates.filter(p => p.email?.toLowerCase() === normalizedEmail)
@@ -119,5 +123,60 @@ export const markPaidByCharge = internalMutation({
     if (!payment || payment.status === "paid") return { applied: false }
     await markPaymentPaid(ctx.db, payment)
     return { applied: true }
+  },
+})
+
+/** Pending payments older than the grace window, for the reconcile cron. */
+export const stalePendings = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - 30 * 60 * 1000
+    const pendings = await ctx.db
+      .query("payments")
+      .withIndex("by_status", q => q.eq("status", "pending"))
+      .order("desc")
+      .take(50)
+    return pendings
+      .filter(p => p.createdAt < cutoff)
+      .map(p => ({ _id: p._id, reference: p.reference, amount: p.amount, currency: p.currency }))
+  },
+})
+
+/**
+ * Cron entry point: re-verifies stale pending payments with Paystack and marks
+ * the settled ones paid, so a closed-tab checkout self-heals without support.
+ * Unverifiable rows are left pending for the next run (never auto-paid).
+ */
+export const reconcileStale = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ checked: number; paid: number }> => {
+    const secret = process.env.PAYSTACK_SECRET_KEY
+    if (!secret) return { checked: 0, paid: 0 }
+    const pendings: { _id: Doc<"payments">["_id"]; reference: string; amount: number; currency: string }[] =
+      await ctx.runQuery(internal.payments_helpers.stalePendings, {})
+    let paid = 0
+    for (const p of pendings) {
+      try {
+        const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(p.reference)}`, {
+          headers: { Authorization: `Bearer ${secret}` },
+        })
+        if (!res.ok) continue
+        const data = await res.json().catch(() => null)
+        const tx = data?.data
+        if (
+          data?.status === true &&
+          tx?.status === "success" &&
+          tx?.reference === p.reference &&
+          tx?.amount === p.amount * 100 &&
+          (tx?.currency ?? "KES") === p.currency
+        ) {
+          await ctx.runMutation(internal.payments_helpers.markPaid, { paymentId: p._id })
+          paid++
+        }
+      } catch {
+        // Network failure — leave pending for the next run.
+      }
+    }
+    return { checked: pendings.length, paid }
   },
 })

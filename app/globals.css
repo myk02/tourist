@@ -267,3 +267,10 @@
   color: var(--muted-foreground);
 }
 .maplibregl-ctrl-attrib a { color: var(--primary); }
+
+/* Clerk "Secured by Clerk" / "Development mode" strip at the bottom of the modal card. */
+.cl-internal-b3fm6y,
+.cl-cardBox > div:has(a[href*="clerk.com"]),
+.cl-cardBox > div:has(a[href*="go.clerk.com"]) {
+  display: none !important;
+}

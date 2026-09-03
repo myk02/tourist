@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { SignInButton, SignUpButton, UserButton, useUser } from '@clerk/nextjs'
+import { UserButton, useUser } from '@clerk/nextjs'
 import { useAction, useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { CalendarClock, Camera, CircleUserRound, Compass, Map, MapPin, Navigation, Sparkles, Wallet } from 'lucide-react'
@@ -254,20 +254,29 @@ function HeaderAccount() {
                     key={plan.days}
                     plan={plan}
                     footer={
-                      <SignUpButton mode="redirect">
-                        <Button size="lg" className="w-full gap-2" suppressHydrationWarning>
-                          <Sparkles className="size-4" /> Sign up to buy
-                        </Button>
-                      </SignUpButton>
+                      <Button
+                        size="lg"
+                        className="w-full gap-2"
+                        nativeButton={false}
+                        render={<Link href="/sign-up" />}
+                        suppressHydrationWarning
+                      >
+                        <Sparkles className="size-4" /> Sign up to buy
+                      </Button>
                     }
                   />
                 ))}
               </div>
-              <SignInButton mode="redirect">
-                <Button variant="outline" size="lg" className="w-full" suppressHydrationWarning>
-                  I already have an account
-                </Button>
-              </SignInButton>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                nativeButton={false}
+                render={<Link href="/sign-in" />}
+                suppressHydrationWarning
+              >
+                I already have an account
+              </Button>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -292,7 +301,7 @@ function HeaderAccount() {
 function MobileNav(){
   const pathname = usePathname()
   return (
-    <nav className="fixed inset-x-4 bottom-3 z-40 flex h-16 items-center justify-around rounded-2xl border border-border/80 bg-background/90 shadow-lift backdrop-blur-lg supports-backdrop-filter:bg-background/75 md:hidden">
+    <nav aria-label="Mobile navigation" className="fixed inset-x-4 bottom-3 z-40 flex h-16 items-center justify-around rounded-2xl border border-border/80 bg-background/90 shadow-lift backdrop-blur-lg supports-backdrop-filter:bg-background/75 md:hidden">
       {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
         <Link
           key={item.href}

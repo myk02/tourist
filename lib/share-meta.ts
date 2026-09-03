@@ -1,4 +1,4 @@
-import { ConvexClient } from 'convex/browser'
+import { ConvexHttpClient } from 'convex/browser'
 
 /**
  * Share-link SEO: resolves real titles, descriptions and images for the
@@ -35,9 +35,9 @@ type QueryFn = (name: string, args: Record<string, unknown>) => Promise<unknown>
 export async function shareMeta(kind: 'trace' | 'recap' | 'moments', tripId: string, token?: string): Promise<ShareMeta> {
   const url = process.env.NEXT_PUBLIC_CONVEX_URL
   if (!url) return FALLBACK[kind]
-  let client: ConvexClient | null = null
+  let client: ConvexHttpClient | null = null
   try {
-    client = new ConvexClient(url)
+    client = new ConvexHttpClient(url)
     const query = client.query as unknown as QueryFn
     if (kind === 'trace') {
       const data = (await query('trips:publicTrace', { tripId, token: token ?? '' })) as TraceData | null
@@ -48,7 +48,7 @@ export async function shareMeta(kind: 'trace' | 'recap' | 'moments', tripId: str
         image: data.trip.coverImage || '/kenya-hero.png',
       }
     }
-    const data = (await query('moments:publicForTrip', { tripId })) as MomentsData | null
+    const data = (await query('moments:publicForTrip', { tripId, token: token ?? '' })) as MomentsData | null
     if (!data?.trip?.name) return FALLBACK[kind]
     const firstImage = data.moments?.map(m => m.imageUrl ?? m.imageUrls?.[0]).find(Boolean)
     return {
@@ -59,6 +59,8 @@ export async function shareMeta(kind: 'trace' | 'recap' | 'moments', tripId: str
   } catch {
     return FALLBACK[kind]
   } finally {
-    client?.close()
+    // ConvexHttpClient has no close() — it's a stateless request client and
+    // can be garbage-collected normally.
+    void client
   }
 }

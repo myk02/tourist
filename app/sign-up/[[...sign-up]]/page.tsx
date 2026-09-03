@@ -55,31 +55,37 @@ export default function SignUpPage() {
                       'h-[44px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] placeholder:text-[#9ca3af] focus:border-[#0e7a55] focus:ring-2 focus:ring-[#0e7a55]/15',
                     formButtonPrimary:
                       'h-[44px] rounded-lg bg-[#0e7a55] hover:bg-[#0c6b4a] text-white text-[14px] font-semibold shadow-sm disabled:bg-[#f3f4f6] disabled:text-[#9ca3af] disabled:border disabled:border-[#e5e7eb] disabled:shadow-none',
-                    footerAction: 'text-center',
-                    footerActionText: 'text-sm text-[#6b7280]',
-                    footerActionLink: 'font-medium text-[#111827] underline underline-offset-4 hover:text-[#0e7a55]',
                     identityPreview: 'rounded-lg border border-[#e5e7eb] bg-[#f9fafb]',
                     formFieldAction: 'text-sm font-medium text-[#0e7a55] hover:underline',
                     alert: 'rounded-lg',
                     loaderIcon: 'text-[#0e7a55]',
+                    logoBox: 'hidden',
+                    footer: 'hidden',
+                    footerAction: 'hidden',
+                    footerActionText: 'hidden',
+                    footerActionLink: 'hidden',
+                    clerkBadge: 'hidden',
+                    developmentModeBadge: 'hidden',
+                    badge: 'hidden',
                   },
                   layout: {
                     socialButtonsPlacement: 'top',
                     socialButtonsVariant: 'blockButton',
+                    unsafe_disableDevelopmentModeWarnings: true,
                   },
                 } as any
               }
             />
-            {/* Base44 footer: terms outside card like image bottom */}
-            <p className="mt-8 text-center text-[11px] leading-relaxed text-[#9ca3af]">
+            {/* Terms outside card like image bottom */}
+            <p className="mt-6 text-center text-[11px] leading-relaxed text-[#9ca3af]">
               By clicking &ldquo;Continue&rdquo;, you agree to our{' '}
-              <Link href="/terms" className="underline underline-offset-4 hover:text-[#0e7a55]">
+              <a href={`${process.env.NEXT_PUBLIC_APP_URL ?? ''}/terms`} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-[#0e7a55]">
                 Terms of Service
-              </Link>{' '}
+              </a>{' '}
               and{' '}
-              <Link href="/privacy" className="underline underline-offset-4 hover:text-[#0e7a55]">
+              <a href={`${process.env.NEXT_PUBLIC_APP_URL ?? ''}/privacy`} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-[#0e7a55]">
                 Privacy Policy
-              </Link>
+              </a>
               .
             </p>
           </div>
@@ -177,7 +183,6 @@ export default function SignUpPage() {
 
         {/* Bottom right photo */}
         <div className="absolute bottom-0 right-0 h-[44%] w-[38%] overflow-hidden rounded-tl-[20px] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.18)] border-t border-l border-white/70">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/diani-beach.png"
             alt="Traveller on Diani Beach, Kenya"

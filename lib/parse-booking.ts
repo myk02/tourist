@@ -111,6 +111,14 @@ function extractGuests(text: string): number | undefined {
   return m ? parseInt(m[1], 10) : undefined
 }
 
+function extractProvider(text: string): string | undefined {
+  const airline = /(operated by|airline:?)\s+([A-Za-z ]{3,30})/i.exec(text)
+  if (airline) return airline[2].trim()
+  const platform = /(booking\.com|expedia|airbnb|trip\.com|jovago|safaribookings)/i.exec(text)
+  if (platform) return platform[1].trim()
+  return undefined
+}
+
 export function parseBookingEmail(text: string): ParsedBooking {
   const amount = extractAmount(text)
   const dates = extractDates(text).sort()
@@ -126,6 +134,6 @@ export function parseBookingEmail(text: string): ParsedBooking {
     checkIn: dates[0],
     checkOut: dates[1] && dates[1] !== dates[0] ? dates[1] : undefined,
     guests: extractGuests(text),
-    provider: extractName(text),
+    provider: extractProvider(text),
   }
 }
