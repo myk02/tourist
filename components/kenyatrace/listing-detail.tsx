@@ -187,7 +187,14 @@ export function Detail({ id }: { id: string }) {
   // undefined = still loading (shimmer), null = well-formed id for a listing
   // that no longer exists (removed or rescraped away) — show 404, not a
   // half-empty ghost page with fallback hero and KSh 0.
-  if (item === undefined) return <div className="kt-shimmer min-h-[100svh]" />
+  if (item === undefined) {
+    return (
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-6">
+        <div className="kt-shimmer h-64 rounded-2xl md:h-80" />
+        <p role="status" className="text-sm text-muted-foreground">Loading listing</p>
+      </div>
+    )
+  }
   if (!item) return <NotFound />
 
   return (
@@ -289,7 +296,7 @@ export function Detail({ id }: { id: string }) {
                   Add to a trip
                 </Button>
                 <Button variant="ghost" className="w-full" onClick={createNewTrip} disabled={!item || creatingTrip}>
-                  {creatingTrip ? 'Creating…' : 'Start a new trip with this'}
+                  {creatingTrip ? 'Creating' : 'Start a new trip with this'}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">Free to reserve — pay later from your bookings.</p>
               </CardContent>

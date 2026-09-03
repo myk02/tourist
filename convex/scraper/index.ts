@@ -4,6 +4,21 @@ import { api, internal } from "../_generated/api"
 import { makeFunctionReference } from "convex/server"
 import { STALE_AFTER_MS } from "./constants"
 
+/**
+ * Catalog refresh policy (Phase 5.2 decision): ON-DEMAND ONLY, no cron.
+ *
+ * - `searchWithScrape` runs from the Discover page behind auth + fresh-data +
+ *   curated-data guards and a per-session client guard — a visit never burns
+ *   paid Firecrawl quota blindly.
+ * - `scrapeAll` exists for manual ops runs (Convex dashboard), not scheduling:
+ *   it fans out through `searchWithScrape`, which requires a user identity and
+ *   therefore always skips from a cron context. Do NOT wire it to crons.ts
+ *   without also lifting the auth gate AND budgeting the Firecrawl spend.
+ * - `clearAndRescrape` is a force-refresh for one vertical. It never clears
+ *   before scraping — `upsertScraped` is insert-then-sweep, so a failed scrape
+ *   leaves the old catalog intact instead of an empty vertical.
+ */
+
 const VERTICALS = ["stays", "flights", "attractions", "cars", "taxis"] as const
 type Vertical = (typeof VERTICALS)[number]
 
@@ -93,9 +108,8 @@ export const clearAndRescrape = internalAction({
       return { status: "skipped", reason: "invalid_vertical" }
     }
 
-    await ctx.runMutation(internal.listings.clearVertical, { vertical })
-    console.log(`[scraper] ${vertical}: cleared, starting fresh scrape`)
-
+    // No clear-before-scrape: upsertScraped sweeps stale rows only after the
+    // fresh ones land, so this can never empty a vertical on failure.
     if (process.env.FIRECRAWL_API_KEY) {
       try {
         const result: Record<string, unknown> = await ctx.runAction(internal.scraper.firecrawl.scrapeVertical, { vertical })

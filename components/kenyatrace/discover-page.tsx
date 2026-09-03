@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Car, Check, Heart, LocateFixed, Map, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Star, X } from 'lucide-react'
+import { Car, Check, Heart, Loader2, LocateFixed, Map, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Star, X } from 'lucide-react'
 import { categories, formatKES, type Vertical } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
 import { toReplaceStopsPayload } from '@/lib/stop-fields'
@@ -56,13 +56,14 @@ function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   return 2 * R * Math.asin(Math.sqrt(a))
 }
 
-/** Hero photo + one-line tagline per category. */
+/** Hero photo + one-line tagline per category. Local assets only — no hotlinks. */
 const VERTICAL_HERO: Record<string, { image: string; tagline: string }> = {
   stays: { image: 'https://upload.wikimedia.org/wikipedia/commons/7/72/PIC_0106.JPG', tagline: 'Wake up by the coast or in the wild' },
   flights: { image: 'https://upload.wikimedia.org/wikipedia/commons/d/d4/Nairobi_Skyline_Savannah_Kenya_May19_R1600687.jpg', tagline: 'City to savannah in an hour' },
   attractions: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'Tours, parks, and the places Kenya is famous for' },
   cars: { image: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Lake_Naivasha%2C_Kenya_%2845636345554%29.jpg', tagline: 'Drive Kenya your own way' },
-  taxis: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'City rides and airport runs' },
+  // Taxis are city rides — the generic Kenya hero, not a Mara landscape dup.
+  taxis: { image: '/kenya-hero.png', tagline: 'City rides and airport runs' },
 }
 
 const SORTS = [
@@ -111,6 +112,10 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
+  // Combobox keyboard state: which suggestion is highlighted + whether the
+  // listbox is open (Escape closes it, typing reopens it).
+  const [activeSuggestion, setActiveSuggestion] = useState(-1)
+  const [suggestOpen, setSuggestOpen] = useState(true)
 
   // Lock body scroll while the full-screen mobile map is open.
   useEffect(() => {
@@ -400,7 +405,30 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
   const mapPoints = (filteredItems ?? []).map(toPoint)
   const visible = filteredItems?.slice(0, visibleCount)
-  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || amenities.length > 0 || !!activeSource
+  // Search suggestions for the combobox listbox (max 6, deduped by name).
+  const suggestions = useMemo(() => {
+    if (!searchTerm) return []
+    const q = searchTerm.toLowerCase()
+    const out: { name: string; location: string }[] = []
+    const seen = new Set<string>()
+    for (const i of rawItems ?? []) {
+      if (out.length >= 6) break
+      if (seen.has(i.name)) continue
+      if (!i.name.toLowerCase().includes(q) && !i.location.toLowerCase().includes(q)) continue
+      seen.add(i.name)
+      out.push({ name: i.name, location: i.location })
+    }
+    return out
+  }, [searchTerm, rawItems])
+  const suggestListOpen = suggestOpen && searchTerm.length > 0 && suggestions.length > 0
+
+  function pickSuggestion(idx: number) {
+    const s = suggestions[idx]
+    if (!s) return
+    setSearchTerm(s.name)
+    setSuggestOpen(false)
+    setActiveSuggestion(-1)
+  }  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || amenities.length > 0 || !!activeSource
   const activeFilterCount = [activeFilter !== 'all', rating > 0, priceNarrowed, nearMe, amenities.length > 0, !!activeSource].filter(Boolean).length
   const hero = VERTICAL_HERO[vertical] ?? VERTICAL_HERO.attractions
   const label = categories.find(c => c.id === vertical)?.label ?? vertical
@@ -419,7 +447,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               <p className="mt-1 text-sm text-white/85">{hero.tagline}</p>
             </div>
             <span className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white backdrop-blur-sm">
-              {filteredItems ? `${filteredItems.length} place${filteredItems.length === 1 ? '' : 's'}` : '…'}
+              {filteredItems ? `${filteredItems.length} place${filteredItems.length === 1 ? '' : 's'}` : 'Loading places'}
             </span>
           </div>
         </div>
@@ -452,44 +480,46 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                 role="combobox"
                 aria-label="Search listings"
                 aria-autocomplete="list"
-                aria-expanded={searchTerm.length > 0}
+                aria-expanded={suggestListOpen}
                 aria-controls="discover-search-suggestions"
+                aria-activedescendant={activeSuggestion >= 0 ? `discover-suggestion-${activeSuggestion}` : undefined}
                 placeholder="Mara, Nairobi, Diani..."
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={e => { setSearchTerm(e.target.value); setSuggestOpen(true); setActiveSuggestion(-1) }}
+                onKeyDown={e => {
+                  if (e.key === 'ArrowDown' && suggestListOpen) { e.preventDefault(); setActiveSuggestion(i => (i + 1) % suggestions.length) }
+                  else if (e.key === 'ArrowUp' && suggestListOpen) { e.preventDefault(); setActiveSuggestion(i => (i - 1 + suggestions.length) % suggestions.length) }
+                  else if (e.key === 'Enter' && activeSuggestion >= 0 && suggestListOpen) { e.preventDefault(); pickSuggestion(activeSuggestion) }
+                  else if (e.key === 'Escape' && suggestListOpen) { setSuggestOpen(false); setActiveSuggestion(-1) }
+                }}
               />
-              {searchTerm && (() => {
-                const q = searchTerm.toLowerCase()
-                const suggestions: { name: string; location: string }[] = []
-                const seen = new Set<string>()
-                for (const i of rawItems ?? []) {
-                  if (suggestions.length >= 6) break
-                  if (seen.has(i.name)) continue
-                  if (!i.name.toLowerCase().includes(q) && !i.location.toLowerCase().includes(q)) continue
-                  seen.add(i.name)
-                  suggestions.push({ name: i.name, location: i.location })
-                }
-                if (suggestions.length === 0) return null
-                return (
-                  <div
-                    className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border bg-popover p-1 shadow-pop"
-                    id="discover-search-suggestions"
-                    role="listbox"
-                  >
-                    {suggestions.map(s => (
-                      <button
-                        key={s.name}
-                        type="button"
-                        onClick={() => setSearchTerm(s.name)}
-                        className="flex w-full items-baseline justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-secondary/60"
-                      >
-                        <span className="truncate font-medium">{s.name}</span>
-                        <span className="shrink-0 truncate text-xs text-muted-foreground">{s.location}</span>
-                      </button>
-                    ))}
-                  </div>
-                )
-              })()}
+              {suggestListOpen && (
+                <div
+                  className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border bg-popover p-1 shadow-pop"
+                  id="discover-search-suggestions"
+                  role="listbox"
+                  aria-label="Search suggestions"
+                >
+                  {suggestions.map((s, idx) => (
+                    <button
+                      key={s.name}
+                      id={`discover-suggestion-${idx}`}
+                      type="button"
+                      role="option"
+                      aria-selected={idx === activeSuggestion}
+                      onMouseEnter={() => setActiveSuggestion(idx)}
+                      onClick={() => pickSuggestion(idx)}
+                      className={cn(
+                        'flex w-full items-baseline justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        idx === activeSuggestion ? 'bg-secondary' : 'hover:bg-secondary/60',
+                      )}
+                    >
+                      <span className="truncate font-medium">{s.name}</span>
+                      <span className="shrink-0 truncate text-xs text-muted-foreground">{s.location}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Select value={sort} onValueChange={v => setSort(v as SortValue)}>
@@ -553,8 +583,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                       : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
                   )}
                 >
-                  <LocateFixed className="size-3.5" />
-                  {locating ? 'Finding…' : 'Near me'}
+                  {locating ? <Loader2 className="size-3.5 animate-spin" /> : <LocateFixed className="size-3.5" />}
+                  {locating ? 'Finding' : 'Near me'}
                 </button>
               </div>
 
@@ -668,7 +698,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                     onMouseEnter={() => setHoveredId(item._id)}
                     onMouseLeave={() => setHoveredId(null)}
                     className={cn(
-                      'group relative rounded-2xl border-0 bg-transparent p-0 shadow-soft transition-all duration-200 hover:-translate-y-1 hover:shadow-lift',
+                      'group relative overflow-hidden rounded-2xl border bg-card p-0 shadow-soft transition-shadow duration-200 hover:shadow-lift',
                       active && 'ring-2 ring-primary/40',
                     )}
                   >
@@ -712,14 +742,14 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                     <button
                       aria-label="Add to a trip"
                       onClick={e => { e.preventDefault(); openTripPicker(item._id) }}
-                      className="absolute right-12 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/60"
+                      className="absolute right-12 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                     >
                       <Plus className="size-4" />
                     </button>
                     <button
                       aria-label={saved ? 'Remove from saved' : 'Save to your list'}
                       onClick={e => { e.preventDefault(); toggleSave(item._id) }}
-                      className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/60"
+                      className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                     >
                       <Heart className={cn('size-4 transition-colors', saved && 'fill-red-500 text-red-500')} />
                     </button>
@@ -728,7 +758,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               })
             ) : (
               Array(PAGE_SIZE).fill(null).map((_, i) => (
-                <Card key={i} className="rounded-2xl border-0 bg-transparent p-0">
+                <Card key={i} className="rounded-2xl border bg-card p-0">
                   <Skeleton className="aspect-[3/2] w-full rounded-2xl" />
                 </Card>
               ))

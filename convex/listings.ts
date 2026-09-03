@@ -126,25 +126,31 @@ export const upsertScraped = internalMutation({
       return { inserted: 0 }
     }
 
+    // Insert-then-sweep (never delete-then-insert): the new rows land first,
+    // then only the OLD scraped rows are removed. A failed scrape inserts
+    // nothing and deletes nothing, so the catalog can never go empty from a
+    // bad scrape — readers see duplicates briefly at worst, never a void.
+    const insertedIds = new Set<string>()
+    let inserted = 0
+    for (const item of args.items) {
+      const id = await ctx.db.insert("listings", { ...item, image: wikimediaThumb(item.image), vertical: args.vertical, ...trustDefaults({ vertical: args.vertical, rating: item.rating, reviews: item.reviews, tags: item.tags }) })
+      insertedIds.add(id)
+      inserted++
+    }
+
     const existing = await ctx.db
       .query("listings")
       .withIndex("by_vertical", (q) => q.eq("vertical", args.vertical))
       .collect()
 
-    let deletedOld = 0
+    let swept = 0
     for (const item of existing) {
-      if (item.scrapedAt !== undefined) {
+      if (item.scrapedAt !== undefined && !insertedIds.has(item._id)) {
         await ctx.db.delete(item._id)
-        deletedOld++
+        swept++
       }
     }
-
-    let inserted = 0
-    for (const item of args.items) {
-      await ctx.db.insert("listings", { ...item, image: wikimediaThumb(item.image), vertical: args.vertical, ...trustDefaults({ vertical: args.vertical, rating: item.rating, reviews: item.reviews, tags: item.tags }) })
-      inserted++
-    }
-    console.log(`[upsertScraped] ${args.vertical}: deleted ${deletedOld} old, inserted ${inserted} new`)
+    console.log(`[upsertScraped] ${args.vertical}: inserted ${inserted} new, swept ${swept} old`)
     return { inserted }
   },
 })
@@ -204,7 +210,13 @@ function trustDefaults(item: { vertical: string; rating: number; reviews: number
   return { instantConfirm: item.reviews >= 200, freeCancellation: item.reviews >= 100 || tags.includes('cancellation') }
 }
 
-/** Internal: wipes a vertical before clearAndRescrape. */
+/**
+ * DEPRECATED (Phase 5.2): the wipe-a-vertical helper for the old
+ * clear-before-scrape flow. Nothing calls it — `upsertScraped` is
+ * insert-then-sweep and `clearAndRescrape` no longer clears. Kept exported so
+ * ops can still empty a poisoned vertical from the dashboard; do not call it
+ * from any automated path.
+ */
 export const clearVertical = internalMutation({
   args: { vertical: v.string() },
   handler: async (ctx, args) => {
