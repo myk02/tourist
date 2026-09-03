@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { ChevronLeft, ChevronRight, Copy, LayoutGrid, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Copy, LayoutGrid, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -107,7 +107,7 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
         <p className="flex items-center gap-2 font-semibold"><Share2 className="size-4 text-primary" /> Love this? Recommend KenyaTrace</p>
         <p className="mt-1 text-sm text-muted-foreground">Share this trip — it works without an account.</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button variant="outline" onClick={copy} className="gap-1.5">{copied ? <Star className="size-4 text-primary" /> : <Copy className="size-4" />}{copied ? 'Copied' : 'Copy link'}</Button>
+          <Button variant="outline" onClick={copy} className="gap-1.5">{copied ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}{copied ? 'Copied' : 'Copy link'}</Button>
           <Button variant="outline" nativeButton={false} render={<a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><MessageCircle className="size-4" />WhatsApp</Button>
           <Button variant="outline" nativeButton={false} render={<a href={`https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Send className="size-4" />Telegram</Button>
           <Button variant="outline" nativeButton={false} render={<a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareLink)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Share2 className="size-4" />Post</Button>

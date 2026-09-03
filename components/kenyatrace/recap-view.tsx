@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { Copy, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
+import { Check, Copy, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/kt/empty-state'
 import { GradientHero } from '@/components/ui/kt/gradient-hero'
 import { isValidConvexId } from '@/lib/id'
-import { prettyDate } from '@/lib/dates'
+import { calendarDayDiff, prettyDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
 type Moment = NonNullable<ReturnType<typeof useQuery<typeof api.moments.publicForTrip>>>['moments'][number]
@@ -69,6 +69,18 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
   const shareLink = typeof window !== 'undefined' ? `${window.location.origin}/recap/${tripId}${token ? `?t=${token}` : ''}` : ''
   const shareText = `A recap of ${trip.destination} with KenyaTrace — plan your own trip: ${shareLink}`
   const active = lightbox != null ? moments[lightbox] : null
+  // Unpacked-lite stats from real data only: shared moments, best picks, days.
+  const bestCount = data.moments.filter(m => m.best).length
+  const daySpan = trip.startDate && trip.endDate ? Math.max(calendarDayDiff(trip.startDate, trip.endDate) + 1, 1) : null
+  const canNativeShare = typeof navigator !== 'undefined' && 'share' in navigator
+
+  async function nativeShare() {
+    try {
+      await navigator.share({ title: `Trip recap · ${trip.name}`, text: shareText, url: shareLink })
+    } catch {
+      // User dismissed the sheet — no error state needed.
+    }
+  }
 
   async function copy() {
     try {
@@ -96,6 +108,14 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
         ) : null}
       </GradientHero>
 
+      {data.moments.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm text-muted-foreground" aria-label="Trip statistics">
+          <span><strong className="font-serif text-lg text-foreground">{data.moments.length}</strong> moment{data.moments.length === 1 ? '' : 's'}</span>
+          {bestCount > 0 && <span><strong className="font-serif text-lg text-foreground">{bestCount}</strong> best pick{bestCount === 1 ? '' : 's'}</span>}
+          {daySpan != null && <span><strong className="font-serif text-lg text-foreground">{daySpan}</strong> day{daySpan === 1 ? '' : 's'}</span>}
+        </div>
+      )}
+
       {moments.length === 0 ? (
         <EmptyState icon={Share2} title="Nothing shared yet" body="The traveller hasn't made any moments public on this trip, so there's no recap to show." />
       ) : (
@@ -122,7 +142,8 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
             <p className="flex items-center gap-2 font-semibold"><Share2 className="size-4 text-primary" /> Share this recap</p>
             <p className="mt-1 text-sm text-muted-foreground">Send it anywhere — it works without an account.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="outline" onClick={copy} className="gap-1.5">{copied ? <Star className="size-4 text-primary" /> : <Copy className="size-4" />}{copied ? 'Copied' : 'Copy link'}</Button>
+              {canNativeShare && <Button onClick={nativeShare} className="gap-1.5"><Share2 className="size-4" />Share</Button>}
+              <Button variant="outline" onClick={copy} className="gap-1.5">{copied ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}{copied ? 'Copied' : 'Copy link'}</Button>
               <Button variant="outline" nativeButton={false} render={<a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><MessageCircle className="size-4" />WhatsApp</Button>
               <Button variant="outline" nativeButton={false} render={<a href={`https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Send className="size-4" />Telegram</Button>
               <Button variant="outline" nativeButton={false} render={<a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareLink)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Share2 className="size-4" />Post</Button>

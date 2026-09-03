@@ -40,6 +40,14 @@ const STORAGE_KEY = 'ktActiveTrack'
 const TAB_LOCK_KEY = 'ktActiveTrackLock'
 const TAB_LOCK_TTL_MS = 15000
 
+/** Collision-resistant tab id (crypto when available, Math fallback for old browsers). */
+function newTabId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return `t-${crypto.randomUUID()}`
+  } catch { /* ignore */ }
+  return `t-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`
+}
+
 interface TrackingContextValue {
   session: TrackingSession | null
   start: (args: { tripId: string; tripName: string; destinationName: string; destLat: number; destLng: number; originLabel?: string }) => void
@@ -120,7 +128,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
   // Release this tab's claim when it closes or navigates away mid-session so
   // another tab can take over immediately instead of waiting out the TTL.
   useEffect(() => {
-    tabIdRef.current = `t-${Math.random().toString(36).slice(2, 10)}`
+    tabIdRef.current = newTabId()
     const release = () => {
       try {
         const raw = localStorage.getItem(TAB_LOCK_KEY)
@@ -146,7 +154,7 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
     try {
       const raw = localStorage.getItem(TAB_LOCK_KEY)
       const lock = raw ? (JSON.parse(raw) as { tabId?: string; at?: number }) : null
-      if (!tabIdRef.current) tabIdRef.current = `t-${Math.random().toString(36).slice(2, 10)}`
+      if (!tabIdRef.current) tabIdRef.current = newTabId()
       if (lock?.tabId && lock.tabId !== tabIdRef.current && Date.now() - (lock.at ?? 0) < TAB_LOCK_TTL_MS) {
         toast.error('Live tracking is already running in another tab')
         return

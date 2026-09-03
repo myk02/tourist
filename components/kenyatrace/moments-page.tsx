@@ -79,6 +79,7 @@ export function Moments() {
   const [location, setLocation] = useState('')
   const [stopId, setStopId] = useState('')
   const [suggesting, setSuggesting] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [view, setView] = useState<'grid' | 'map' | 'timeline'>('grid')
   const tripStops = selectedTrip?.stops ?? []
 
@@ -145,6 +146,9 @@ export function Moments() {
       toast.error('Choose a trip, add at least one photo and a caption')
       return
     }
+    // No double-tap: uploads + create are one atomic busy window.
+    if (saving) return
+    setSaving(true)
     try {
       const storageIds: Id<'_storage'>[] = []
       const videoIds: Id<'_storage'>[] = []
@@ -173,6 +177,8 @@ export function Moments() {
       toast.success(earnedDays > 0 ? 'Moment saved — you earned a free day!' : stopId ? `Moment pinned to ${stop?.name}` : coords ? 'Moment saved with location' : 'Moment saved')
     } catch {
       toast.error('Could not save this moment')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -325,7 +331,7 @@ export function Moments() {
                 </Button>
               </div>
             </FieldGroup>
-            <Button onClick={save} disabled={!files.length || !caption.trim()}>Save moment</Button>
+            <Button onClick={save} disabled={!files.length || !caption.trim() || saving}>{saving ? 'Saving' : 'Save moment'}</Button>
           </DialogContent>
         </Dialog>
       </div>

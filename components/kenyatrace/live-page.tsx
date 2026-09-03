@@ -136,8 +136,17 @@ export function Track() {
 
   function handleStop() {
     stop()
+    setConfirmEnd(false)
     toast.success('Tracking stopped')
   }
+
+  // Two-tap confirm: one stray tap must never kill a live trace with no undo.
+  const [confirmEnd, setConfirmEnd] = useState(false)
+  useEffect(() => {
+    if (!confirmEnd) return
+    const t = setTimeout(() => setConfirmEnd(false), 4000)
+    return () => clearTimeout(t)
+  }, [confirmEnd])
 
   // Consent is enforced server-side on every record() — turning it off here
   // ends persistence immediately, wherever the user is in the app.
@@ -206,7 +215,10 @@ export function Track() {
                   <BrandMark icon={MapPin} />
                   <div className="flex-1">
                     <p className="font-semibold">Share your live location?</p>
-                    <p className="text-sm text-muted-foreground">We record your route to build a trace of your trip. Only you can see it, and you can turn it off anytime.</p>
+                    <p className="text-sm text-muted-foreground">
+                      We record your route only while tracking is active on this trip — around 4% battery a day,
+                      pausable anytime. Only you can see it until you share the trace link.
+                    </p>
                   </div>
                 </div>
                 <label className="flex cursor-pointer items-center justify-between rounded-xl border p-3">
@@ -257,7 +269,13 @@ export function Track() {
                     </p>
                   )}
                 </div>
-                <Button variant="destructive" onClick={handleStop}>End</Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => { if (confirmEnd) handleStop(); else setConfirmEnd(true) }}
+                  aria-live="polite"
+                >
+                  {confirmEnd ? 'Tap again to end' : 'End'}
+                </Button>
               </div>
             ) : (
               <div className="flex items-center gap-4">
