@@ -6,15 +6,13 @@ KenyaTrace is a Kenya-first travel companion: plan an itinerary, explore stays a
 
 **Live app:** [kenyatrace.vercel.app](https://kenyatrace.vercel.app)
 
-![Safari landscape across Kenya](public/kenya-hero.png)
-
 ---
 
 ## What you can do
 
-| | |
-| --- | --- |
-| **Plan** | Tell KenyaTrace where you are going, your dates, and your budget. It builds a day-by-day itinerary with stops, travel time, and cost. |
+| Feature | Description |
+|---------|-------------|
+| **Plan** | Tell KenyaTrace where you're going, your dates, and your budget. It builds a day-by-day itinerary with stops, travel time, and cost. |
 | **Explore** | Browse stays, flights, things to do, cars, and taxis on a map + grid. Save spots and drop them onto a day of your trip. |
 | **Book & pay** | Confirm bookings in Kenyan shillings. Checkout is M-Pesa-first via Paystack, with card as a fallback. |
 | **Live trace** | Share a private link so family can follow the journey on a map in real time. You can disable or rotate the link at any time. |
@@ -44,7 +42,7 @@ Plan  →  Explore  →  Book  →  Live trace  →  Moments  →  Recap
 Everyone gets a **30-day free trial** from first sign-in. After that, access is prepaid — no auto-renewal.
 
 | Pack | Price | About |
-| --- | --- | --- |
+|------|-------|-------|
 | Weekly | **KES 100** | 7 days of full access |
 | Monthly | **KES 400** | 30 days of full access — best per-day value |
 
@@ -52,10 +50,10 @@ Pay with **M-Pesa** or card.
 
 ---
 
-## Stack
+## Tech Stack
 
 | Layer | Choice |
-| --- | --- |
+|-------|--------|
 | App | [Next.js](https://nextjs.org/) 16 (App Router) + React 19 |
 | Backend & realtime | [Convex](https://www.convex.dev/) |
 | Auth | [Clerk](https://clerk.com/) |
@@ -67,7 +65,7 @@ Pay with **M-Pesa** or card.
 
 ---
 
-## Local development
+## Local Development
 
 **Requirements:** Node.js 20+, npm, and accounts for Convex, Clerk, Paystack, and OpenRouter.
 
@@ -106,7 +104,7 @@ python deploy.py "your commit message"
 ## Routes
 
 | Path | What it is |
-| --- | --- |
+|------|------------|
 | `/` and `/plan` | Guided trip planner |
 | `/discover` | Explore listings (stays, flights, attractions, cars, taxis) |
 | `/trips` | Your trips |
