@@ -25,6 +25,9 @@ const MONTHS: Record<string, number> = {
 
 function toIso(day: number, month: number, year: number): string {
   if (!day || !month || !year) return ''
+  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 2000 || year > 2100) return ''
+  const d = new Date(year, month - 1, day)
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return ''
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
@@ -57,11 +60,14 @@ function extractAmount(text: string): { amount: number; currency?: string } {
   return { amount: 0 }
 }
 
+const STOP_WORDS = new Set(['CONFIRMED','BOOKING','RESERVED','CANCELLED','ARRIVAL','DEPARTURE','CHECKIN','CHECKOUT','PAYMENT','INVOICE','RECEIPT','REFERENCE','CONFIRMATION'])
 function extractReference(text: string): string | undefined {
   const labeled = /(?:booking\s*(?:reference|ref|no\.?|number)|confirmation\s*(?:no\.?|number|code)|reservation\s*(?:no\.?|number|code)?|PNR)[^A-Z0-9]{1,24}([A-Z0-9]{4,14})/i.exec(text)
   if (labeled) return labeled[1]
   const standalone = /\b([A-Z]{2}-\d{4,10}|[A-Z0-9]{6,12})\b/.exec(text)
-  return standalone?.[1]
+  const cand = standalone?.[1]
+  if (cand && !STOP_WORDS.has(cand.toUpperCase())) return cand
+  return undefined
 }
 
 function extractName(text: string): string {
@@ -105,12 +111,21 @@ function extractGuests(text: string): number | undefined {
   return m ? parseInt(m[1], 10) : undefined
 }
 
+function extractProvider(text: string): string | undefined {
+  const airline = /(operated by|airline:?)\s+([A-Za-z ]{3,30})/i.exec(text)
+  if (airline) return airline[2].trim()
+  const platform = /(booking\.com|expedia|airbnb|trip\.com|jovago|safaribookings)/i.exec(text)
+  if (platform) return platform[1].trim()
+  return undefined
+}
+
 export function parseBookingEmail(text: string): ParsedBooking {
   const amount = extractAmount(text)
-  const dates = extractDates(text)
+  const dates = extractDates(text).sort()
   const type = detectType(text)
+  const name = extractName(text)
   return {
-    name: extractName(text),
+    name,
     place: extractPlace(text),
     type,
     reference: extractReference(text),
@@ -119,6 +134,6 @@ export function parseBookingEmail(text: string): ParsedBooking {
     checkIn: dates[0],
     checkOut: dates[1] && dates[1] !== dates[0] ? dates[1] : undefined,
     guests: extractGuests(text),
-    provider: extractName(text),
+    provider: extractProvider(text),
   }
 }

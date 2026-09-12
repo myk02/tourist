@@ -26,8 +26,7 @@
 
 :root {
   color-scheme: light;
-  --background: #f7f8f4;
-  --foreground: #14211a;
+  --background: #f7f8f4;  --foreground: #14211a;
   --card: #ffffff;
   --card-foreground: #14211a;
   --popover: #ffffff;
@@ -44,7 +43,23 @@
   --border: #e4e9e3;
   --ring: #0e7a55;
   --radius: .625rem;
+
+  /* ─── KenyaTrace layout scale (Phase 2.3: single source) ───
+     Pages: `kt-page` (max-w-6xl) · wide grids: `kt-page-wide` (max-w-7xl) ·
+     reading detail: `kt-page-narrow` (max-w-3xl). Cards stay `rounded-2xl`,
+     heroes `rounded-3xl`. Overlays: map popover < fab < tracker < nav < modal. */
+  --kt-page: 72rem;
+  --kt-page-wide: 80rem;
+  --kt-page-narrow: 48rem;
+  --kt-z-map-popover: 20;
+  --kt-z-fab: 30;
+  --kt-z-tracker: 35;
+  --kt-z-nav: 40;
 }
+
+.kt-page { margin-inline: auto; width: 100%; max-width: var(--kt-page); padding-inline: 1.25rem; padding-block: 2rem; }
+.kt-page-wide { margin-inline: auto; width: 100%; max-width: var(--kt-page-wide); padding-inline: 1.25rem; padding-block: 1.5rem; }
+.kt-page-narrow { margin-inline: auto; width: 100%; max-width: var(--kt-page-narrow); padding-inline: 1.25rem; padding-block: 2.5rem; }
 
 .dark {
   color-scheme: dark;
@@ -267,3 +282,10 @@
   color: var(--muted-foreground);
 }
 .maplibregl-ctrl-attrib a { color: var(--primary); }
+
+/* Clerk "Secured by Clerk" / "Development mode" strip at the bottom of the modal card. */
+.cl-internal-b3fm6y,
+.cl-cardBox > div:has(a[href*="clerk.com"]),
+.cl-cardBox > div:has(a[href*="go.clerk.com"]) {
+  display: none !important;
+}

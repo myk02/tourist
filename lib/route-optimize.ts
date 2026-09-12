@@ -28,7 +28,9 @@ export function pathLengthKm(stops: OptimizableStop[]): number {
 }
 
 function dist(a: OptimizableStop, b: OptimizableStop): number {
-  return haversineKm(a.lat!, a.lng!, b.lat!, b.lng!)
+  if (a.lat == null || a.lng == null || b.lat == null || b.lng == null) return Infinity
+  if (!Number.isFinite(a.lat) || !Number.isFinite(a.lng) || !Number.isFinite(b.lat) || !Number.isFinite(b.lng)) return Infinity
+  return haversineKm(a.lat, a.lng, b.lat, b.lng)
 }
 
 /**

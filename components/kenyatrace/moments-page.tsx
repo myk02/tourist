@@ -7,16 +7,18 @@ import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { isValidConvexId } from '@/lib/id'
-import { Camera, LayoutGrid, Map as MapIcon, Sparkles, Timeline } from 'lucide-react'
+import { Camera, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
+import { PillToggle } from '@/components/ui/kt/pill-toggle'
+import { ProgressBar } from '@/components/ui/kt/progress-bar'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { haversineKm } from '@/lib/travel'
-import { cn } from '@/lib/utils'
 import { KenyaMap } from './kenya-map'
 import { MomentAlbum } from './moment-album'
 import { ListingImage } from './shared'
@@ -77,6 +79,7 @@ export function Moments() {
   const [location, setLocation] = useState('')
   const [stopId, setStopId] = useState('')
   const [suggesting, setSuggesting] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [view, setView] = useState<'grid' | 'map' | 'timeline'>('grid')
   const tripStops = selectedTrip?.stops ?? []
 
@@ -123,8 +126,11 @@ export function Moments() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ imageData: dataUrl }),
       })
+      if (!response.ok) {
+        const err = await response.json().catch(() => null)
+        throw new Error(err?.error || 'Could not suggest a caption')
+      }
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error)
       setCaption(data.caption || '')
       setLocation(data.location || '')
       toast.success('Caption suggested')
@@ -140,6 +146,9 @@ export function Moments() {
       toast.error('Choose a trip, add at least one photo and a caption')
       return
     }
+    // No double-tap: uploads + create are one atomic busy window.
+    if (saving) return
+    setSaving(true)
     try {
       const storageIds: Id<'_storage'>[] = []
       const videoIds: Id<'_storage'>[] = []
@@ -168,6 +177,8 @@ export function Moments() {
       toast.success(earnedDays > 0 ? 'Moment saved — you earned a free day!' : stopId ? `Moment pinned to ${stop?.name}` : coords ? 'Moment saved with location' : 'Moment saved')
     } catch {
       toast.error('Could not save this moment')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -207,16 +218,14 @@ export function Moments() {
 
         {credit && (
           <div className="flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-4 shadow-soft">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><Sparkles className="size-5" /></span>
+            <BrandMark icon="sparkles" size="sm" />
             <div className="min-w-0 flex-1">
               <p className="font-semibold">Your moments earn free days</p>
               <p className="text-sm text-muted-foreground">
                 {credit.earnedDays > 0 && <>You&apos;ve earned {credit.earnedDays} free day{credit.earnedDays === 1 ? '' : 's'} so far. </>}
                 {credit.mediaForNextDay} more photo{credit.mediaForNextDay === 1 ? '' : 's'} = +1 free day of access.
               </p>
-              <div className="mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${((credit.mediaTotal % 3) / 3) * 100}%` }} />
-              </div>
+              <ProgressBar value={((credit.mediaTotal % 3) / 3) * 100} label="Progress to next free day" className="mt-2 w-full max-w-xs" />
             </div>
           </div>
         )}
@@ -224,11 +233,16 @@ export function Moments() {
         {trips?.length ? (
           <>
             {moments?.length ? (
-              <div className="flex w-fit items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1">
-                <button onClick={() => setView('grid')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'grid' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><LayoutGrid className="size-4" />Album</button>
-                <button onClick={() => setView('map')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'map' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><MapIcon className="size-4" />Map</button>
-                <button onClick={() => setView('timeline')} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', view === 'timeline' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}><Timeline className="size-4" />Timeline</button>
-              </div>
+              <PillToggle
+                label="Moments view"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: 'grid', label: 'Album' },
+                  { value: 'map', label: 'Map' },
+                  { value: 'timeline', label: 'Timeline' },
+                ]}
+              />
             ) : null}
 
             {view === 'grid' && <MomentAlbum tripId={selected!} onUploadClick={() => setAddOpen(true)} />}
@@ -262,7 +276,7 @@ export function Moments() {
                               ) : firstVideo ? (
                                 <video src={firstVideo} muted playsInline preload="metadata" className="size-full object-cover" />
                               ) : (
-                                <ListingImage src="/placeholder.jpg" fill alt={m.caption} className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
+                                <ListingImage src="/kenya-hero.png" fill alt="" className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
                               )}
                             </div>
                           )
@@ -288,8 +302,8 @@ export function Moments() {
             <FieldGroup>
               <Field>
                 <FieldLabel>Photos & videos</FieldLabel>
-                <Input type="file" accept="image/*,video/*" multiple onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 6))} />
-                {files.length > 0 && <p className="mt-1 text-xs text-muted-foreground">{files.length} file{files.length === 1 ? '' : 's'} selected (up to 6)</p>}
+                <Input type="file" accept="image/*,video/*" multiple onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 8))} />
+                {files.length > 0 && <p className="mt-1 text-xs text-muted-foreground">{files.length} file{files.length === 1 ? '' : 's'} selected (up to 8)</p>}
               </Field>
               <Field>
                 <FieldLabel>Caption</FieldLabel>
@@ -298,9 +312,10 @@ export function Moments() {
               {tripStops.length > 0 && (
                 <Field>
                   <FieldLabel>Pin to itinerary stop</FieldLabel>
-                  <Select value={stopId} onValueChange={v => setStopId(v ?? '')}>
+                  <Select value={stopId || 'none'} onValueChange={v => setStopId(v === 'none' ? '' : (v ?? ''))}>
                     <SelectTrigger><SelectValue placeholder="Not pinned to a stop" /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Not pinned to a stop</SelectItem>
                       {tripStops.map(s => <SelectItem key={s._id} value={s._id}>{`Day ${s.day} · ${s.name}`}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -316,7 +331,7 @@ export function Moments() {
                 </Button>
               </div>
             </FieldGroup>
-            <Button onClick={save} disabled={!files.length || !caption.trim()}>Save moment</Button>
+            <Button onClick={save} disabled={!files.length || !caption.trim() || saving}>{saving ? 'Saving' : 'Save moment'}</Button>
           </DialogContent>
         </Dialog>
       </div>

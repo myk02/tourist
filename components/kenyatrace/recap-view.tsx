@@ -1,16 +1,21 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { Copy, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
+import { Check, Copy, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
+import { EmptyState } from '@/components/ui/kt/empty-state'
+import { GradientHero } from '@/components/ui/kt/gradient-hero'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { isValidConvexId } from '@/lib/id'
+import { calendarDayDiff, prettyDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
 type Moment = NonNullable<ReturnType<typeof useQuery<typeof api.moments.publicForTrip>>>['moments'][number]
@@ -23,7 +28,7 @@ function mediaOf(m: Moment): Media[] {
     ...videos.map(url => ({ type: 'video' as const, url })),
     ...images.map(url => ({ type: 'image' as const, url })),
   ]
-  return media.length ? media : [{ type: 'image', url: '/placeholder.jpg' }]
+  return media.length ? media : [{ type: 'image', url: '/kenya-hero.png' }]
 }
 
 const GRID_SIZE = 9
@@ -32,11 +37,11 @@ const GRID_SIZE = 9
  * The 9-grid recap: up to nine of the trip's public moments arranged as a
  * shareable card. Prefers the traveller's "best" picks, then the newest.
  */
-export function RecapView({ tripId }: { tripId: string }) {
+export function RecapView({ tripId, token }: { tripId: string; token?: string }) {
   // A malformed /recap/<garbage> route must show the not-found state, not
   // make Convex throw on an invalid id.
   const validTripId = isValidConvexId(tripId)
-  const data = useQuery(api.moments.publicForTrip, validTripId ? { tripId: tripId as Id<'trips'> } : 'skip')
+  const data = useQuery(api.moments.publicForTrip, validTripId ? { tripId: tripId as Id<'trips'>, token: token ?? '' } : 'skip')
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -52,19 +57,31 @@ export function RecapView({ tripId }: { tripId: string }) {
         <MapPin className="size-10 text-primary" />
         <h1 className="font-serif text-3xl font-semibold tracking-tight">Recap not found</h1>
         <p className="text-sm text-muted-foreground">This recap link isn&apos;t available.</p>
-        <Button variant="outline" nativeButton={false} render={<a href="/" />}>Back to KenyaTrace</Button>
+        <Button variant="outline" nativeButton={false} render={<Link href="/" />}>Back to KenyaTrace</Button>
       </div>
     </div>
   )
 
   if (!validTripId) return notFound
-  if (data === undefined) return <div className="mx-auto max-w-3xl px-5 py-10"><div className="kt-shimmer aspect-square rounded-3xl" /></div>
+  if (data === undefined) return <PageLoading label="Loading trip recap" className="mx-auto max-w-3xl px-5 py-10" shimmerClassName="aspect-square rounded-3xl" />
   if (!data) return notFound
 
   const { trip } = data
-  const shareLink = typeof window !== 'undefined' ? `${window.location.origin}/recap/${tripId}` : ''
+  const shareLink = typeof window !== 'undefined' ? `${window.location.origin}/recap/${tripId}${token ? `?t=${token}` : ''}` : ''
   const shareText = `A recap of ${trip.destination} with KenyaTrace — plan your own trip: ${shareLink}`
   const active = lightbox != null ? moments[lightbox] : null
+  // Unpacked-lite stats from real data only: shared moments, best picks, days.
+  const bestCount = data.moments.filter(m => m.best).length
+  const daySpan = trip.startDate && trip.endDate ? Math.max(calendarDayDiff(trip.startDate, trip.endDate) + 1, 1) : null
+  const canNativeShare = typeof navigator !== 'undefined' && 'share' in navigator
+
+  async function nativeShare() {
+    try {
+      await navigator.share({ title: `Trip recap · ${trip.name}`, text: shareText, url: shareLink })
+    } catch {
+      // User dismissed the sheet — no error state needed.
+    }
+  }
 
   async function copy() {
     try {
@@ -78,10 +95,10 @@ export function RecapView({ tripId }: { tripId: string }) {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-7 px-5 py-10">
-      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-[color-mix(in_oklch,var(--primary),#000_28%)] px-6 py-8 text-primary-foreground shadow-lift ring-1 ring-primary/20">
+      <GradientHero>
         <Badge className="bg-accent text-accent-foreground">Trip recap</Badge>
         <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight">{trip.name}</h1>
-        <p className="mt-1 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {trip.startDate} → {trip.endDate}</p>
+        <p className="mt-1 opacity-80">{trip.origin ? `${trip.origin} → ` : ''}{trip.destination} · {prettyDate(trip.startDate)} → {prettyDate(trip.endDate)}</p>
         {trip.rating ? (
           <div className="mt-3 flex items-center gap-2">
             <span className="flex gap-0.5">
@@ -90,14 +107,18 @@ export function RecapView({ tripId }: { tripId: string }) {
             <span className="text-sm font-medium">{trip.rating}/5</span>
           </div>
         ) : null}
-      </div>
+      </GradientHero>
+
+      {data.moments.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm text-muted-foreground" aria-label="Trip statistics">
+          <span><strong className="font-serif text-lg text-foreground">{data.moments.length}</strong> moment{data.moments.length === 1 ? '' : 's'}</span>
+          {bestCount > 0 && <span><strong className="font-serif text-lg text-foreground">{bestCount}</strong> best pick{bestCount === 1 ? '' : 's'}</span>}
+          {daySpan != null && <span><strong className="font-serif text-lg text-foreground">{daySpan}</strong> day{daySpan === 1 ? '' : 's'}</span>}
+        </div>
+      )}
 
       {moments.length === 0 ? (
-        <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
-          <Share2 className="size-8 text-primary" />
-          <p className="mt-4 font-serif text-2xl">Nothing shared yet</p>
-          <p className="mt-2 max-w-md text-muted-foreground">The traveller hasn&apos;t made any moments public on this trip, so there&apos;s no recap to show.</p>
-        </div>
+        <EmptyState icon={Share2} title="Nothing shared yet" body="The traveller hasn't made any moments public on this trip, so there's no recap to show." />
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -122,14 +143,15 @@ export function RecapView({ tripId }: { tripId: string }) {
             <p className="flex items-center gap-2 font-semibold"><Share2 className="size-4 text-primary" /> Share this recap</p>
             <p className="mt-1 text-sm text-muted-foreground">Send it anywhere — it works without an account.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="outline" onClick={copy} className="gap-1.5">{copied ? <Star className="size-4 text-primary" /> : <Copy className="size-4" />}{copied ? 'Copied' : 'Copy link'}</Button>
+              {canNativeShare && <Button onClick={nativeShare} className="gap-1.5"><Share2 className="size-4" />Share</Button>}
+              <Button variant="outline" onClick={copy} className="gap-1.5">{copied ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}{copied ? 'Copied' : 'Copy link'}</Button>
               <Button variant="outline" nativeButton={false} render={<a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><MessageCircle className="size-4" />WhatsApp</Button>
               <Button variant="outline" nativeButton={false} render={<a href={`https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Send className="size-4" />Telegram</Button>
               <Button variant="outline" nativeButton={false} render={<a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareLink)}`} target="_blank" rel="noopener noreferrer" />} className="gap-1.5"><Share2 className="size-4" />Post</Button>
             </div>
           </div>
 
-          <p className="text-center text-sm text-muted-foreground">Made with <span className="font-semibold text-foreground">KenyaTrace</span> — <a href="/plan" className="underline underline-offset-2 transition-colors hover:text-primary">plan your own Kenya trip</a>.</p>
+          <p className="text-center text-sm text-muted-foreground">Made with <span className="font-semibold text-foreground">KenyaTrace</span> — <Link href="/plan" className="underline underline-offset-2 transition-colors hover:text-primary">plan your own Kenya trip</Link>.</p>
         </>
       )}
 

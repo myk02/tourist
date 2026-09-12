@@ -33,5 +33,3 @@ export type Stop = {
   /** Epoch ms when the traveller checked this stop off as done (undefined = not done). */
   completedAt?: number
 }
-
-export type Generated = { name: string; destination: string; summary: string; stops: Stop[] }

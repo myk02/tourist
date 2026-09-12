@@ -10,13 +10,13 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const DISMISS_KEY = 'kt-install-dismissed'
-const REASK_AFTER_MS = 14 * 86_400_000
 
 /**
  * Install nudge aimed at the in-trip audience: when the browser says the app
  * is installable (or on iOS Safari, which needs the manual Share → Add to
- * Home Screen route), offer it once — then stay quiet for two weeks if
- * dismissed. Hidden entirely once running as an installed app.
+ * Home Screen route), offer it once — then stay quiet for good if dismissed,
+ * installed, or the native install dialog is closed. Hidden entirely once
+ * running as an installed app.
  */
 export function InstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
@@ -24,16 +24,20 @@ export function InstallPrompt() {
   const [showIosTip, setShowIosTip] = useState(false)
 
   useEffect(() => {
-    // The service worker only exists to make the installed shell open on weak
-    // connections — production only, never interferes with dev HMR.
-    if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    // Register SW for offline shell: production + localhost (so PWA is testable
+    // in dev) but not on other hosts where it would interfere with HMR.
+    if ('serviceWorker' in navigator) {
+      const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+      if (process.env.NODE_ENV === 'production' || isLocalhost) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {})
+      }
     }
 
+    let permanentlyDismissed = false
     try {
-      const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) ?? 0)
-      if (Number.isFinite(dismissedAt) && Date.now() - dismissedAt < REASK_AFTER_MS) return
+      permanentlyDismissed = localStorage.getItem(DISMISS_KEY) === '1'
     } catch { /* private mode */ }
+    if (permanentlyDismissed) return
 
     // Already installed? Never nag.
     const standalone =
@@ -47,32 +51,54 @@ export function InstallPrompt() {
       setShowNative(true)
     }
     window.addEventListener('beforeinstallprompt', onPrompt)
+    const onInstalled = () => {
+      try { localStorage.setItem(DISMISS_KEY, '1') } catch { /* ignore */ }
+      setShowNative(false)
+      setShowIosTip(false)
+      setDeferred(null)
+    }
+    window.addEventListener('appinstalled', onInstalled)
 
     // iOS Safari has no install event — surface the manual route instead.
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    // iPadOS 13+ reports as MacIntel with touch points, so check that too.
+    const ua = navigator.userAgent
+    const isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     if (isIOS) {
       const t = setTimeout(() => setShowIosTip(true), 4000)
       return () => {
         clearTimeout(t)
         window.removeEventListener('beforeinstallprompt', onPrompt)
+        window.removeEventListener('appinstalled', onInstalled)
       }
     }
 
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
   }, [])
 
   function dismiss() {
-    try { localStorage.setItem(DISMISS_KEY, String(Date.now())) } catch { /* ignore */ }
+    try { localStorage.setItem(DISMISS_KEY, '1') } catch { /* ignore */ }
     setShowNative(false)
     setShowIosTip(false)
   }
 
   async function install() {
     if (!deferred) return
+    let accepted = false
     try {
       await deferred.prompt()
-      await deferred.userChoice
+      const choice = await deferred.userChoice
+      accepted = choice?.outcome === 'accepted'
     } catch { /* user closed the native dialog */ }
+    // A successful install is a one-time deal: remember it so the nudge
+    // never comes back (dismissed native dialogs still hide the banner, but
+    // can be re-offered on a later visit — only the explicit "Not now" / X
+    // and a completed install are permanent).
+    if (accepted) {
+      try { localStorage.setItem(DISMISS_KEY, '1') } catch { /* ignore */ }
+    }
     setDeferred(null)
     setShowNative(false)
   }
@@ -81,7 +107,7 @@ export function InstallPrompt() {
 
   return (
     <div className="fixed bottom-20 left-4 z-[700] w-[calc(100%-2rem)] max-w-sm rounded-2xl border bg-card p-4 shadow-pop md:bottom-6">
-      <button type="button" aria-label="Dismiss" onClick={dismiss} className="absolute right-2.5 top-2.5 text-muted-foreground transition-colors hover:text-foreground">
+      <button type="button" aria-label="Dismiss" onClick={dismiss} className="absolute right-1.5 top-1.5 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground">
         <X className="size-4" />
       </button>
       <div className="flex items-start gap-3">

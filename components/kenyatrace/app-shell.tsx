@@ -3,12 +3,13 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { SignInButton, SignUpButton, UserButton, useUser } from '@clerk/nextjs'
+import { UserButton, useUser } from '@clerk/nextjs'
 import { useAction, useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { CalendarClock, Camera, CircleUserRound, Compass, Map, MapPin, Navigation, Sparkles, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { InstallPrompt } from './install-prompt'
@@ -49,9 +50,7 @@ export function KenyaTraceShell({ children }: { children: React.ReactNode }) {
 function Brand() {
   return (
     <Link href="/" className="group flex shrink-0 items-center gap-2.5">
-      <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs transition-transform group-hover:scale-[1.03]">
-        <Navigation className="size-5" />
-      </span>
+      <span className="transition-transform group-hover:scale-[1.03]"><BrandMark icon="navigation" size="sm" /></span>
       <span className="font-serif text-xl font-semibold tracking-tight">KenyaTrace</span>
     </Link>
   )
@@ -115,9 +114,11 @@ function formatDate(ts: number | null | undefined) {
  * content (the landing page in particular).
  */
 function HeaderAccount() {
-  const { isSignedIn } = useUser()
+  const { isSignedIn, isLoaded } = useUser()
   const status = useQuery(api.subscriptions.getStatus)
   const [plansOpen, setPlansOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const ended = Boolean(isSignedIn && status != null && !status.active && status.trialStartedAt != null)
   const onTrial = Boolean(isSignedIn && status?.mode === 'trial')
@@ -143,14 +144,21 @@ function HeaderAccount() {
         ? 'Your free trial has ended. Pick a pack below to keep exploring — one-time payment, no auto-renewal.'
         : null
 
+  // Hydration guard: Clerk (isSignedIn/isLoaded) and Convex subscription status
+  // are client-only and differ between SSR and the first client render. Render a
+  // static signed-out placeholder until mounted + auth loaded so server and
+  // initial client HTML match, then switch to real auth UI after hydration.
+  const isHydrating = !mounted || !isLoaded
+
   return (
     <>
-      {chipLabel && (
+      {!isHydrating && chipLabel && (
         <button
           type="button"
           onClick={() => setPlansOpen(true)}
           className="hidden items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 sm:flex"
           aria-label="Open plans"
+          suppressHydrationWarning
         >
           {ended ? <Wallet className="size-3.5" /> : <CalendarClock className="size-3.5" />}
           {chipLabel}
@@ -159,53 +167,83 @@ function HeaderAccount() {
 
       <Button
         size="sm"
-        variant={ended ? 'default' : 'outline'}
+        variant={isHydrating ? 'outline' : ended ? 'default' : 'outline'}
         onClick={() => setPlansOpen(true)}
+        suppressHydrationWarning
       >
-        {ended ? 'Subscribe' : 'Plans'}
+        {isHydrating ? 'Plans' : ended ? 'Subscribe' : 'Plans'}
       </Button>
 
-      {isSignedIn ? (
-        <UserButton />
-      ) : (
-        <>
-          <SignInButton mode="modal">
-            <Button variant="ghost" size="sm" className="hidden md:inline-flex">Sign in</Button>
-          </SignInButton>
-          <SignUpButton mode="modal">
-            <Button size="sm" className="hidden sm:inline-flex">Start free trial</Button>
-          </SignUpButton>
-        </>
-      )}
+      <span suppressHydrationWarning>
+        {isHydrating ? (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden md:inline-flex"
+              nativeButton={false}
+              render={<Link href="/sign-in" />}
+              suppressHydrationWarning
+            >
+              Sign in
+            </Button>
+            <Button
+              size="sm"
+              className="hidden sm:inline-flex"
+              nativeButton={false}
+              render={<Link href="/sign-up" />}
+              suppressHydrationWarning
+            >
+              Start free trial
+            </Button>
+          </>
+        ) : isSignedIn ? (
+          <UserButton />
+        ) : (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden md:inline-flex"
+              nativeButton={false}
+              render={<Link href="/sign-in" />}
+              suppressHydrationWarning
+            >
+              Sign in
+            </Button>
+            <Button
+              size="sm"
+              className="hidden sm:inline-flex"
+              nativeButton={false}
+              render={<Link href="/sign-up" />}
+              suppressHydrationWarning
+            >
+              Start free trial
+            </Button>
+          </>
+        )}
+      </span>
 
       <Dialog open={plansOpen} onOpenChange={setPlansOpen}>
         <DialogContent className="max-h-[86svh] overflow-y-auto p-5 sm:max-w-xl">
           <DialogHeader className="gap-2 items-center text-center">
-            <span className="mx-auto flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs">
-              <Sparkles className="size-5" />
-            </span>
+            <BrandMark icon="sparkles" size="sm" className="mx-auto" />
             <DialogTitle className="font-serif text-xl tracking-tight">
-              {ended ? 'Pick a plan to continue' : 'Unlock KenyaTrace'}
+              <span suppressHydrationWarning>
+                {isHydrating ? 'Unlock KenyaTrace' : ended ? 'Pick a plan to continue' : 'Unlock KenyaTrace'}
+              </span>
             </DialogTitle>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              {ended
-                ? 'Your free trial has ended. Pick a one-time pack to keep planning — no auto-renewal.'
-                : isSignedIn
-                  ? 'One-time packs — no auto-renewal. Skip any month by simply not topping up.'
-                  : 'Start with a 30-day free trial, then grab a one-time pack whenever you’re ready.'}
+            <p className="max-w-sm text-sm text-muted-foreground" suppressHydrationWarning>
+              {isHydrating
+                ? 'Start with a 30-day free trial, then grab a one-time pack whenever you’re ready.'
+                : ended
+                  ? 'Your free trial has ended. Pick a one-time pack to keep planning — no auto-renewal.'
+                  : isSignedIn
+                    ? 'One-time packs — no auto-renewal. Skip any month by simply not topping up.'
+                    : 'Start with a 30-day free trial, then grab a one-time pack whenever you’re ready.'}
             </p>
           </DialogHeader>
-          {isSignedIn ? (
-            <div className="flex flex-col gap-3">
-              {statusLine && (
-                <div className="flex items-center gap-2.5 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm">
-                  <CalendarClock className="size-4 shrink-0 text-primary" />
-                  <span className="text-foreground">{statusLine}</span>
-                </div>
-              )}
-              <DayPackCheckout onPurchased={() => { setPlansOpen(false); toast.success('Your access is active') }} />
-            </div>
-          ) : (
+          {isHydrating || !isSignedIn ? (
             <div className="flex flex-col gap-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 {PLANS.map(plan => (
@@ -213,18 +251,42 @@ function HeaderAccount() {
                     key={plan.days}
                     plan={plan}
                     footer={
-                      <SignUpButton mode="modal">
-                        <Button size="lg" className="w-full gap-2">
-                          <Sparkles className="size-4" /> Sign up to buy
-                        </Button>
-                      </SignUpButton>
+                      <Button
+                        size="lg"
+                        className="w-full gap-2"
+                        nativeButton={false}
+                        render={<Link href="/sign-up" />}
+                        suppressHydrationWarning
+                      >
+                        <Sparkles className="size-4" /> Sign up to buy
+                      </Button>
                     }
                   />
                 ))}
               </div>
-              <SignInButton mode="modal">
-                <Button variant="outline" size="lg" className="w-full">I already have an account</Button>
-              </SignInButton>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                nativeButton={false}
+                render={<Link href="/sign-in" />}
+                suppressHydrationWarning
+              >
+                I already have an account
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {statusLine && (
+                <div
+                  className="flex items-center gap-2.5 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm"
+                  suppressHydrationWarning
+                >
+                  <CalendarClock className="size-4 shrink-0 text-primary" />
+                  <span className="text-foreground">{statusLine}</span>
+                </div>
+              )}
+              <DayPackCheckout onPurchased={() => { setPlansOpen(false); toast.success('Your access is active') }} />
             </div>
           )}
         </DialogContent>
@@ -236,7 +298,7 @@ function HeaderAccount() {
 function MobileNav(){
   const pathname = usePathname()
   return (
-    <nav className="fixed inset-x-4 bottom-3 z-40 flex h-16 items-center justify-around rounded-2xl border border-border/80 bg-background/90 shadow-lift backdrop-blur-lg supports-backdrop-filter:bg-background/75 md:hidden">
+    <nav aria-label="Mobile navigation" className="fixed inset-x-4 bottom-3 z-40 flex h-16 items-center justify-around rounded-2xl border border-border/80 bg-background/90 shadow-lift backdrop-blur-lg supports-backdrop-filter:bg-background/75 md:hidden">
       {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
         <Link
           key={item.href}

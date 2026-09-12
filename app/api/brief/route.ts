@@ -1,6 +1,9 @@
 import { chatJSON } from '@/lib/ai'
 import { seasonGuidance } from '@/lib/seasons'
 import { z } from 'zod'
+import { rateLimit, getClientKey } from '@/lib/rate-limit'
+
+export const maxDuration = 60
 
 /**
  * The AI trip brief: a short, honest summary of a *saved* trip. Grounded the
@@ -49,6 +52,13 @@ Rules:
 
 export async function POST(request: Request) {
   try {
+    const rl = rateLimit(`brief:${getClientKey(request)}`, 20, 60_000)
+    if (!rl.ok) {
+      return Response.json({ error: 'Too many requests — try again shortly.' }, { status: 429 })
+    }
+    if (!process.env.OPENROUTER_API_KEY) {
+      return Response.json({ error: 'Trip brief service is temporarily unavailable — try again shortly.' }, { status: 503 })
+    }
     const body = await request.json()
     const input = requestSchema.parse(body)
     const stopsText = input.stops
@@ -71,7 +81,10 @@ export async function POST(request: Request) {
     })
     return Response.json(brief)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not generate the trip brief'
-    return Response.json({ error: message }, { status: 400 })
+    console.error('[brief] error', error)
+    const raw = error instanceof Error ? error.message : 'Could not generate the trip brief'
+    const message = raw.includes('OPENROUTER') || raw.includes('Bearer') ? 'Trip brief service is temporarily unavailable' : raw
+    const isConfig = /OPENROUTER_API_KEY is not configured/i.test(raw)
+    return Response.json({ error: message }, { status: isConfig ? 503 : 400 })
   }
 }

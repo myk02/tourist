@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Check, FileDown, Loader2, Navigation, Printer, Route, Sparkles } from 'lucide-react'
+import { ArrowRight, FileDown, Loader2, Navigation, Printer, Route, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SuggestedBadge, VerifiedBadge } from '@/components/ui/kt/badges'
 import { Card } from '@/components/ui/card'
 import { dailyAllowance } from '@/lib/budget'
 import { buildPrintableItinerary, type PrintableItinerary } from '@/lib/itinerary'
@@ -55,10 +56,14 @@ export function PlanStage() {
     try {
       doc = buildPrintableItinerary(exportData())
     } catch {
+      toast.error('Could not build the printable itinerary')
       return
     }
     const win = window.open('', '_blank', 'width=860,height=1000')
-    if (!win) return
+    if (!win) {
+      toast.error('Popup blocked — allow popups to print the itinerary')
+      return
+    }
     win.document.write(doc)
     win.document.close()
     setTimeout(() => win.print(), 350)
@@ -105,8 +110,8 @@ export function PlanStage() {
       <div>
         <h2 className="flex items-center gap-2 font-serif text-2xl font-semibold tracking-tight"><Navigation className="size-5 text-primary" /> How to get there</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {plan.journey.map((leg, i) => (
-            <Card key={i} className="p-4">
+          {plan.journey.map((leg) => (
+            <Card key={`${leg.from}-${leg.to}-${leg.how}`} className="p-4">
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 truncate text-sm font-semibold">{leg.from}</p>
                 <ArrowRight className="size-4 shrink-0 text-primary" />
@@ -143,12 +148,12 @@ export function PlanStage() {
             <div key={day}>
               <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Day {day}</h3>
               <div className="flex flex-col gap-2">
-                {stops.map((s, i) => (
-                  <Card key={`${s.title}-${i}`} className="p-4">
+                {stops.map((s, idx) => (
+                  <Card key={`${s.listingId ?? s.title}-${s.day}-${s.time}-${idx}`} className="p-4">
                     <div className="flex gap-3.5">
                       {s.image && (
                         <div className="relative hidden size-16 shrink-0 overflow-hidden rounded-xl sm:block">
-                          <ListingImage src={s.image} alt="" fill className="object-cover" sizes="64px" />
+                          <ListingImage src={s.image} alt={s.title} fill className="object-cover" sizes="64px" />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
@@ -162,16 +167,16 @@ export function PlanStage() {
                           </p>
                           <Badge className="text-[10px]">{s.kind}</Badge>
                           {s.verified ? (
-                            <Badge className="bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300"><Check className="size-3" />Verified</Badge>
+                            <VerifiedBadge className="text-[10px]" />
                           ) : (
-                            <Badge variant="outline" className="border-amber-500/40 text-[10px] text-amber-700 dark:text-amber-300">Suggested</Badge>
+                            <SuggestedBadge className="text-[10px]" />
                           )}
                         </div>
                         <p className="mt-0.5 text-sm text-muted-foreground">{s.time} · {s.place}</p>
-                        {s.travelKm != null && i > 0 && (
+                        {s.travelKm != null && idx > 0 && (
                           <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                             <Navigation className="size-3 shrink-0 text-primary" />
-                            {s.travelKm} km · ~{formatMins(s.travelMins ?? 0)} from {stops[i - 1]?.title}
+                            {s.travelKm} km · ~{formatMins(s.travelMins ?? 0)} from {stops[idx - 1]?.title}
                             <span className={cn('rounded-full px-1.5 py-px text-[10px] font-medium', s.travelRouted ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
                               {s.travelRouted ? 'routing' : 'estimate'}
                             </span>

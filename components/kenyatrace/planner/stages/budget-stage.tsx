@@ -66,6 +66,7 @@ export function BudgetStage() {
                 <button
                   key={b}
                   type="button"
+                  aria-pressed={draft.budget === b}
                   onClick={() => setDraft(d => ({ ...d, budget: b }))}
                   className={cn(
                     'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
@@ -85,6 +86,7 @@ export function BudgetStage() {
                 <button
                   key={i}
                   type="button"
+                  aria-pressed={draft.interests.includes(i)}
                   onClick={() => setDraft(d => ({ ...d, interests: d.interests.includes(i) ? d.interests.filter(x => x !== i) : [...d.interests, i] }))}
                   className={cn(
                     'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',

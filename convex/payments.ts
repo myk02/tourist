@@ -1,7 +1,9 @@
-import { action, mutation } from "./_generated/server"
+import { action, mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { makeFunctionReference } from "convex/server"
 import type { Doc, Id } from "./_generated/dataModel"
+import { isEmail } from "../lib/email"
+import { chargeMatches } from "../lib/money"
 
 // Real function references for the internal helpers, built by path (the
 // `internal.*` proxy would create a type-inference cycle in this module tree,
@@ -10,15 +12,14 @@ const getForVerifyRef = makeFunctionReference<
   "query",
   { paymentId: Id<"payments">; ownerId: string },
   Doc<"payments"> | null
->("payments_helpers/getForVerify")
+>("payments_helpers:getForVerify")
 const markPaidRef = makeFunctionReference<
   "mutation",
   { paymentId: Id<"payments"> },
   void
->("payments_helpers/markPaid")
+>("payments_helpers:markPaid")
 
 const PAYSTACK_BASE = "https://api.paystack.co"
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
  * Paystack checkout for reservations.
@@ -49,12 +50,13 @@ export const initialize = mutation({
     // be verified, so starting a popup could take a user's money with no
     // record of the payment on our side.
     if (!process.env.PAYSTACK_SECRET_KEY) throw new Error("Payment provider is not configured — contact support")
-    if (!EMAIL_RE.test(email.trim())) throw new Error("Enter a valid email address")
+    if (!isEmail(email)) throw new Error("Enter a valid email address")
     const booking = await ctx.db.get(bookingId)
     if (!booking || booking.ownerId !== identity.subject) throw new Error("Booking not found")
     if (booking.status === "cancelled") throw new Error("Cancelled bookings can't be paid")
     if (booking.status === "paid") throw new Error("This booking is already paid")
     if (booking.amount <= 0) throw new Error("Nothing to pay for this booking")
+    if (!booking.listingId) throw new Error("Email-forwarded bookings can't be paid online — contact support")
 
     // The popup's checkout initializes the transaction client-side with the
     // public key, so the reference must be fresh for every attempt — reusing
@@ -64,14 +66,10 @@ export const initialize = mutation({
     // Every attempt gets its OWN pending row (never patched): a retry after a
     // closed/crashed popup must not overwrite a reference the user may already
     // have paid with, or two successful charges could map to a single payment.
-    // Superseded pending attempts are removed so rows don't accumulate.
-    const reference = `KT-PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
-    const stale = await ctx.db
-      .query("payments")
-      .withIndex("by_booking", q => q.eq("bookingId", bookingId))
-      .filter(q => q.eq(q.field("status"), "pending"))
-      .collect()
-    await Promise.all(stale.map(row => ctx.db.delete(row._id)))
+    // Prior pendings are kept so the webhook can still exact-match a charge
+    // for a previous reference that lands after a retry. They self-expire via
+    // the 7-day window in markPaidByCharge and can be GC'd by a cron.
+    const reference = `KT-PAY-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`
 
     const paymentId = await ctx.db.insert("payments", {
       ownerId: identity.subject,
@@ -84,6 +82,30 @@ export const initialize = mutation({
       createdAt: Date.now(),
     })
     return { paymentId, reference, amount: booking.amount }
+  },
+})
+
+/**
+ * Latest still-pending payment attempt for a booking (owner-only). Powers the
+ * "Check status" retry in the bookings UI: a traveller who paid but closed
+ * the tab before verification can re-confirm without starting a new checkout
+ * (which would mint a second reference and risk a double charge).
+ */
+export const pendingForBooking = query({
+  args: { bookingId: v.id("bookings") },
+  handler: async (ctx, { bookingId }) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    const booking = await ctx.db.get(bookingId)
+    if (!booking || booking.ownerId !== identity.subject) return null
+    if (booking.status === "paid" || booking.status === "cancelled") return null
+    const pending = await ctx.db
+      .query("payments")
+      .withIndex("by_booking", q => q.eq("bookingId", bookingId))
+      .filter(q => q.eq(q.field("status"), "pending"))
+      .order("desc")
+      .first()
+    return pending ? { paymentId: pending._id, reference: pending.reference, createdAt: pending.createdAt } : null
   },
 })
 
@@ -102,13 +124,14 @@ export const verifyAndConfirm = action({
     const res = await fetch(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(payment.reference)}`, {
       headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
     })
+    if (!res.ok) return { verified: false }
     const data = await res.json().catch(() => null)
     const tx = data?.data
     const success =
       data?.status === true &&
       tx?.status === "success" &&
-      tx?.amount === payment.amount * 100 &&
-      (tx?.currency ?? "KES") === payment.currency
+      tx?.reference === payment.reference &&
+      chargeMatches(payment.amount, payment.currency, tx ?? {})
     if (!success) return { verified: false }
 
     await ctx.runMutation(markPaidRef, { paymentId })

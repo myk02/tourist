@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { isEmail } from '@/lib/email'
 import { EMAIL_FROM, resend } from '@/lib/resend'
+import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
  * POST /api/send-invite
@@ -19,6 +19,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export async function POST(request: Request) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Sign in required' }, { status: 401 })
+  const rl = rateLimit(`invite:${getClientKey(request, userId)}`, 10, 60_000)
+  if (!rl.ok) return NextResponse.json({ error: 'Too many invites — try again shortly.' }, { status: 429 })
 
   let body: Record<string, unknown>
   try {
@@ -30,13 +32,14 @@ export async function POST(request: Request) {
   const to = typeof body.to === 'string' ? body.to.trim().toLowerCase() : ''
   const tripId = typeof body.tripId === 'string' ? body.tripId : ''
   const token = typeof body.token === 'string' ? body.token : ''
-  const tripName = typeof body.tripName === 'string' ? body.tripName.trim() : ''
+  const tripName = typeof body.tripName === 'string' ? body.tripName.trim().slice(0, 120) : ''
   const role = body.role === 'viewer' ? 'viewer' : 'editor'
-  const senderName = typeof body.senderName === 'string' && body.senderName.trim() ? body.senderName.trim() : 'Someone'
+  const senderName = typeof body.senderName === 'string' && body.senderName.trim() ? body.senderName.trim().slice(0, 80) : 'Someone'
   const message = typeof body.message === 'string' ? body.message.trim().slice(0, 500) : ''
 
-  if (!EMAIL_RE.test(to)) return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
+  if (!isEmail(to)) return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
   if (!tripName) return NextResponse.json({ error: 'Missing invite details' }, { status: 400 })
+  if (tripId.length > 64 || token.length > 64) return NextResponse.json({ error: 'Invalid invite details' }, { status: 400 })
   // The link base is server-configured, never the client's Origin header — a
   // page under an attacker's domain must not be able to make KenyaTrace email
   // links pointing at it (token capture).

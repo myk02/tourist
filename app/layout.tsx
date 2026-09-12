@@ -9,10 +9,19 @@ import './globals.css'
 const sans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans' })
 const serif = Lora({ subsets: ['latin'], variable: '--font-lora' })
 
+function getAppUrl(): URL {
+  const raw = process.env.NEXT_PUBLIC_APP_URL || 'https://kenyatrace.vercel.app'
+  try {
+    return new URL(raw)
+  } catch {
+    return new URL('https://kenyatrace.vercel.app')
+  }
+}
+
 export const metadata: Metadata = {
   title: { default: 'KenyaTrace — Travel Kenya your way', template: '%s · KenyaTrace' },
   description: 'Discover, plan, book and trace unforgettable journeys across Kenya.',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://kenyatrace.vercel.app'),
+  metadataBase: getAppUrl(),
 }
 
 export const viewport: Viewport = {

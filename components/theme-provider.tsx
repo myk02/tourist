@@ -26,7 +26,11 @@ function getInitialTheme(): Theme {
 }
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = React.useState<Theme>(getInitialTheme)
+  const [theme, setThemeState] = React.useState<Theme>("light")
+
+  React.useEffect(() => {
+    setThemeState(getInitialTheme())
+  }, [])
 
   React.useEffect(() => {
     const root = document.documentElement
@@ -50,6 +54,8 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
     [theme]
   )
 
+  // Avoid hydration mismatch by withholding theme-dependent UI until mounted
+  // is handled by consumers via suppressHydrationWarning or mounted checks
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }
 

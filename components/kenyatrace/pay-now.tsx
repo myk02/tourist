@@ -8,6 +8,7 @@ import type { Doc } from '@/convex/_generated/dataModel'
 import { Loader2, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { toMinorKES } from '@/lib/money'
 import { loadPaystackScript } from '@/lib/paystack-inline'
 
 /**
@@ -81,7 +82,7 @@ export function PayNowButton({ booking }: { booking: Doc<'bookings'> }) {
       const handler = window.PaystackPop.setup({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
         email,
-        amount: amount * 100, // KES → minor units
+        amount: toMinorKES(amount), // KES → minor units
         currency: 'KES',
         ref: reference,
         callback: () => { void confirm() },
@@ -91,6 +92,9 @@ export function PayNowButton({ booking }: { booking: Doc<'bookings'> }) {
         },
       })
       handler.openIframe()
+      // M-Pesa STK guidance: the prompt lands on the payer's phone, not in
+      // this tab — tell them where to look or first-time payers stall here.
+      toast.info('Check your phone — enter your M-Pesa PIN to complete payment')
     } catch (error) {
       busyRef.current = false
       setBusy(false)

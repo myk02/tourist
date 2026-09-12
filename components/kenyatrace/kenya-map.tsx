@@ -97,6 +97,10 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
 
   useEffect(() => { applyHover() }, [hoveredId])
 
+  // Theme is not a rebuild trigger — map survives theme toggles via setStyle.
+  const isDarkRef = useRef(isDark)
+  isDarkRef.current = isDark
+
   useEffect(() => {
     if (!node.current) return
     let disposed = false
@@ -111,7 +115,8 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
     import('maplibre-gl').then(({ default: maplibregl }) => {
       if (disposed || !node.current) return
       // Follow the app theme: dark basemap at night, light during the day.
-      const style = isDark ? 'https://tiles.openfreemap.org/styles/dark' : 'https://tiles.openfreemap.org/styles/liberty'
+      // Use the ref so this creation effect doesn't re-run on theme toggle.
+      const style = isDarkRef.current ? 'https://tiles.openfreemap.org/styles/dark' : 'https://tiles.openfreemap.org/styles/liberty'
       map = new maplibregl.Map({
         container: node.current,
         style,
@@ -175,7 +180,7 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
         if (!map) return
         // Persistent live-trace line: source created once, redrawn via setData.
         map.addSource('live-path', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: liveTraceRef.current } } })
-        map.addLayer({ id: 'live-path', type: 'line', source: 'live-path', paint: { 'line-color': isDark ? '#fbbf24' : '#f59e0b', 'line-width': 4, 'line-opacity': 0.85, 'line-dasharray': [1.5, 2] } })
+        map.addLayer({ id: 'live-path', type: 'line', source: 'live-path', paint: { 'line-color': isDarkRef.current ? '#fbbf24' : '#f59e0b', 'line-width': 4, 'line-opacity': 0.85, 'line-dasharray': [1.5, 2] } })
         livePathSourceRef.current = map.getSource('live-path') as unknown as { setData: (data: unknown) => void }
 
         const trace = liveTraceRef.current
@@ -185,10 +190,10 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
           // smooth primary-green line, so it reads like a real drawn route
           // against both the light and dark basemaps.
           const smooth = smoothRoute(route)
-          const casingColor = isDark ? '#0a100d' : '#ffffff'
-          const routeColor = isDark ? '#35c992' : '#0e7a55'
+          const casingColor = isDarkRef.current ? '#0a100d' : '#ffffff'
+          const routeColor = isDarkRef.current ? '#35c992' : '#0e7a55'
           map.addSource('route-main', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: smooth } } })
-          map.addLayer({ id: 'route-casing', type: 'line', source: 'route-main', paint: { 'line-color': casingColor, 'line-width': 9, 'line-opacity': isDark ? 0.85 : 0.9 } })
+          map.addLayer({ id: 'route-casing', type: 'line', source: 'route-main', paint: { 'line-color': casingColor, 'line-width': 9, 'line-opacity': isDarkRef.current ? 0.85 : 0.9 } })
           map.addLayer({ id: 'route-main', type: 'line', source: 'route-main', paint: { 'line-color': routeColor, 'line-width': 4.5, 'line-opacity': 0.9 } })
           const bounds = new maplibregl.LngLatBounds()
           smooth.forEach(coord => bounds.extend(coord))
@@ -205,6 +210,8 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
           }
         }
       })
+    }).catch(() => {
+      // MapLibre chunk failed to load (offline) — leave empty state.
     })
 
     return () => {
@@ -219,7 +226,22 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
       livePopupRef.current = null
       livePathSourceRef.current = null
     }
-  }, [points, route, highlight, destIds, focus, labelMode, isDark])
+  }, [points, route, highlight, destIds, focus, labelMode])
+
+  // Theme toggle without tearing the map down — swap basemap style in place.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const style = isDark ? 'https://tiles.openfreemap.org/styles/dark' : 'https://tiles.openfreemap.org/styles/liberty'
+    try {
+      // Avoid redundant setStyle if already that theme.
+      const current = (map.getStyle() as unknown as { name?: string })?.name ?? ''
+      if ((isDark && current.includes('dark')) || (!isDark && current.includes('liberty'))) return
+    } catch { /* ignore */ }
+    try {
+      map.setStyle(style)
+    } catch { /* ignore */ }
+  }, [isDark])
 
   // Move the live marker (and follow the camera) — in place, no map rebuild.
   useEffect(() => {

@@ -7,7 +7,9 @@ import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { CalendarDays, Footprints, MapPin, Radio, Route } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { isValidConvexId } from '@/lib/id'
+import { prettyDate } from '@/lib/dates'
 import { KenyaMap } from './kenya-map'
 
 /**
@@ -48,7 +50,7 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
   )
 
   if (!validTripId) return unavailable
-  if (data === undefined) return <div className="kt-shimmer min-h-[100svh]" />
+  if (data === undefined) return <PageLoading label="Loading live trace" shimmerClassName="min-h-[100svh]" />
 
   if (!data) return unavailable
 
@@ -81,7 +83,7 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
             {data.trip.destination}{data.trip.origin ? ` · started in ${data.trip.origin}` : ''}
           </p>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><CalendarDays className="size-3.5" />{data.trip.startDate} → {data.trip.endDate}</span>
+            <span className="flex items-center gap-1.5"><CalendarDays className="size-3.5" />{prettyDate(data.trip.startDate)} → {prettyDate(data.trip.endDate)}</span>
             <span className="flex items-center gap-1.5"><Route className="size-3.5" />{stopDays} day{stopDays === 1 ? '' : 's'} · {data.stops.length} stop{data.stops.length === 1 ? '' : 's'}</span>
             {data.distanceKm > 0 && <span className="flex items-center gap-1.5"><Footprints className="size-3.5" />~{data.distanceKm} km traced</span>}
           </div>

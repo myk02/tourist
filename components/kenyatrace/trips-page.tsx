@@ -10,10 +10,13 @@ import { Compass, Copy, CopyPlus, LogOut, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { formatKES } from '@/lib/kenya-data'
+import { daysUntil } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { RequireSubscription } from './paywall'
 
@@ -25,13 +28,6 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 type Trip = NonNullable<ReturnType<typeof useQuery<typeof api.trips.list>>>[number]
-
-function daysUntil(dateStr: string) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const target = new Date(`${dateStr}T00:00:00`)
-  return Math.round((target.getTime() - today.getTime()) / 86400000)
-}
 
 function countdown(trip: Trip) {
   if (trip.status === 'completed') return 'Completed trip'
@@ -154,7 +150,7 @@ export function Trips({ compact = false }: { compact?: boolean }) {
     }
   }
 
-  if (trips === undefined) return <div className="kt-shimmer h-52 rounded-2xl" />
+  if (trips === undefined) return <PageLoading label="Loading trips" shimmerClassName="h-52 rounded-2xl" />
 
   const empty = (
     <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
@@ -218,7 +214,7 @@ export function Trips({ compact = false }: { compact?: boolean }) {
         {planningTrips.length > 0 && mostUrgentPlanning && daysUntil(mostUrgentPlanning.startDate) <= 14 && (
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
             <div className="flex items-center gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><Compass /></span>
+              <BrandMark icon="compass" size="sm" />
               <div>
                 <p className="font-semibold">{countdown(mostUrgentPlanning)} — {planningTrips.length === 1 ? 'it' : `${planningTrips.length} trips`} still need{planningTrips.length === 1 ? 's' : ''} planning</p>
                 <p className="text-sm text-muted-foreground">Finish the itinerary before you head out and your trip will be ready to book, track and share.</p>

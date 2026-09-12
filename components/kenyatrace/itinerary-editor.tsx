@@ -3,8 +3,10 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
-  closestCenter,
+  KeyboardSensor,
   PointerSensor,
+  TouchSensor,
+  closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -20,23 +22,21 @@ import { api } from '@/convex/_generated/api'
 import { KenyaMap } from './kenya-map'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SuggestedBadge, VerifiedBadge } from '@/components/ui/kt/badges'
+import { PillToggle } from '@/components/ui/kt/pill-toggle'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Car, Clock, GripVertical, List, Lock, LockOpen, Map as MapIcon, Pencil, Plus, RefreshCw, Route, Search, TriangleAlert, Utensils, Wallet, X } from 'lucide-react'
+import { Car, Clock, GripVertical, Lock, LockOpen, Pencil, Plus, RefreshCw, Route, Search, TriangleAlert, Wallet, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatKES } from '@/lib/kenya-data'
+import { KIND_CHIP, kindChip } from '@/lib/kind'
 import { dayOptimizationHint } from '@/lib/route-optimize'
 import { cn } from '@/lib/utils'
 import type { Stop } from './types'
 
-export const KIND_STYLE: Record<string, string> = {
-  Stay: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  Transport: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  Experience: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  Food: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
-}
+export const KIND_STYLE: Record<string, string> = KIND_CHIP
 
 function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371
@@ -82,14 +82,16 @@ function ensureKeys(stops: Stop[]): Stop[] {
   return stops.map(s => (s.key ? s : { ...s, key: stopKey() }))
 }
 
-function SortableStopRow({ stop, active, editing, readOnly, onEditingChange, onUpdate, onRemove }: {
+function SortableStopRow({ stop, active, editing, readOnly, days, onEditingChange, onUpdate, onRemove, onMoveDay }: {
   stop: Stop
   active?: boolean
   editing: boolean
   readOnly?: boolean
+  days: number[]
   onEditingChange: (editing: boolean) => void
   onUpdate: (patch: Partial<Stop>) => void
   onRemove: () => void
+  onMoveDay: (day: number) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.key! })
   return (
@@ -112,11 +114,11 @@ function SortableStopRow({ stop, active, editing, readOnly, onEditingChange, onU
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className={cn('font-semibold', stop.locked && 'opacity-60')}>{stop.title}</p>
-          <Badge className={cn('shrink-0 text-[10px]', KIND_STYLE[stop.kind] ?? 'bg-secondary text-muted-foreground')}>{stop.kind}</Badge>
+          <Badge className={cn('shrink-0 text-[10px]', kindChip(stop.kind))}>{stop.kind}</Badge>
           {stop.verified ? (
-            <Badge className="shrink-0 bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300">Verified</Badge>
+            <VerifiedBadge className="shrink-0 text-[10px]" />
           ) : stop.source === 'gap' ? (
-            <Badge variant="outline" className="shrink-0 border-amber-500/40 text-[10px] text-amber-700 dark:text-amber-300">Suggested</Badge>
+            <SuggestedBadge className="shrink-0 text-[10px]" />
           ) : null}
           {stop.locked && <Lock className="size-3 shrink-0 text-primary" />}
         </div>
@@ -166,13 +168,23 @@ function SortableStopRow({ stop, active, editing, readOnly, onEditingChange, onU
       </div>
       {!readOnly && (
         <div className="flex items-center gap-0.5">
-          <Button size="icon" variant="ghost" className="size-8" aria-label={stop.locked ? 'Unlock this stop' : 'Lock this stop'} onClick={() => onUpdate({ locked: !stop.locked })}>
+          {days.length > 1 && (
+            <select
+              value={stop.day}
+              onChange={e => onMoveDay(Number(e.target.value))}
+              aria-label={`Move ${stop.title} to another day`}
+              className="h-9 max-w-24 rounded-lg border border-border bg-background px-1 text-xs text-muted-foreground"
+            >
+              {days.map(d => <option key={d} value={d}>Day {d}</option>)}
+            </select>
+          )}
+          <Button size="icon" variant="ghost" className="min-h-11 min-w-11" aria-label={stop.locked ? 'Unlock this stop' : 'Lock this stop'} onClick={() => onUpdate({ locked: !stop.locked })}>
             {stop.locked ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
           </Button>
-          <Button size="icon" variant="ghost" className="size-8" aria-label="Edit time and cost" onClick={() => onEditingChange(!editing)}>
+          <Button size="icon" variant="ghost" className="min-h-11 min-w-11" aria-label="Edit time and cost" onClick={() => onEditingChange(!editing)}>
             {editing ? <X className="size-4" /> : <Pencil className="size-4" />}
           </Button>
-          <Button size="icon" variant="ghost" className="size-8 text-destructive" aria-label={`Remove ${stop.title}`} onClick={onRemove}>
+          <Button size="icon" variant="ghost" className="min-h-11 min-w-11 text-destructive" aria-label={`Remove ${stop.title}`} onClick={onRemove}>
             <X className="size-4" />
           </Button>
         </div>
@@ -181,8 +193,17 @@ function SortableStopRow({ stop, active, editing, readOnly, onEditingChange, onU
   )
 }
 
-function TravelTime({ a, b }: { a: Stop; b: Stop }) {
-  // Prefer the real routed travel time computed at plan time; fall back to the
+/** Day header summary: stop count, cost and route distance in one glance. */
+function DaySummary({ stops, cost, travel }: { stops: Stop[]; cost: number; travel?: { km: number; mins: number } }) {
+  const parts = [
+    `${stops.length} stop${stops.length === 1 ? '' : 's'}`,
+    formatKES(cost),
+  ]
+  if (travel && travel.km > 0) parts.push(`${travel.km} km · ~${formatMins(travel.mins)}`)
+  return <span className="text-sm text-muted-foreground">· {parts.join(' · ')}</span>
+}
+
+function TravelTime({ a, b }: { a: Stop; b: Stop }) {  // Prefer the real routed travel time computed at plan time; fall back to the
   // straight-line estimate so saved trips without routed data still show rows.
   const label = b.travelKm != null && b.travelMins != null ? `${b.travelKm} km · ~${formatMins(b.travelMins)}` : travelRow(a, b)
   const routed = b.travelKm != null && b.travelMins != null
@@ -230,7 +251,11 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
   const [replanningDay, setReplanningDay] = useState<number | null>(null)
   const [hoveredStop, setHoveredStop] = useState<string | null>(null)
   const [mobileView, setMobileView] = useState<'list' | 'map'>(defaultMobileView)
-  const sensors = useSensors(useSensor(PointerSensor))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
+    useSensor(KeyboardSensor),
+  )
 
   useEffect(() => {
     const t = setTimeout(() => setSearchTerm(addTerm), 300)
@@ -276,6 +301,30 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     return map
   }, [stops])
 
+  // Per-day route totals for the day headers ("Day 2 · 3 stops · 48 km · ~1h 20m").
+  // Prefers routed travelKm/Mins computed at plan time; falls back to the same
+  // straight-line estimate travelRow uses so saved trips without routed data
+  // still show a number instead of nothing.
+  const dayTravel = useMemo(() => {
+    const map = new Map<number, { km: number; mins: number }>()
+    for (const [, dayStops] of days) {
+      let km = 0
+      let mins = 0
+      for (let i = 1; i < dayStops.length; i++) {
+        const a = dayStops[i - 1]
+        const b = dayStops[i]
+        const legKm = b.travelKm ?? (a.lat != null && a.lng != null && b.lat != null && b.lng != null
+          ? distanceKm(a.lat, a.lng, b.lat, b.lng)
+          : 0)
+        const legMins = b.travelMins ?? Math.max((legKm / 45) * 60, legKm > 0 ? 15 : 0)
+        km += legKm
+        mins += legMins
+      }
+      map.set(dayStops[0]?.day ?? 0, { km: Math.round(km), mins: Math.round(mins) })
+    }
+    return map
+  }, [days])
+
   const kindTotals = useMemo(() => {
     const map = new Map<string, number>()
     for (const s of stops) map.set(s.kind, (map.get(s.kind) ?? 0) + s.cost)
@@ -299,13 +348,14 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     const dayStops = stops.filter(s => s.day === day)
     const hint = dayOptimizationHint(dayStops)
     if (!hint) return
+    undoRef.current = stops
     const ordered = hint.order.map(i => dayStops[i])
     setStops(prev => {
       const firstIdx = prev.findIndex(s => s.day === day)
       if (firstIdx < 0) return prev
       return [...prev.slice(0, firstIdx), ...ordered, ...prev.slice(firstIdx).filter(s => s.day !== day)]
     })
-    toast.success(`Day ${day} reordered — ~${Math.round(hint.savingsKm)} km shorter`)
+    toastWithUndo(`Day ${day} reordered — ~${Math.round(hint.savingsKm)} km shorter`, `Day ${day} reordered`)
   }
 
   const mapData = useMemo(() => {
@@ -348,6 +398,32 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     setStops(prev => prev.map(s => (s.key === key ? { ...s, ...patch } : s)))
   }
 
+  // Screen-reader announcements for reorder/move/optimize (drag gives no feedback).
+  const [announcement, setAnnouncement] = useState('')
+
+  /** Snapshot/restore for the destructive reorders (optimize), with Undo toast. */
+  const undoRef = useRef<Stop[] | null>(null)
+  function restoreUndo(label: string) {
+    const prev = undoRef.current
+    if (!prev) return
+    undoRef.current = null
+    setStops(prev)
+    setAnnouncement(label)
+    toast.success(label)
+  }
+  function toastWithUndo(message: string, announce: string) {
+    setAnnouncement(announce)
+    toast.success(message, { action: { label: 'Undo', onClick: () => restoreUndo(announce) } })
+  }
+
+  /** Keyboard/mobile-friendly cross-day move — the drag-free alternative to dnd. */
+  function moveStop(key: string, day: number) {
+    const target = stops.find(s => s.key === key)
+    if (!target || target.day === day) return
+    setStops(prev => prev.map(s => (s.key === key ? { ...s, day } : s)))
+    setAnnouncement(`Moved ${target.title} to day ${day}`)
+  }
+
   function removeStop(key: string) {
     setStops(prev => prev.filter(s => s.key !== key))
     setEditingKey(prev => (prev === key ? null : prev))
@@ -356,10 +432,16 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
   /**
    * Reorders stops within each day by a greedy nearest-neighbour walk over
    * their coordinates, cutting backtracking between consecutive stops while
-   * keeping every day's route and day boundaries intact.
+   * keeping every day's route and day boundaries intact. Locked stops stay
+   * pinned in place; only unlocked stops are reordered between them.
    */
   function optimizeRoute() {
     if (stops.length < 2) return
+    if (stops.some(s => s.locked)) {
+      toast.error('Unlock stops first to optimize — locked stops stay pinned')
+      return
+    }
+    undoRef.current = stops
     setStops(prev => {
       const byDay = new Map<number, Stop[]>()
       for (const s of prev) {
@@ -368,7 +450,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
         byDay.set(s.day, arr)
       }
       const result: Stop[] = []
-      for (const [day, dayStops] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
+      for (const [, dayStops] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
         // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
         const withCoords = dayStops.filter(s => s.lat != null && s.lng != null)
         const withoutCoords = dayStops.filter(s => s.lat == null || s.lng == null)
@@ -386,24 +468,24 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
           ordered.push(remaining.splice(best, 1)[0])
         }
         result.push(...ordered, ...withoutCoords)
-        void day
       }
       return result
     })
-    toast.success('Route optimized — shortest path per day')
+    toastWithUndo('Route optimized — shortest path per day', 'Route optimized')
   }
 
   function handleDragEnd(day: number, event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
+    const moved = stops.find(s => s.key === active.id)
     setStops(prev => {
       const dayStops = prev.filter(s => s.day === day)
       const from = dayStops.findIndex(s => s.key === active.id)
       const to = dayStops.findIndex(s => s.key === over.id)
       if (from < 0 || to < 0) return prev
       const reordered = [...dayStops]
-      const [moved] = reordered.splice(from, 1)
-      reordered.splice(to, 0, moved)
+      const [m] = reordered.splice(from, 1)
+      reordered.splice(to, 0, m)
       const next = [...prev]
       let seen = 0
       for (let i = 0; i < next.length; i++) {
@@ -411,6 +493,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
       }
       return next
     })
+    if (moved) setAnnouncement(`Moved ${moved.title} to position ${stops.filter(s => s.day === day).findIndex(s => s.key === over.id) + 1} on day ${day}`)
   }
 
   async function replanDay(day: number) {
@@ -518,9 +601,11 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
                   active={hoveredStop === stop.key}
                   editing={editingKey === stop.key}
                   readOnly={readOnly}
+                  days={days.map(([d]) => d)}
                   onEditingChange={editing => setEditingKey(editing ? stop.key! : null)}
                   onUpdate={patch => patchStop(stop.key!, patch)}
                   onRemove={() => removeStop(stop.key!)}
+                  onMoveDay={day => moveStop(stop.key!, day)}
                 />
               </div>
             ))}
@@ -532,6 +617,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
 
   return (
     <div className="flex flex-col gap-5">
+      <p aria-live="polite" className="sr-only">{announcement}</p>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-primary">{days.length}-day route</p>
@@ -569,21 +655,16 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
             </>
           )}
         </div>
-        <div className="mt-3 flex w-fit items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1 lg:hidden">
-          <button
-            type="button"
-            onClick={() => setMobileView('list')}
-            className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', mobileView === 'list' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}
-          >
-            <List className="size-4" />List
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileView('map')}
-            className={cn('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors', mobileView === 'map' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}
-          >
-            <MapIcon className="size-4" />Map
-          </button>
+        <div className="mt-3 lg:hidden">
+          <PillToggle
+            label="Itinerary view"
+            value={mobileView}
+            onChange={setMobileView}
+            options={[
+              { value: 'list', label: 'List' },
+              { value: 'map', label: 'Map' },
+            ]}
+          />
         </div>
         <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className={cn('min-w-0', mobileView === 'map' && 'hidden lg:block')}>
@@ -591,10 +672,10 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
               <div className="flex flex-col gap-6">
                 {days.map(([day]) => (
                   <div key={day} className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground shadow-xs">{day}</span>
                       <h3 className="font-semibold">Day {day}</h3>
-                      <span className="text-sm text-muted-foreground">· {formatKES(dayTotals.get(day) ?? 0)}</span>
+                      <DaySummary stops={stops.filter(s => s.day === day)} cost={dayTotals.get(day) ?? 0} travel={dayTravel.get(day)} />
                     </div>
                     {renderStopList(day)}
                   </div>
@@ -651,7 +732,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">By category</p>
               {kindTotals.map(([kind, value]) => (
                 <div key={kind} className="flex items-center gap-2 text-xs">
-                  <span className="flex w-24 shrink-0 items-center gap-1"><Utensils className="size-3 hidden" />{kind}</span>
+                  <span className="w-24 shrink-0">{kind}</span>
                   <Progress className="h-1.5 flex-1" value={Math.min((value / Math.max(total, 1)) * 100, 100)} />
                   <span className="w-16 shrink-0 text-right text-muted-foreground">{formatKES(value)}</span>
                 </div>

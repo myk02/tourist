@@ -56,14 +56,17 @@ export async function drivingLeg(from: { lat: number; lng: number }, to: { lat: 
  * travel legs so we don't hammer the free OSRM endpoint with a parallel burst.
  */
 export async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  if (!items.length) return []
+  const safeConcurrency = Math.max(1, Math.min(Math.floor(concurrency) || 1, items.length))
   const out = new Array<R>(items.length)
   let cursor = 0
   async function worker() {
     while (cursor < items.length) {
       const i = cursor++
+      if (i >= items.length) break
       out[i] = await fn(items[i], i)
     }
   }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker))
+  await Promise.all(Array.from({ length: safeConcurrency }, worker))
   return out
 }

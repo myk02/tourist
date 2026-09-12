@@ -3,9 +3,9 @@ import { v } from "convex/values"
 import { makeFunctionReference } from "convex/server"
 import type { Doc, Id } from "./_generated/dataModel"
 import { PLAN_PRICES, TRIAL_DAYS, DAY_MS } from "../lib/plans"
+import { isEmail } from "../lib/email"
 
 const PAYSTACK_BASE = "https://api.paystack.co"
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
  * Subscription access for KenyaTrace: prepaid packs — KES 100 for 7 days or
@@ -37,12 +37,12 @@ const applyDayPackRef = makeFunctionReference<
   "mutation",
   { purchaseId: Id<"subscriptionPurchases"> },
   void
->("subscription_helpers/applyDayPack")
+>("subscription_helpers:applyDayPack")
 const getPurchaseForVerifyRef = makeFunctionReference<
   "query",
   { purchaseId: Id<"subscriptionPurchases">; ownerId: string },
   Doc<"subscriptionPurchases"> | null
->("subscription_helpers/getForVerify")
+>("subscription_helpers:getPurchaseForVerify")
 
 /**
  * Server-side enforcement used by content-creating mutations across the app.
@@ -57,7 +57,11 @@ export async function requireActiveAccess(db: DatabaseWriter, ownerId: string) {
   if (!sub) {
     const user = await db.query("users").withIndex("by_clerk", q => q.eq("clerkId", ownerId)).unique()
     const trialStart = user?.createdAt ?? now
-    await db.insert("subscriptions", { ownerId, trialEndsAt: trialStart + TRIAL_DAYS * DAY_MS, createdAt: now, updatedAt: now })
+    const trialEndsAt = trialStart + TRIAL_DAYS * DAY_MS
+    await db.insert("subscriptions", { ownerId, trialEndsAt, createdAt: now, updatedAt: now })
+    if (trialEndsAt <= now) {
+      throw new Error("Your access has ended — buy a day pack to keep planning")
+    }
     return
   }
   const deadline = Math.max(sub.trialEndsAt ?? 0, sub.paidUntil ?? 0)
@@ -150,8 +154,8 @@ export const initializeDayPack = mutation({
     if (!process.env.PAYSTACK_SECRET_KEY) throw new Error("Payment provider is not configured — contact support")
     const price = PLAN_PRICES[days]
     if (!price) throw new Error("Invalid day pack")
-    if (!EMAIL_RE.test(email.trim())) throw new Error("Enter a valid email address")
-    const reference = `KT-SUB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+    if (!isEmail(email)) throw new Error("Enter a valid email address")
+    const reference = `KT-SUB-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`
     const purchaseId = await ctx.db.insert("subscriptionPurchases", {
       ownerId: identity.subject,
       reference,
@@ -181,11 +185,13 @@ export const verifyAndConfirmDayPack = action({
     const res = await fetch(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(purchase.reference)}`, {
       headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
     })
+    if (!res.ok) return { verified: false, days: 0 }
     const data = await res.json().catch(() => null)
     const tx = data?.data
     const success =
       data?.status === true &&
       tx?.status === "success" &&
+      tx?.reference === purchase.reference &&
       tx?.amount === purchase.amount * 100 &&
       (tx?.currency ?? "KES") === purchase.currency
     if (!success) return { verified: false, days: 0 }

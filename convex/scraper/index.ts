@@ -1,13 +1,28 @@
 import { v } from "convex/values"
-import { action, query } from "../_generated/server"
+import { action, internalAction, query } from "../_generated/server"
 import { api, internal } from "../_generated/api"
 import { makeFunctionReference } from "convex/server"
 import { STALE_AFTER_MS } from "./constants"
 
+/**
+ * Catalog refresh policy (Phase 5.2 decision): ON-DEMAND ONLY, no cron.
+ *
+ * - `searchWithScrape` runs from the Discover page behind auth + fresh-data +
+ *   curated-data guards and a per-session client guard — a visit never burns
+ *   paid Firecrawl quota blindly.
+ * - `scrapeAll` exists for manual ops runs (Convex dashboard), not scheduling:
+ *   it fans out through `searchWithScrape`, which requires a user identity and
+ *   therefore always skips from a cron context. Do NOT wire it to crons.ts
+ *   without also lifting the auth gate AND budgeting the Firecrawl spend.
+ * - `clearAndRescrape` is a force-refresh for one vertical. It never clears
+ *   before scraping — `upsertScraped` is insert-then-sweep, so a failed scrape
+ *   leaves the old catalog intact instead of an empty vertical.
+ */
+
 const VERTICALS = ["stays", "flights", "attractions", "cars", "taxis"] as const
 type Vertical = (typeof VERTICALS)[number]
 
-// Real reference to this module's own public action, built by path so that
+// Real reference to this module's own action, built by path so that
 // `scrapeAll`/`clearAndRescrape` don't create a type-inference cycle (the
 // `internal.*` proxy would also resolve it at runtime, but the self-reference
 // breaks TS inference here).
@@ -15,7 +30,7 @@ const searchWithScrapeRef = makeFunctionReference<
   "action",
   { vertical: string },
   Record<string, unknown>
->("scraper/index/searchWithScrape")
+>("scraper/index:searchWithScrape")
 
 export const searchWithScrape = action({
   args: { vertical: v.string() },
@@ -23,6 +38,11 @@ export const searchWithScrape = action({
   // searchWithScrapeRef (itself), so without the annotation TS can't infer
   // this type without recursing and gives up with `any`/TS7022.
   handler: async (ctx, { vertical }): Promise<Record<string, unknown>> => {
+    // Scraping burns paid Firecrawl quota — never let anonymous traffic
+    // trigger it. Signed-in users still get auto-refreshed listings.
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return { status: "skipped", reason: "unauthenticated" }
+
     const items: any[] = await ctx.runQuery(api.listings.list, { vertical })
     const now = Date.now()
     const hasFresh = items?.some(
@@ -31,6 +51,15 @@ export const searchWithScrape = action({
     if (hasFresh) {
       console.log(`[scraper] ${vertical}: fresh data exists, skipping scrape`)
       return { status: "skipped", reason: "fresh_data" }
+    }
+    // A catalog that only contains seeded/curated rows (no scrapedAt) is
+    // intentional content, not stale data — scraping it on every visit would
+    // spend API budget re-fetching what we already show. Only catalogs that
+    // were scraped before get refreshed; empty catalogs bootstrap below.
+    const hasScraped = items?.some((i: any) => i.scrapedAt !== undefined)
+    if (!hasScraped && (items?.length ?? 0) > 0) {
+      console.log(`[scraper] ${vertical}: curated-only catalog, skipping scrape`)
+      return { status: "skipped", reason: "curated_data" }
     }
 
     // Prefer Firecrawl (richer, LLM-extracted listings) when the key is set,
@@ -45,12 +74,17 @@ export const searchWithScrape = action({
       }
     }
     console.log(`[scraper] ${vertical}: starting http scrape`)
-    await ctx.runAction(internal.scraper.http_scraper.scrapeVertical, { vertical })
-    return { status: "completed", source: "http" }
+    try {
+      await ctx.runAction(internal.scraper.http_scraper.scrapeVertical, { vertical })
+      return { status: "completed", source: "http" }
+    } catch (error) {
+      console.error(`[scraper] ${vertical}: http scrape failed -`, error)
+      return { status: "failed", source: "http", error: String(error) }
+    }
   },
 })
 
-export const scrapeAll = action({
+export const scrapeAll = internalAction({
   args: {},
   handler: async (ctx): Promise<Record<string, unknown>> => {
     const results: Record<string, unknown> = {}
@@ -67,16 +101,15 @@ export const scrapeAll = action({
   },
 })
 
-export const clearAndRescrape = action({
+export const clearAndRescrape = internalAction({
   args: { vertical: v.string() },
   handler: async (ctx, { vertical }): Promise<Record<string, unknown>> => {
     if (!VERTICALS.includes(vertical as Vertical)) {
       return { status: "skipped", reason: "invalid_vertical" }
     }
 
-    await ctx.runMutation(api.listings.clearVertical, { vertical })
-    console.log(`[scraper] ${vertical}: cleared, starting fresh scrape`)
-
+    // No clear-before-scrape: upsertScraped sweeps stale rows only after the
+    // fresh ones land, so this can never empty a vertical on failure.
     if (process.env.FIRECRAWL_API_KEY) {
       try {
         const result: Record<string, unknown> = await ctx.runAction(internal.scraper.firecrawl.scrapeVertical, { vertical })
@@ -85,8 +118,13 @@ export const clearAndRescrape = action({
         console.error(`[scraper] ${vertical}: Firecrawl failed (${String(error)}), falling back to http scraper`)
       }
     }
-    await ctx.runAction(internal.scraper.http_scraper.scrapeVertical, { vertical })
-    return { status: "completed", source: "http" }
+    try {
+      await ctx.runAction(internal.scraper.http_scraper.scrapeVertical, { vertical })
+      return { status: "completed", source: "http" }
+    } catch (error) {
+      console.error(`[scraper] ${vertical}: http scrape failed -`, error)
+      return { status: "failed", source: "http", error: String(error) }
+    }
   },
 })
 
@@ -102,7 +140,15 @@ export const getScrapeStatus = query({
         status[vertical] = { count: 0, stale: true, lastScraped: null }
         continue
       }
-      const newest = Math.max(...items.map((i: any) => i.scrapedAt || 0))
+      const hasScraped = items.some((i: any) => i.scrapedAt !== undefined)
+      // Curated-only catalogs (seed data) are not stale — they were
+      // intentionally never scraped. Only catalogs that were scraped before
+      // can become stale.
+      if (!hasScraped) {
+        status[vertical] = { count: items.length, stale: false, lastScraped: null }
+        continue
+      }
+      const newest = Math.max(...items.filter((i: any) => i.scrapedAt !== undefined).map((i: any) => i.scrapedAt as number))
       status[vertical] = {
         count: items.length,
         stale: now - newest > STALE_AFTER_MS,

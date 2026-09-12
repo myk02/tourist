@@ -9,6 +9,7 @@
  */
 
 import type * as bookings from "../bookings.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as listings from "../listings.js";
 import type * as moments from "../moments.js";
@@ -21,9 +22,7 @@ import type * as scraper_constants from "../scraper/constants.js";
 import type * as scraper_firecrawl from "../scraper/firecrawl.js";
 import type * as scraper_http_scraper from "../scraper/http_scraper.js";
 import type * as scraper_index from "../scraper/index.js";
-import type * as scraper_taxis from "../scraper/taxis.js";
 import type * as scraper_verticalConfig from "../scraper/verticalConfig.js";
-import type * as scraper_wikipedia from "../scraper/wikipedia.js";
 import type * as subscription_helpers from "../subscription_helpers.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as trips from "../trips.js";
@@ -37,6 +36,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   bookings: typeof bookings;
+  crons: typeof crons;
   http: typeof http;
   listings: typeof listings;
   moments: typeof moments;
@@ -49,9 +49,7 @@ declare const fullApi: ApiFromModules<{
   "scraper/firecrawl": typeof scraper_firecrawl;
   "scraper/http_scraper": typeof scraper_http_scraper;
   "scraper/index": typeof scraper_index;
-  "scraper/taxis": typeof scraper_taxis;
   "scraper/verticalConfig": typeof scraper_verticalConfig;
-  "scraper/wikipedia": typeof scraper_wikipedia;
   subscription_helpers: typeof subscription_helpers;
   subscriptions: typeof subscriptions;
   trips: typeof trips;

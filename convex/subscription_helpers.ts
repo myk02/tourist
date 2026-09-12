@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery, type DatabaseWriter } from "./_generated/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
+import { TRIAL_DAYS } from "../lib/plans"
 
 const DAY_MS = 86400000
 
@@ -11,8 +12,11 @@ async function extendPaidAccess(db: DatabaseWriter, ownerId: string, days: numbe
     .withIndex("by_owner", q => q.eq("ownerId", ownerId))
     .unique()
   if (!sub) {
+    const user = await db.query("users").withIndex("by_clerk", q => q.eq("clerkId", ownerId)).unique()
+    const trialStart = user?.createdAt ?? now
     await db.insert("subscriptions", {
       ownerId,
+      trialEndsAt: trialStart + TRIAL_DAYS * DAY_MS,
       paidUntil: now + days * DAY_MS,
       createdAt: now,
       updatedAt: now,
@@ -61,12 +65,14 @@ export const applyDayPack = internalMutation({
  */
 export const applyDayPackByCharge = internalMutation({
   args: { reference: v.string(), email: v.string(), amount: v.number(), currency: v.string() },
-  handler: async (ctx, { reference }) => {
+  handler: async (ctx, { reference, amount, currency }) => {
     const purchase = await ctx.db
       .query("subscriptionPurchases")
       .withIndex("by_reference", q => q.eq("reference", reference))
-      .unique()
+      .first()
     if (!purchase || purchase.status === "paid") return { applied: false }
+    // Webhook amount is in minor units — validate before crediting.
+    if (amount !== purchase.amount * 100 || currency !== purchase.currency) return { applied: false }
     const now = Date.now()
     await ctx.db.patch(purchase._id, { status: "paid", paidAt: now })
     await extendPaidAccess(ctx.db, purchase.ownerId, purchase.days, now)

@@ -12,12 +12,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import type { ParsedBooking } from '@/lib/parse-booking'
+import { kindChip } from '@/lib/kind'
 
 const TYPE_STYLE: Record<string, string> = {
-  Stay: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  Flight: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  Transport: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  General: 'bg-secondary text-muted-foreground',
+  Stay: kindChip('Stay'),
+  Flight: kindChip('Flight'),
+  Transport: kindChip('Transport'),
+  General: kindChip('General'),
 }
 
 /**
@@ -55,8 +56,11 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text }),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || 'Could not read this email')
+      }
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not read this email')
       setParsed(data)
       setEdit({ ...data })
     } catch (e) {

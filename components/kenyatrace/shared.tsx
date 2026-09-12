@@ -3,16 +3,18 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { usePathname } from 'next/navigation'
-import { useConvexAuth, useQuery } from 'convex/react'
-import { SignInButton } from '@clerk/nextjs'
+import { useParams } from 'next/navigation'
+import { useAction, useConvexAuth, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Doc, Id } from '@/convex/_generated/dataModel'
-import { CircleUserRound, Compass, MapPin } from 'lucide-react'
+import { CircleUserRound, Loader2, MapPin } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ProgressBar } from '@/components/ui/kt/progress-bar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatKES, wikimediaThumb } from '@/lib/kenya-data'
+import { kindHex } from '@/lib/kind'
 import { isValidConvexId } from '@/lib/id'
 import { cn } from '@/lib/utils'
 import { PayNowButton } from './pay-now'
@@ -32,7 +34,14 @@ export function ListingImage({ src, alt, ...props }: Omit<React.ComponentProps<t
 const SOURCE_META: Record<string, { label: string; dot: string }> = {
   firecrawl: { label: 'Firecrawl', dot: 'bg-emerald-400' },
   scraper: { label: 'Live web', dot: 'bg-sky-400' },
+  'scraper:estimated': { label: 'Estimated', dot: 'bg-sky-400' },
   wikipedia: { label: 'Wikipedia', dot: 'bg-amber-400' },
+}
+
+/** True for http-scraped or Wikipedia-sourced listings (incl. scraper:estimated). */
+export function isLiveSource(source?: string | null): boolean {
+  if (!source) return false
+  return source === 'wikipedia' || source === 'scraper' || source.startsWith('scraper:')
 }
 
 /** The source dimension used by the Discover filter (?source=). */
@@ -41,7 +50,7 @@ export type SourceFilterValue = 'all' | 'firecrawl' | 'live' | 'curated'
 /** Maps a listing's `source` field to its Discover filter value (null when curated/unknown). */
 export function sourceToFilter(source?: string | null): Exclude<SourceFilterValue, 'all' | 'curated'> | null {
   if (source === 'firecrawl') return 'firecrawl'
-  if (source === 'scraper' || source === 'wikipedia') return 'live'
+  if (isLiveSource(source)) return 'live'
   return null
 }
 
@@ -75,7 +84,21 @@ export function SourceBadge({ source, className, onClick }: { source?: string | 
   )
 }
 
-export function RequireAuth({children}:{children:React.ReactNode}){const {isAuthenticated,isLoading}=useConvexAuth();if(isLoading)return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl"/></div>;if(!isAuthenticated)return <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center"><span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8"/></span><h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1><p className="text-muted-foreground">Sign in to save routes, reservations, live traces and moments.</p><SignInButton mode="modal"><Button size="lg">Sign in to continue</Button></SignInButton></div>;return <>{children}</>}
+export function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  if (isLoading) return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl" /></div>
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
+        <span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8" /></span>
+        <h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1>
+        <p className="text-muted-foreground">Sign in to save routes, reservations, live traces and moments.</p>
+        <Button size="lg" nativeButton={false} render={<Link href="/sign-in" />}>Sign in to continue</Button>
+      </div>
+    )
+  }
+  return <>{children}</>
+}
 
 /**
  * One reservation row, resolving the listing by id. Used on the Profile
@@ -86,22 +109,48 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
   // skip the lookup so Convex doesn't reject the empty id.
   const listing = useQuery(api.listings.get, booking.listingId ? { id: booking.listingId as Id<'listings'> } : 'skip')
   const item = listing
+  // A pending attempt from a closed-tab checkout: offer re-confirmation
+  // against the SAME reference instead of a new checkout (no double charge).
+  const pending = useQuery(api.payments.pendingForBooking, (booking.status === 'requested' || booking.status === 'pending') && booking.amount > 0 ? { bookingId: booking._id } : 'skip')
+  const verifyAndConfirm = useAction(api.payments.verifyAndConfirm)
+  const [confirming, setConfirming] = useState(false)
+  async function checkStatus() {
+    if (!pending || confirming) return
+    setConfirming(true)
+    try {
+      const result = await verifyAndConfirm({ paymentId: pending.paymentId })
+      if (result.verified) toast.success(`Payment received — ${booking.reference} is confirmed`)
+      else toast.error('Not confirmed yet — if you paid, wait a minute and try again')
+    } catch {
+      toast.error('Could not check the payment — try again shortly')
+    } finally {
+      setConfirming(false)
+    }
+  }
   return (
     <Card>
       <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
         <div className="min-w-0">
           <p className="font-semibold">{item?.name || 'Reserved place'}</p>
           <p className="text-sm text-muted-foreground">{booking.reference} · {item ? `${item.location} · ` : ''}{booking.checkIn ? `${booking.checkIn} → ${booking.checkOut}` : ''}{booking.guests ? ` · ${booking.guests} guest${booking.guests === 1 ? '' : 's'}` : ''}</p>
+          {pending && <p className="mt-1 text-xs text-muted-foreground">A payment attempt is pending — paid already? Check its status instead of paying again.</p>}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <strong>{formatKES(booking.amount)}</strong>
           <Badge className={cn(
             booking.status === 'cancelled' && 'bg-card text-card-foreground',
             booking.status === 'paid' && 'bg-emerald-600 text-white',
+            (booking.status === 'requested' || booking.status === 'pending') && 'bg-secondary text-secondary-foreground',
           )}>
             {booking.status === 'paid' ? 'Paid' : booking.status}
           </Badge>
-          {booking.status === 'requested' && booking.amount > 0 && <PayNowButton booking={booking} />}
+          {pending && (
+            <Button variant="outline" size="sm" onClick={checkStatus} disabled={confirming} className="gap-1.5">
+              {confirming && <Loader2 className="size-3.5 animate-spin" />}
+              {confirming ? 'Checking' : 'Check status'}
+            </Button>
+          )}
+          {(booking.status === 'requested' || booking.status === 'pending') && booking.amount > 0 && booking.listingId && <PayNowButton booking={booking} />}
           {booking.status !== 'cancelled' && booking.status !== 'paid' && <Button variant="outline" size="sm" onClick={() => onCancel(booking._id)}>Cancel</Button>}
         </div>
       </CardContent>
@@ -109,13 +158,10 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
   )
 }
 
-export function Stat({label,value}:{label:string;value:number}){return <Card><CardHeader><CardDescription>{label}</CardDescription><CardTitle className="text-3xl">{value}</CardTitle></CardHeader></Card>}
-
-const KIND_COLORS: Record<string, string> = { Stay: '#0b6e4f', Transport: '#e8a317', Experience: '#2563eb', Food: '#8b5cf6' }
-
 /**
  * Compact trip-cost card: total vs budget progress bar, plus a stacked
  * breakdown by spend category. Reused on the plan journey and trip detail.
+ * Category hues come from lib/kind.ts (single source).
  */
 export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost: number; kind: string }[]; budget: number; perDay?: number; className?: string }) {
   const total = stops.reduce((s, x) => s + x.cost, 0)
@@ -134,19 +180,17 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
           {over && <span className="ml-2 text-xs font-semibold text-destructive">over budget</span>}
         </span>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-        <div className={cn('h-full rounded-full transition-all', over ? 'bg-destructive' : 'bg-primary')} style={{ width: `${pct}%` }} />
-      </div>
+      <ProgressBar value={pct} label="Trip cost against budget" barClassName={over ? 'bg-destructive' : undefined} className="mt-2" />
       <p className="mt-1 text-xs text-muted-foreground">{pct}% of your budget used{perDay != null ? ` · ≈ ${formatKES(perDay)} per day` : ''}</p>
       {kinds.length > 0 && (
         <div className="mt-3 border-t pt-3">
           <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-            {kinds.map(k => <div key={k.kind} style={{ width: `${(k.total / Math.max(total, 1)) * 100}%`, backgroundColor: KIND_COLORS[k.kind] }} />)}
+            {kinds.map(k => <div key={k.kind} style={{ width: `${(k.total / Math.max(total, 1)) * 100}%`, backgroundColor: kindHex(k.kind) }} />)}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
             {kinds.map(k => (
               <span key={k.kind} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="size-2.5 rounded-full" style={{ backgroundColor: KIND_COLORS[k.kind] }} />
+                <span className="size-2.5 rounded-full" style={{ backgroundColor: kindHex(k.kind) }} />
                 {k.kind} · {formatKES(k.total)}
               </span>
             ))}
@@ -157,10 +201,13 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
   )
 }
 
-export function Empty({title,text,action}:{title:string;text:string;action?:()=>void}){return <div className="col-span-full flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center"><Compass className="size-8 text-primary"/><h2 className="mt-4 font-serif text-2xl">{title}</h2><p className="mt-2 max-w-md text-muted-foreground">{text}</p>{action&&<Button className="mt-4" variant="outline" onClick={action}>Clear filters</Button>}</div>}
+export function NotFound(){return <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary"/><h1 className="font-serif text-4xl">This trail ends here</h1><p className="text-muted-foreground">The page or place you requested could not be found.</p><Button nativeButton={false} render={<Link href="/"/>}>Back home</Button></div>}
 
-export function NotFound(){return <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary"/><h1 className="font-serif text-4xl">This trail ends here</h1><p className="text-muted-foreground">The page or place you requested could not be found.</p><Button nativeButton={false} render={<Link href="/"/>}>Back to discover</Button></div>}
-
-export function useTripId(){const pathname=usePathname();const id=pathname.split('/')[2];// Validate the route param before querying — a malformed id would make
-// Convex throw and crash the page instead of showing NotFound.
-return isValidConvexId(id) ? id as Id<'trips'> : null}
+export function useTripId() {
+  const params = useParams<{ id?: string | string[] }>()
+  const raw = params?.id
+  const id = Array.isArray(raw) ? raw[0] : raw
+  // Validate the route param before querying — a malformed id would make
+  // Convex throw and crash the page instead of showing NotFound.
+  return isValidConvexId(id) ? id as Id<'trips'> : null
+}

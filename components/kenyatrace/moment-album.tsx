@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -25,7 +26,7 @@ function mediaOf(m: Moment): Media[] {
     ...videos.map(url => ({ type: 'video' as const, url })),
     ...images.map(url => ({ type: 'image' as const, url })),
   ]
-  return media.length ? media : [{ type: 'image', url: '/placeholder.jpg' }]
+  return media.length ? media : [{ type: 'image', url: '/kenya-hero.png' }]
 }
 
 export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; onUploadClick?: () => void }) {
@@ -140,7 +141,14 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                     {media[0].type === 'video' ? (
                       <video src={media[0].url} muted playsInline preload="metadata" className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     ) : (
-                      <img src={media[0].url} alt={m.caption} className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      <Image
+                          src={media[0].url}
+                          alt={m.caption}
+                          fill
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          unoptimized
+                          className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
                     )}
                   </button>
                   {media.length > 1 && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{media.length} media</Badge>}
@@ -185,7 +193,14 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                 {activeMedia[activeIndex].type === 'video' ? (
                   <video src={activeMedia[activeIndex].url} controls autoPlay playsInline className="max-h-full w-full object-contain" />
                 ) : (
-                  <img src={activeMedia[activeIndex].url} alt={active.caption} className="max-h-full w-full object-contain" />
+                  <Image
+                        src={activeMedia[activeIndex].url}
+                        alt={active.caption}
+                        width={1600}
+                        height={1200}
+                        unoptimized
+                        className="max-h-full w-full object-contain"
+                      />
                 )}
                 {activeMedia.length > 1 && (
                   <>

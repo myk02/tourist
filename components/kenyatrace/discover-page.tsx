@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useQuery, useMutation, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { SignInButton, useUser } from '@clerk/nextjs'
+import { useClerk, useUser } from '@clerk/nextjs'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,12 +15,13 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Car, Check, Heart, LocateFixed, Map, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Star, X } from 'lucide-react'
+import { Car, Check, Heart, Loader2, LocateFixed, Map, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Star, X } from 'lucide-react'
 import { categories, formatKES, type Vertical } from '@/lib/kenya-data'
 import { cn } from '@/lib/utils'
 import { toReplaceStopsPayload } from '@/lib/stop-fields'
 import { KenyaMap, toPoint } from './kenya-map'
-import { ListingImage } from './shared'
+import { ListingImage, isLiveSource } from './shared'
+import { TaxiFareEstimator } from './taxi-fare-estimator'
 
 const NEAR_KM = 100
 
@@ -55,13 +56,14 @@ function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   return 2 * R * Math.asin(Math.sqrt(a))
 }
 
-/** Hero photo + one-line tagline per category. */
+/** Hero photo + one-line tagline per category. Local assets only — no hotlinks. */
 const VERTICAL_HERO: Record<string, { image: string; tagline: string }> = {
   stays: { image: 'https://upload.wikimedia.org/wikipedia/commons/7/72/PIC_0106.JPG', tagline: 'Wake up by the coast or in the wild' },
   flights: { image: 'https://upload.wikimedia.org/wikipedia/commons/d/d4/Nairobi_Skyline_Savannah_Kenya_May19_R1600687.jpg', tagline: 'City to savannah in an hour' },
   attractions: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'Tours, parks, and the places Kenya is famous for' },
   cars: { image: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Lake_Naivasha%2C_Kenya_%2845636345554%29.jpg', tagline: 'Drive Kenya your own way' },
-  taxis: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'City rides and airport runs' },
+  // Taxis are city rides — the generic Kenya hero, not a Mara landscape dup.
+  taxis: { image: '/kenya-hero.png', tagline: 'City rides and airport runs' },
 }
 
 const SORTS = [
@@ -110,6 +112,10 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
+  // Combobox keyboard state: which suggestion is highlighted + whether the
+  // listbox is open (Escape closes it, typing reopens it).
+  const [activeSuggestion, setActiveSuggestion] = useState(-1)
+  const [suggestOpen, setSuggestOpen] = useState(true)
 
   // Lock body scroll while the full-screen mobile map is open.
   useEffect(() => {
@@ -119,6 +125,18 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
   const rawItems = useQuery(api.listings.search, { vertical, term: debouncedSearch || undefined })
   const scrapeAction = useAction(api.scraper.index.searchWithScrape)
+  const seedVertical = useMutation(api.listings.seedVertical)
+
+  // Taxis has no live source worth scraping (ride-hail APIs are closed), so
+  // it runs fully on curated route data. If a fresh database opens the tab
+  // and finds nothing, seed the curated routes once per session.
+  const seedGuardRef = useRef(false)
+  useEffect(() => {
+    if (vertical === 'taxis' && rawItems && rawItems.length === 0 && !seedGuardRef.current) {
+      seedGuardRef.current = true
+      seedVertical({ vertical }).catch(() => toast.error('Could not load taxi routes — try again shortly'))
+    }
+  }, [vertical, rawItems, seedVertical])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300)
@@ -126,6 +144,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   }, [searchTerm])
 
   const { isSignedIn } = useUser()
+  const clerk = useClerk()
   const savedListings = useQuery(api.saved.list)
   const saveListing = useMutation(api.saved.save)
   const removeListing = useMutation(api.saved.remove)
@@ -138,7 +157,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   const [pickerListingId, setPickerListingId] = useState<Id<'listings'> | null>(null)
   const [pickerTripId, setPickerTripId] = useState<Id<'trips'> | null>(null)
   const pickerTrip = useQuery(api.trips.getWithStops, pickerTripId ? { id: pickerTripId } : 'skip')
-  const signInRef = useRef<HTMLDivElement>(null)
   const [pendingSaveId, setPendingSaveId] = useState<string | null>(null)
   // Add-to-trip after sign-in: remember which listing the guest wanted so the
   // picker opens the moment they land back, signed in.
@@ -147,7 +165,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   function openTripPicker(listingId: Id<'listings'>) {
     if (!isSignedIn) {
       setPendingAddId(listingId)
-      signInRef.current?.click()
+      clerk.openSignIn()
       return
     }
     setPickerListingId(listingId)
@@ -178,6 +196,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     return { min, max: Math.max(max, min + 1000) }
   }, [rawItems])
 
+  // Reset price range when vertical changes
+  useEffect(() => { setPriceRange(null) }, [vertical])
   useEffect(() => {
     if (rawItems && priceRange === null && rawItems.length > 0) {
       setPriceRange([priceBounds.min, priceBounds.max])
@@ -202,7 +222,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     // Provenance dimension — mirrors sourceToFilter(): 'live' covers the
     // http/wikipedia scrapers, 'curated' is anything without a scraper mark.
     if (activeSource === 'firecrawl') items = items.filter(i => i.source === 'firecrawl')
-    else if (activeSource === 'live') items = items.filter(i => i.source === 'scraper' || i.source === 'wikipedia')
+    else if (activeSource === 'live') items = items.filter(i => isLiveSource(i.source))
     else if (activeSource === 'curated') items = items.filter(i => !i.source)
     switch (sort) {
       case 'recent': items.sort((a, b) => (b.scrapedAt ?? b._creationTime) - (a.scrapedAt ?? a._creationTime)); break
@@ -226,7 +246,12 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
     const qs = p.toString()
     const target = `/discover/${vertical}${qs ? `?${qs}` : ''}`
     if (target !== window.location.pathname + window.location.search) {
-      router.replace(target, { scroll: false })
+      // Debounce slider/amenity drags so a rapid scrub fires one RSC
+      // navigation instead of one per pointer move.
+      const t = window.setTimeout(() => {
+        router.replace(target, { scroll: false })
+      }, 250)
+      return () => window.clearTimeout(t)
     }
   }, [debouncedSearch, activeFilter, rating, sort, priceNarrowed, activePrice, nearMe, amenities, activeSource, vertical, router])
 
@@ -246,17 +271,21 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
   // Auto-refresh stale listings from the scraper — but only once per session
   // per vertical, so a page visit doesn't trigger a paid scrape every time.
+  // Only catalogs that were actually scraped before are refreshed: seeded /
+  // curated rows carry no scrapedAt on purpose and must never auto-scrape.
   const SCRAPE_GUARD_MS = 60 * 60 * 1000
   useEffect(() => {
+    if (vertical === 'taxis') return // curated-only vertical — no auto-scrape
     if (rawItems && rawItems.length > 0) {
-      const hasStale = rawItems.some(i => !i.scrapedAt || Date.now() - i.scrapedAt > 24 * 60 * 60 * 1000)
-      if (hasStale || (!rawItems.some(i => i.scrapedAt) && vertical !== 'taxis')) {
+      const scrapedAts = rawItems.map(i => i.scrapedAt).filter((t): t is number => typeof t === 'number')
+      const newest = scrapedAts.length ? Math.max(...scrapedAts) : null
+      if (newest !== null && Date.now() - newest > 24 * 60 * 60 * 1000) {
         const key = `kt_scrape_${vertical}`
         let lastScrape = 0
         try { lastScrape = parseInt(sessionStorage.getItem(key) || '0', 10) || 0 } catch { /* ignore */ }
         if (Date.now() - lastScrape > SCRAPE_GUARD_MS) {
           try { sessionStorage.setItem(key, String(Date.now())) } catch { /* ignore */ }
-          scrapeAction({ vertical }).catch(console.error)
+          scrapeAction({ vertical }).catch(() => toast.error('Live results unavailable — showing saved listings'))
         }
       }
     }
@@ -298,7 +327,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   }
 
   async function toggleSave(listingId: string) {
-    if (!isSignedIn) { setPendingSaveId(listingId); signInRef.current?.click(); return }
+    if (!isSignedIn) { setPendingSaveId(listingId); clerk.openSignIn(); return }
     try {
       if (savedIds.has(listingId as Id<'listings'>)) { await removeListing({ listingId: listingId as Id<'listings'> }); toast.success('Removed from saved') }
       else { await saveListing({ listingId: listingId as Id<'listings'> }); toast.success('Saved to your list') }
@@ -313,12 +342,23 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   // Appends a listing as a stop on the chosen trip (same flow as the listing
   // detail page) — a one-click "Add to my trip" from the card.
   async function confirmAddToListing() {
-    if (!pickerListingId || !pickerTripId || !pickerTrip) return
+    if (!pickerListingId || !pickerTripId) {
+      toast.error('Choose a trip first')
+      return
+    }
+    if (!pickerTrip) {
+      toast.error('Trip data is still loading — try again')
+      return
+    }
     const item = rawItems?.find(i => i._id === pickerListingId)
     if (!item) return
     // Full-fidelity payload — a subset here would wipe completedAt/reason/
     // locks/images off every existing stop (replaceStops is delete+insert).
     const existing = toReplaceStopsPayload(pickerTrip.stops)
+    if (existing.some(s => s.listingId === item._id)) {
+      toast.error('This place is already in that trip')
+      return
+    }
     const kind = item.vertical === 'stays' ? 'Stay' : item.vertical === 'flights' || item.vertical === 'taxis' || item.vertical === 'cars' ? 'Transport' : 'Experience'
     try {
       await replaceStops({
@@ -365,7 +405,30 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
   const mapPoints = (filteredItems ?? []).map(toPoint)
   const visible = filteredItems?.slice(0, visibleCount)
-  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || amenities.length > 0 || !!activeSource
+  // Search suggestions for the combobox listbox (max 6, deduped by name).
+  const suggestions = useMemo(() => {
+    if (!searchTerm) return []
+    const q = searchTerm.toLowerCase()
+    const out: { name: string; location: string }[] = []
+    const seen = new Set<string>()
+    for (const i of rawItems ?? []) {
+      if (out.length >= 6) break
+      if (seen.has(i.name)) continue
+      if (!i.name.toLowerCase().includes(q) && !i.location.toLowerCase().includes(q)) continue
+      seen.add(i.name)
+      out.push({ name: i.name, location: i.location })
+    }
+    return out
+  }, [searchTerm, rawItems])
+  const suggestListOpen = suggestOpen && searchTerm.length > 0 && suggestions.length > 0
+
+  function pickSuggestion(idx: number) {
+    const s = suggestions[idx]
+    if (!s) return
+    setSearchTerm(s.name)
+    setSuggestOpen(false)
+    setActiveSuggestion(-1)
+  }  const hasActiveFilters = activeFilter !== 'all' || rating > 0 || priceNarrowed || nearMe || amenities.length > 0 || !!activeSource
   const activeFilterCount = [activeFilter !== 'all', rating > 0, priceNarrowed, nearMe, amenities.length > 0, !!activeSource].filter(Boolean).length
   const hero = VERTICAL_HERO[vertical] ?? VERTICAL_HERO.attractions
   const label = categories.find(c => c.id === vertical)?.label ?? vertical
@@ -384,7 +447,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               <p className="mt-1 text-sm text-white/85">{hero.tagline}</p>
             </div>
             <span className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white backdrop-blur-sm">
-              {filteredItems ? `${filteredItems.length} place${filteredItems.length === 1 ? '' : 's'}` : '…'}
+              {filteredItems ? `${filteredItems.length} place${filteredItems.length === 1 ? '' : 's'}` : 'Loading places'}
             </span>
           </div>
         </div>
@@ -414,39 +477,49 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               <Search className="absolute left-3 top-3.5 size-4 text-muted-foreground" />
               <Input
                 className="h-11 pl-10"
-                aria-label="Search"
+                role="combobox"
+                aria-label="Search listings"
+                aria-autocomplete="list"
+                aria-expanded={suggestListOpen}
+                aria-controls="discover-search-suggestions"
+                aria-activedescendant={activeSuggestion >= 0 ? `discover-suggestion-${activeSuggestion}` : undefined}
                 placeholder="Mara, Nairobi, Diani..."
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={e => { setSearchTerm(e.target.value); setSuggestOpen(true); setActiveSuggestion(-1) }}
+                onKeyDown={e => {
+                  if (e.key === 'ArrowDown' && suggestListOpen) { e.preventDefault(); setActiveSuggestion(i => (i + 1) % suggestions.length) }
+                  else if (e.key === 'ArrowUp' && suggestListOpen) { e.preventDefault(); setActiveSuggestion(i => (i - 1 + suggestions.length) % suggestions.length) }
+                  else if (e.key === 'Enter' && activeSuggestion >= 0 && suggestListOpen) { e.preventDefault(); pickSuggestion(activeSuggestion) }
+                  else if (e.key === 'Escape' && suggestListOpen) { setSuggestOpen(false); setActiveSuggestion(-1) }
+                }}
               />
-              {searchTerm && (() => {
-                const q = searchTerm.toLowerCase()
-                const suggestions: { name: string; location: string }[] = []
-                const seen = new Set<string>()
-                for (const i of rawItems ?? []) {
-                  if (suggestions.length >= 6) break
-                  if (seen.has(i.name)) continue
-                  if (!i.name.toLowerCase().includes(q) && !i.location.toLowerCase().includes(q)) continue
-                  seen.add(i.name)
-                  suggestions.push({ name: i.name, location: i.location })
-                }
-                if (suggestions.length === 0) return null
-                return (
-                  <div className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border bg-popover p-1 shadow-pop">
-                    {suggestions.map(s => (
-                      <button
-                        key={s.name}
-                        type="button"
-                        onClick={() => setSearchTerm(s.name)}
-                        className="flex w-full items-baseline justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-secondary/60"
-                      >
-                        <span className="truncate font-medium">{s.name}</span>
-                        <span className="shrink-0 truncate text-xs text-muted-foreground">{s.location}</span>
-                      </button>
-                    ))}
-                  </div>
-                )
-              })()}
+              {suggestListOpen && (
+                <div
+                  className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border bg-popover p-1 shadow-pop"
+                  id="discover-search-suggestions"
+                  role="listbox"
+                  aria-label="Search suggestions"
+                >
+                  {suggestions.map((s, idx) => (
+                    <button
+                      key={s.name}
+                      id={`discover-suggestion-${idx}`}
+                      type="button"
+                      role="option"
+                      aria-selected={idx === activeSuggestion}
+                      onMouseEnter={() => setActiveSuggestion(idx)}
+                      onClick={() => pickSuggestion(idx)}
+                      className={cn(
+                        'flex w-full items-baseline justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        idx === activeSuggestion ? 'bg-secondary' : 'hover:bg-secondary/60',
+                      )}
+                    >
+                      <span className="truncate font-medium">{s.name}</span>
+                      <span className="shrink-0 truncate text-xs text-muted-foreground">{s.location}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Select value={sort} onValueChange={v => setSort(v as SortValue)}>
@@ -483,6 +556,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                   return (
                     <button
                       key={option.value}
+                      type="button"
+                      aria-pressed={active}
                       onClick={() => (option.kind === 'amenity' ? toggleAmenity(option.value) : setActiveFilter(option.value as QuickFilter))}
                       className={cn(
                         'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
@@ -497,6 +572,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                   )
                 })}
                 <button
+                  type="button"
+                  aria-pressed={nearMe}
                   onClick={toggleNearMe}
                   disabled={locating}
                   className={cn(
@@ -506,8 +583,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                       : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
                   )}
                 >
-                  <LocateFixed className="size-3.5" />
-                  {locating ? 'Finding…' : 'Near me'}
+                  {locating ? <Loader2 className="size-3.5 animate-spin" /> : <LocateFixed className="size-3.5" />}
+                  {locating ? 'Finding' : 'Near me'}
                 </button>
               </div>
 
@@ -604,6 +681,11 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-5">
+          {/* Fare estimator — taxis only. Sits above the route cards. */}
+          {vertical === 'taxis' && (
+            <TaxiFareEstimator routes={(filteredItems ?? []).map(r => ({ _id: r._id, name: r.name, location: r.location }))} />
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visible ? (
               visible.map(item => {
@@ -616,7 +698,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                     onMouseEnter={() => setHoveredId(item._id)}
                     onMouseLeave={() => setHoveredId(null)}
                     className={cn(
-                      'group relative rounded-2xl border-0 bg-transparent p-0 shadow-soft transition-all duration-200 hover:-translate-y-1 hover:shadow-lift',
+                      'group relative overflow-hidden rounded-2xl border bg-card p-0 shadow-soft transition-shadow duration-200 hover:shadow-lift',
                       active && 'ring-2 ring-primary/40',
                     )}
                   >
@@ -660,14 +742,14 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                     <button
                       aria-label="Add to a trip"
                       onClick={e => { e.preventDefault(); openTripPicker(item._id) }}
-                      className="absolute right-12 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/60"
+                      className="absolute right-12 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                     >
                       <Plus className="size-4" />
                     </button>
                     <button
                       aria-label={saved ? 'Remove from saved' : 'Save to your list'}
                       onClick={e => { e.preventDefault(); toggleSave(item._id) }}
-                      className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/60"
+                      className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                     >
                       <Heart className={cn('size-4 transition-colors', saved && 'fill-red-500 text-red-500')} />
                     </button>
@@ -676,7 +758,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               })
             ) : (
               Array(PAGE_SIZE).fill(null).map((_, i) => (
-                <Card key={i} className="rounded-2xl border-0 bg-transparent p-0">
+                <Card key={i} className="rounded-2xl border bg-card p-0">
                   <Skeleton className="aspect-[3/2] w-full rounded-2xl" />
                 </Card>
               ))
@@ -694,8 +776,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed py-12 text-center">
                 <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><Car className="size-6" /></span>
                 <div>
-                  <p className="font-serif text-2xl font-semibold tracking-tight">Coming soon</p>
-                  <p className="mx-auto mt-1 text-sm text-muted-foreground">Airport transfers and city rides.</p>
+                  <p className="font-serif text-2xl font-semibold tracking-tight">No rides match your filters</p>
+                  <p className="mx-auto mt-1 text-sm text-muted-foreground">Try the fare estimator above, or clear your filters.</p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button variant="outline" nativeButton={false} render={<Link href="/discover/cars" />}>Rent a car</Button>
@@ -719,7 +801,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
             <KenyaMap
               points={mapPoints}
               labelMode
-              className="h-[calc(100vh-7rem)]"
+              className="h-[calc(100svh-7rem)]"
               hoveredId={hoveredId}
               onMarkerEnter={setHoveredId}
               onMarkerLeave={() => setHoveredId(null)}
@@ -772,7 +854,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
         </DialogContent>
       </Dialog>
 
-      <SignInButton mode="modal"><div ref={signInRef} style={{ display: 'none' }} /></SignInButton>
     </div>
   )
 }

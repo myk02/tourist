@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { ArrowRight, Compass, Loader2, Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ProgressBar } from '@/components/ui/kt/progress-bar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { KenyaMap } from '../../kenya-map'
@@ -52,10 +53,12 @@ export function TrackStage() {
             <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
               {!tracking && activeSession?.status !== 'arrived' && consentPrompt && (
                 <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-2.5">
-                  <p className="text-sm text-muted-foreground">Record your route while you travel?</p>
+                  <label htmlFor="kt-track-consent" className="text-sm text-muted-foreground">Record your route while you travel?</label>
                   <Switch
+                    id="kt-track-consent"
                     checked={localConsent}
                     onCheckedChange={toggleConsent}
+                    aria-label="Record your route while you travel"
                   />
                 </div>
               )}
@@ -75,9 +78,7 @@ export function TrackStage() {
                           : `${activeSession?.path.length ?? 0} point${activeSession?.path.length === 1 ? '' : 's'} recorded`
                         : `Your route from ${draft.origin} to ${plan?.destination ?? 'your destination'} — your route saves every few seconds while you move, only while this page or its widget stays open.`}
                     </p>
-                    <div className="mt-2 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${activeSession?.progressPct ?? 0}%` }} />
-                    </div>
+                    <ProgressBar value={activeSession?.progressPct ?? 0} label="Trip progress" className="mt-2 w-full max-w-sm" />
                     <p className="mt-1 text-xs text-muted-foreground">{activeSession?.progressPct ?? 0}% of the way there</p>
                   </>
                 )}

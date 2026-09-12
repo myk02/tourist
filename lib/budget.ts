@@ -8,7 +8,10 @@ export type BudgetTierId = 'shoestring' | 'mid' | 'premium' | 'luxury'
 
 /** The user's per-day allowance: total budget divided across the trip. */
 export function dailyAllowance(budget: number, days: number): number {
-  return Math.round(budget / Math.max(1, days))
+  if (!Number.isFinite(budget) || !Number.isFinite(days)) return 0
+  const safeBudget = Math.max(0, budget)
+  const safeDays = Math.max(1, Math.floor(days))
+  return Math.round(safeBudget / safeDays)
 }
 
 /** Which destination price-band a trip's per-day money can realistically cover. */
@@ -88,7 +91,9 @@ export function tierMismatchWarning(interests: string[], budget: number, days: n
  * without arithmetic — only meaningful overspending triggers a retry.
  */
 export function validatePlanBudget(stops: { cost: number }[], budget: number): string | null {
-  const total = stops.reduce((sum, s) => sum + s.cost, 0)
+  if (!Number.isFinite(budget) || budget < 0) return "Invalid budget"
+  const total = stops.reduce((sum, s) => sum + (Number.isFinite(s.cost) ? s.cost : 0), 0)
+  if (!Number.isFinite(total)) return "Invalid plan costs"
   if (total > Math.ceil(budget * 1.15)) {
     return `total cost KES ${total.toLocaleString()} exceeds the KES ${budget.toLocaleString()} budget — pick a cheaper destination or cut costs`
   }

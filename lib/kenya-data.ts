@@ -25,13 +25,6 @@ export const categories: { id: Vertical; label: string }[] = [
   { id: "taxis", label: "Taxis" },
 ]
 
-export const itinerary = [
-  { day: 1, time: "09:00", title: "Arrive & settle into Nairobi", place: "Westlands, Nairobi", cost: 14200, kind: "Stay" },
-  { day: 2, time: "07:00", title: "Drive to the Maasai Mara", place: "Narok County", cost: 12500, kind: "Transport" },
-  { day: 2, time: "15:30", title: "Golden-hour game drive", place: "Mara Triangle", cost: 6200, kind: "Experience" },
-  { day: 3, time: "06:00", title: "Sunrise over the savannah", place: "Mara River", cost: 4800, kind: "Experience" },
-]
-
 // Canonical KES formatter. The currency symbol prefix is pinned (en-KE's ICU
 // renders "Ksh" with locale-dependent spacing, which drifts between runtimes);
 // only the numeric portion uses the locale so grouping stays correct.
@@ -59,6 +52,3 @@ export function wikimediaThumb(url: string, width = 960): string {
   }
   return url
 }
-
-export const STALE_AFTER_MS = 24 * 60 * 60 * 1000
-export const totalCost = itinerary.reduce((sum, stop) => sum + stop.cost, 0)

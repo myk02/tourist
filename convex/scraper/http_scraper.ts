@@ -1,11 +1,38 @@
 import { v } from "convex/values"
 import { internalAction } from "../_generated/server"
-import { api, internal } from "../_generated/api"
+import { internal } from "../_generated/api"
 import { STALE_AFTER_MS } from "./constants"
 
 const USER_AGENT = "KenyaTrace/1.0 (compatible; Bot for scraping Kenya travel data)"
 const MAX_RETRIES = 3
 const REQUEST_DELAY = 1000
+
+/**
+ * Source tags written to listings.source so the UI can honestly label each
+ * card. Anything not from Wikipedia or Firecrawl is ESTIMATED — the http
+ * scraper does not have commercial agreements with booking sites and falls
+ * back to placeholder pricing when the page structure changes. Marking these
+ * rows lets the Discover UI show "Estimated" badges rather than implying
+ * real-time inventory.
+ */
+export const SOURCE = {
+  estimated: "scraper:estimated",
+  wikipedia: "wikipedia",
+  firecrawl: "firecrawl",
+} as const
+
+/** Deterministic pseudo-random so the same input always yields the same
+ *  rating/reviews — avoids churn on every scrape refresh. */
+function stableRating(seed: string): number {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0
+  return 4.2 + ((Math.abs(h) % 100) / 100) * 0.7
+}
+function stableReviews(seed: string, min: number, max: number): number {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 17 + seed.charCodeAt(i)) | 0
+  return min + (Math.abs(h) % (max - min))
+}
 
 const TAXI_SKYLINE = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Nairobi_Skyline_Savannah_Kenya_May19_R1600687.jpg/960px-Nairobi_Skyline_Savannah_Kenya_May19_R1600687.jpg"
 const DIANI_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2d/Diani_Beach_Ukunda.jpg/960px-Diani_Beach_Ukunda.jpg"
@@ -30,7 +57,7 @@ async function fetchHTML(url: string, retry = 0): Promise<string | null> {
     })
     if (!response.ok) {
       if (retry < MAX_RETRIES) {
-        await sleep(REQUEST_DELAY * retry)
+        await sleep(REQUEST_DELAY * (retry + 1))
         return fetchHTML(url, retry + 1)
       }
       return null
@@ -38,7 +65,7 @@ async function fetchHTML(url: string, retry = 0): Promise<string | null> {
     return await response.text()
   } catch {
     if (retry < MAX_RETRIES) {
-      await sleep(REQUEST_DELAY * retry)
+      await sleep(REQUEST_DELAY * (retry + 1))
       return fetchHTML(url, retry + 1)
     }
     return null
@@ -84,15 +111,15 @@ async function parseBookingResults(html: string, now: number, source: string): P
       location: extractLocation(html, match.index),
       price,
       unit: "night",
-      rating,
-      reviews,
+      rating: rating || stableRating(match[2] ?? "stay"),
+      reviews: reviews || stableReviews(match[2] ?? "stay", 20, 400),
       image: extractImageFromHtml(html, match.index),
-      tags: ["Scraped", source],
+      tags: ["Estimated", source],
       description: `Accommodation in Kenya`,
       lat: 0,
       lng: 0,
       scrapedAt: now,
-      source: "scraper",
+      source: SOURCE.estimated,
     })
   }
 
@@ -134,15 +161,15 @@ function parseFlightResults(html: string, now: number, route: any): any[] {
         location: `${route.from}, Kenya → ${route.to}, Kenya`,
         price,
         unit: "one way",
-        rating: 4.4 + Math.random() * 0.3,
-        reviews: Math.floor(Math.random() * 200) + 50,
+        rating: stableRating(`${route.from}-${route.to}`),
+        reviews: stableReviews(`${route.from}-${route.to}`, 50, 250),
         image: "https://upload.wikimedia.org/wikipedia/commons/e/ee/5Y-KZC_Boeing_787_Kenya_Airways_%2834754105944%29.jpg",
-        tags: ["Domestic", "Scraped"],
+        tags: ["Domestic", "Estimated"],
         description: `Flight from ${route.from} to ${route.to}.`,
         lat: -1.3192,
         lng: 36.9278,
         scrapedAt: now,
-        source: "scraper",
+        source: SOURCE.estimated,
       })
     }
   }
@@ -183,15 +210,15 @@ function parseActivityResults(html: string, now: number, act: any): any[] {
         location: act.location,
         price,
         unit: "person",
-        rating: 4.3 + Math.random() * 0.5,
-        reviews: Math.floor(Math.random() * 300) + 50,
+        rating: stableRating(match[1] ?? act.name),
+        reviews: stableReviews(match[1] ?? act.name, 50, 350),
         image: "https://upload.wikimedia.org/wikipedia/commons/1/17/Masai_Mara_at_Sunset.jpg",
-        tags: ["Tour", "Scraped", act.name],
+        tags: ["Tour", "Estimated", act.name],
         description: `${match[1]?.trim()} experience in ${act.location}.`,
         lat: 0,
         lng: 0,
         scrapedAt: now,
-        source: "scraper",
+        source: SOURCE.estimated,
       })
     }
   }
@@ -221,15 +248,15 @@ async function scrapeAttractions(ctx: any, now: number): Promise<any[]> {
             location: "Kenya",
             price,
             unit: "person",
-            rating: 3.5 + Math.random() * 1.5,
-            reviews: Math.floor(Math.random() * 500) + 50,
+            rating: stableRating(pageData.title),
+            reviews: stableReviews(pageData.title, 50, 550),
             image: pageData.image || "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Giraffe_Centre_August_2025_04.jpg/800px-Giraffe_Centre_August_2025_04.jpg",
-            tags: ["Attraction", "Scraped"],
+            tags: ["Attraction", "Wikipedia"],
             description: pageData.description.slice(0, 300) || pageData.extract?.slice(0, 300) || "",
             lat: pageData.lat || 0,
             lng: pageData.lng || 0,
             scrapedAt: now,
-            source: "wikipedia",
+            source: SOURCE.wikipedia,
           })
         }
       }
@@ -242,10 +269,15 @@ async function scrapeAttractions(ctx: any, now: number): Promise<any[]> {
 
 function estimateAttractionPrice(name: string): number {
   const lower = name.toLowerCase()
-  if (lower.includes("park") || lower.includes("reserve")) return 1000 + Math.random() * 3000
-  if (lower.includes("museum")) return 500 + Math.random() * 1500
-  if (lower.includes("beach")) return 500 + Math.random() * 2000
-  return 500 + Math.random() * 1500
+  let base = 500
+  let spread = 1500
+  if (lower.includes("park") || lower.includes("reserve")) { base = 1000; spread = 3000 }
+  else if (lower.includes("museum")) { base = 500; spread = 1500 }
+  else if (lower.includes("beach")) { base = 500; spread = 2000 }
+  // Deterministic per attraction so prices don't jitter on each refresh.
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0
+  return Math.round(base + (Math.abs(h) % spread))
 }
 
 async function fetchWikiAPI(url: string): Promise<any> {
@@ -297,15 +329,15 @@ async function scrapeCars(ctx: any, now: number): Promise<any[]> {
       location: "Pickup in Nairobi",
       price: car.price,
       unit: "day",
-      rating: 4.4 + Math.random() * 0.5,
-      reviews: Math.floor(Math.random() * 300) + 50,
+      rating: stableRating(car.name),
+      reviews: stableReviews(car.name, 50, 350),
       image: car.image,
       tags: car.tags,
       description: `${car.name} for rent in Nairobi.`,
       lat: -1.3192,
       lng: 36.9278,
       scrapedAt: now,
-      source: "scraper",
+      source: SOURCE.estimated,
     })
   }
 
@@ -331,15 +363,15 @@ async function scrapeTaxis(ctx: any, now: number): Promise<any[]> {
       location: `${route.from} → ${route.to}, Kenya`,
       price: route.price,
       unit: "ride",
-      rating: 4.3 + Math.random() * 0.4,
-      reviews: Math.floor(Math.random() * 1000) + 500,
+      rating: stableRating(`${route.from}-${route.to}`),
+      reviews: stableReviews(`${route.from}-${route.to}`, 500, 1500),
       image: taxiImage(route.to),
-      tags: ["Ride-hailing", "Scraped"],
+      tags: ["Ride-hailing", "Estimated"],
       description: `Transfer from ${route.from} to ${route.to}.`,
       lat: -1.2864,
       lng: 36.8172,
       scrapedAt: now,
-      source: "scraper",
+      source: SOURCE.estimated,
     })
   }
 
@@ -405,11 +437,16 @@ export const scrapeVertical = internalAction({
     try {
       const items = await scraper(ctx, now)
       if (items.length > 0) {
-        await ctx.runMutation(api.listings.upsertScraped, { vertical, items })
+        await ctx.runMutation(internal.listings.upsertScraped, { vertical, items })
         console.log(`[scraper] ${vertical}: scraped ${items.length} items`)
+      } else {
+        throw new Error(`Scrape for ${vertical} returned no items`)
       }
     } catch (error) {
       console.error(`[scraper] ${vertical}: failed -`, error)
+      // Rethrow so callers report failure instead of claiming a successful
+      // refresh that never wrote anything.
+      throw new Error(`Scrape for ${vertical} failed: ${String(error)}`, { cause: error })
     }
   },
 })

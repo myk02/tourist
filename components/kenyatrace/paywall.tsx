@@ -2,14 +2,16 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { SignInButton, useUser } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
 import { useAction, useConvexAuth, useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { CalendarClock, Camera, Check, CircleUserRound, Compass, Heart, Loader2, Sparkles, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatKES } from '@/lib/kenya-data'
+import { toMinorKES } from '@/lib/money'
 import { readCache, writeCache } from '@/lib/offline-cache'
 import { loadPaystackScript } from '@/lib/paystack-inline'
 import { PLAN_PRICES } from '@/lib/plans'
@@ -19,13 +21,21 @@ type Status = NonNullable<ReturnType<typeof useQuery<typeof api.subscriptions.ge
 
 // Prices come from lib/plans.ts (single source of truth shared with the
 // Convex backend), so what the UI shows is always what gets charged.
+// Per-day and savings lines are DERIVED, never hardcoded — a price change in
+// plans.ts flows through automatically instead of silently drifting.
+function perDay(price: number, days: number): string {
+  return `≈ KES ${Math.round(price / days)}/day`
+}
+// Monthly vs the pro-rata weekly rate for the same 30 days.
+const MONTHLY_SAVINGS = Math.max(0, Math.round((30 * (PLAN_PRICES[7] / 7)) - PLAN_PRICES[30]))
+
 export const PLANS = [
   {
     days: 7,
     name: 'Weekly pack',
     price: PLAN_PRICES[7],
     suffix: '7 days',
-    perDay: '≈ KES 14/day',
+    perDay: perDay(PLAN_PRICES[7], 7),
     duration: '7 days of full access',
     benefits: ['Plan unlimited Kenya trips', 'Live tracking & share traces', 'Save spots & moments'],
     popular: false,
@@ -35,8 +45,8 @@ export const PLANS = [
     name: 'Monthly pack',
     price: PLAN_PRICES[30],
     suffix: 'month',
-    perDay: '≈ KES 13/day',
-    savings: 'Save KES 70',
+    perDay: perDay(PLAN_PRICES[30], 30),
+    savings: MONTHLY_SAVINGS > 0 ? `Save KES ${MONTHLY_SAVINGS}` : undefined,
     duration: '30 days of full access',
     benefits: ['Everything in Weekly', 'More than 4× the days', 'Best per-day value', 'No auto-renewal'],
     popular: true,
@@ -181,7 +191,7 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
       const handler = window.PaystackPop.setup({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
         email,
-        amount: amount * 100, // KES → minor units
+        amount: toMinorKES(amount), // KES → minor units
         currency: 'KES',
         ref: reference,
         callback: () => { void confirm() },
@@ -191,6 +201,9 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
         },
       })
       handler.openIframe()
+      // M-Pesa STK guidance: the prompt lands on the payer's phone, not in
+      // this tab — tell them where to look or first-time payers stall here.
+      toast.info('Check your phone — enter your M-Pesa PIN to complete payment')
     } catch (error) {
       busyRef.current = false
       setBusy(null)
@@ -234,9 +247,7 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
   return (
     <div className={cn('mx-auto flex w-full flex-col', compact ? 'gap-4 max-w-3xl' : 'max-w-3xl gap-6 px-5 py-16')}>
       <div className="flex flex-col items-center gap-2.5 text-center">
-        <span className={cn('flex items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-pop', compact ? 'size-10' : 'size-14')}>
-          <Sparkles className={compact ? 'size-5' : 'size-7'} />
-        </span>
+        <BrandMark icon="sparkles" size={compact ? 'sm' : 'lg'} className="shadow-pop" />
         <h1 className={cn('font-serif font-semibold tracking-tight text-balance', compact ? 'text-xl' : 'text-4xl')}>Pick a plan</h1>
         <p className="max-w-md text-muted-foreground">
           {status.mode === 'none' ? 'Your 30-day free trial has ended.' : 'Your access has ended.'} Pay with M-Pesa — one-time packs, no auto-renewal.
@@ -279,11 +290,23 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
  */
 export function PaywallDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const status = useQuery(api.subscriptions.getStatus)
-  if (!status) return null
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[86svh] overflow-y-auto p-5 sm:max-w-xl">
-        <PaywallScreen status={status} compact />
+        <DialogHeader>
+          <DialogTitle>Pick a plan</DialogTitle>
+          <DialogDescription>Choose a day pack to continue planning</DialogDescription>
+        </DialogHeader>
+        {status === undefined ? (
+          <div className="kt-shimmer h-48 rounded-2xl" />
+        ) : status === null ? (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-sm text-muted-foreground">Sign in to pick a day pack and continue planning.</p>
+            <Button nativeButton={false} render={<Link href="/sign-in" />}>Sign in to continue</Button>
+          </div>
+        ) : (
+          <PaywallScreen status={status} compact />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -351,7 +374,9 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
         <span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8" /></span>
         <h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1>
         <p className="text-muted-foreground">Sign in to plan routes, save reservations, live traces and moments.</p>
-        <SignInButton mode="modal"><Button size="lg">Sign in to continue</Button></SignInButton>
+        <Button size="lg" nativeButton={false} render={<Link href="/sign-in" />}>
+          Sign in to continue
+        </Button>
       </div>
     )
   }

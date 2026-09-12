@@ -11,6 +11,8 @@ import { CalendarClock, Camera, Copy, CopyPlus, FileDown, Images, LocateFixed, M
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { GradientHero } from '@/components/ui/kt/gradient-hero'
+import { PageLoading } from '@/components/ui/kt/loading'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -19,7 +21,7 @@ import { geocodeArea } from '@/lib/geocode'
 import { buildPrintableItinerary, type PrintableItinerary } from '@/lib/itinerary'
 import { downloadItineraryImage } from '@/lib/itinerary-image'
 import { formatKES } from '@/lib/kenya-data'
-import { localDateOnly } from '@/lib/dates'
+import { localDateOnly, prettyDate } from '@/lib/dates'
 import { ItineraryEditor } from './itinerary-editor'
 import { KenyaMap } from './kenya-map'
 import { MomentAlbum } from './moment-album'
@@ -129,9 +131,9 @@ export function TripDetail() {
   // declarations, so handlers and JSX below use the guaranteed non-null id.
   if (id == null) return <NotFound />
   const tripId = id
-  if (trip === undefined) return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-72 rounded-2xl" /></div>
+  if (trip === undefined) return <PageLoading label="Loading trip" className="mx-auto max-w-6xl p-8" shimmerClassName="h-72 rounded-2xl" />
   if (!trip) {
-    if (inviteState === 'accepting') return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-72 rounded-2xl" /></div>
+    if (inviteState === 'accepting') return <PageLoading label="Accepting trip invite" className="mx-auto max-w-6xl p-8" shimmerClassName="h-72 rounded-2xl" />
     if (inviteState === 'signin') {
       return (
         <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
@@ -209,8 +211,9 @@ export function TripDetail() {
       )
     }
     if (stage === 'past') {
+      const token = (trip as { traceShareToken?: string }).traceShareToken
       return (
-        <Button variant="secondary" nativeButton={false} render={<Link href={`/recap/${trip._id}`} />}>
+        <Button variant="secondary" nativeButton={false} render={<Link href={token ? `/recap/${trip._id}?t=${token}` : `/recap/${trip._id}`} />}>
           <Images data-icon="inline-start" />View recap
         </Button>
       )
@@ -340,6 +343,9 @@ export function TripDetail() {
   }
 
   async function handleSave(stops: Stop[]) {
+    const completionByKey = Object.fromEntries(
+      trip!.stops.map(s => [`${s.day}|${s.reason ?? s.name}`, s.completedAt]),
+    )
     try {
       await replaceStops({
         tripId,
@@ -365,7 +371,7 @@ export function TripDetail() {
           travelKm: s.travelKm,
           travelMins: s.travelMins,
           travelRouted: s.travelRouted,
-          completedAt: s.completedAt,
+          completedAt: s.completedAt ?? completionByKey[`${s.day}|${s.reason ?? s.title}`],
         })),
       })
       toast.success('Itinerary saved')
@@ -374,15 +380,15 @@ export function TripDetail() {
     }
   }
 
-  const stops = trip.stops.map(s => ({ day: s.day, time: s.time, title: s.name, place: s.place, cost: s.cost, kind: s.kind, lat: s.lat, lng: s.lng, locked: s.locked, reason: s.reason, verified: s.verified, duration: s.duration, source: s.source as 'catalog' | 'gap' | undefined, listingId: s.listingId, vertical: s.vertical, unit: s.unit, image: s.image, travelKm: s.travelKm, travelMins: s.travelMins, travelRouted: s.travelRouted }))
+  const stops = trip.stops.map(s => ({ day: s.day, time: s.time, title: s.name, place: s.place, cost: s.cost, kind: s.kind, lat: s.lat, lng: s.lng, locked: s.locked, reason: s.reason, verified: s.verified, duration: s.duration, source: s.source as 'catalog' | 'gap' | undefined, listingId: s.listingId, vertical: s.vertical, unit: s.unit, image: s.image, travelKm: s.travelKm, travelMins: s.travelMins, travelRouted: s.travelRouted, completedAt: s.completedAt }))
   const activeBookings = (bookings ?? []).filter(b => b.status !== 'cancelled')
   const bookingsTotal = activeBookings.reduce((sum, b) => sum + b.amount, 0)
   return (
     <RequireSubscription enabled={requireSubscription}>
     <div className="mx-auto flex max-w-6xl flex-col gap-7 px-5 py-8">
-      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-[color-mix(in_oklch,var(--primary),#000_28%)] px-6 py-10 text-primary-foreground shadow-lift ring-1 ring-primary/20 md:px-10">
+      <GradientHero className="px-6 py-10 md:px-10">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge className="bg-accent text-accent-foreground">{trip.startDate} — {trip.endDate}</Badge>
+          <Badge className="bg-accent text-accent-foreground">{prettyDate(trip.startDate)} — {prettyDate(trip.endDate)}</Badge>
           <Badge className="bg-primary-foreground/20 text-primary-foreground">{stageChip}</Badge>
           {!isOwner && <Badge className="bg-accent text-accent-foreground">{myRole === 'editor' ? 'Shared with you · Editor' : 'Shared with you · Viewer'}</Badge>}
         </div>
@@ -453,7 +459,7 @@ export function TripDetail() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
+      </GradientHero>
       {stage === 'active' && (
         <TodayCard
           tripId={tripId}
@@ -515,6 +521,15 @@ export function TripDetail() {
                 <p className="text-sm text-muted-foreground">Reservations linked to this trip</p>
                 <ForwardBookingDialog tripId={tripId} />
               </div>
+              {bookings !== undefined && (() => {
+                const unpaid = bookings.filter(b => b.status !== 'paid' && b.status !== 'cancelled' && b.amount > 0)
+                const unpaidTotal = unpaid.reduce((s, b) => s + b.amount, 0)
+                return unpaid.length > 0 ? (
+                  <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-800 dark:text-amber-200">
+                    <strong>{formatKES(unpaidTotal)}</strong> outstanding across {unpaid.length} reservation{unpaid.length === 1 ? '' : 's'} — pay below to lock {unpaid.length === 1 ? 'it' : 'them'} in.
+                  </p>
+                ) : null
+              })()}
               {bookings === undefined ? (
                 <div className="kt-shimmer h-28 rounded-xl" />
               ) : bookings.length > 0 ? (

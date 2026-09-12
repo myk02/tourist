@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowRight, BedDouble, MapPin, Plus, RefreshCw, Star } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SuggestedBadge, VerifiedBadge } from '@/components/ui/kt/badges'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatKES } from '@/lib/kenya-data'
 import { haversineKm } from '@/lib/travel'
@@ -232,8 +233,8 @@ export function WhereYouStay({ stops, listings, budgetPerDay, origin, destinatio
                       <ListingImage src={s.image} alt={s.title} fill className="object-cover" sizes="176px" />
                     </div>
                   ) : (
-                    <div className="flex h-40 w-full shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-accent/15 sm:h-28 sm:w-44">
-                      <BedDouble className="size-8 text-primary/60" />
+                    <div className="flex h-40 w-full shrink-0 items-center justify-center rounded-xl bg-muted sm:h-28 sm:w-44">
+                      <BedDouble className="size-8 text-muted-foreground" />
                     </div>
                   )}
 
@@ -248,9 +249,9 @@ export function WhereYouStay({ stops, listings, budgetPerDay, origin, destinatio
                       </p>
                       <Badge className="text-[10px]">Stay</Badge>
                       {s.verified ? (
-                        <Badge className="bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300">Verified</Badge>
+                        <VerifiedBadge className="text-[10px]" />
                       ) : (
-                        <Badge variant="outline" className="border-amber-500/40 text-[10px] text-amber-700 dark:text-amber-300">Suggested</Badge>
+                        <SuggestedBadge className="text-[10px]" />
                       )}
                     </div>
                     <p className="mt-0.5 text-sm text-muted-foreground"><MapPin className="mr-1 inline size-3.5 align-[-2px]" />{s.place}</p>

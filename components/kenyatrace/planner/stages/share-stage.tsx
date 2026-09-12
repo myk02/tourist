@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Camera, Check, Copy, Flag, Loader2, MapPin, MessageCircle, Send, Share2, Star } from 'lucide-react'
+import Link from 'next/link'
+import { Camera, Check, Copy, Flag, Loader2, MapPin, MessageCircle, Send, Share2, Star, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { BrandMark } from '@/components/ui/kt/brand-mark'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -50,7 +52,7 @@ export function ShareStage() {
       ) : draft.published ? (
         <div className="flex flex-col gap-5">
           <div className="flex items-center gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-5 shadow-soft">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-xs"><Check className="size-6" /></span>
+            <BrandMark icon="check" />
             <div>
               <p className="font-semibold">Your experience is live</p>
               <p className="text-sm text-muted-foreground">Anyone with the link can see your photos, videos and {draft.rating}/5 rating.</p>
@@ -100,15 +102,15 @@ export function ShareStage() {
                         {f.video ? (
                           <video src={fileUrls.get(f.file) ?? ''} className="size-full object-cover" muted playsInline />
                         ) : (
-                          <ListingImage src={fileUrls.get(f.file) ?? ''} alt="" fill className="object-cover" sizes="160px" />
+                          <ListingImage src={fileUrls.get(f.file) ?? ''} alt={`Preview of ${f.file.name}`} fill className="object-cover" sizes="160px" />
                         )}
                         <button
                           type="button"
-                          aria-label="Remove file"
+                          aria-label={`Remove ${f.file.name}`}
                           onClick={() => removeFile(i)}
-                          className="absolute right-1 top-1 flex size-6 items-center justify-center rounded-full bg-black/60 text-xs text-white"
+                          className="absolute right-1 top-1 flex size-8 items-center justify-center rounded-full bg-black/60 text-white after:absolute after:-inset-2 after:content-['']"
                         >
-                          ✕
+                          <X className="size-4" />
                         </button>
                       </div>
                     ))}
@@ -151,7 +153,7 @@ export function DoneStage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 py-6 text-center">
-      <span className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),#000_25%)] text-primary-foreground shadow-pop"><Flag className="size-8" /></span>
+      <BrandMark icon="flag" size="lg" className="rounded-full shadow-pop" />
       <h1 className="font-serif text-4xl font-semibold tracking-tight">Session complete</h1>
       <p className="max-w-md text-muted-foreground">
         {plan ? `You planned ${plan.destination} from ${draft.origin} over ${draft.days} day${draft.days === 1 ? '' : 's'} on a ${formatKES(draft.budget)} budget${draft.rating ? `, and rated it ${draft.rating}/5` : ''}.` : 'Your Kenya journey is complete.'}
@@ -165,7 +167,7 @@ export function DoneStage() {
 
       <div className="mt-2 flex flex-wrap justify-center gap-3">
         <Button size="lg" onClick={resetSession} className="gap-2"><MapPin className="size-4" />Start a new session</Button>
-        <Button variant="outline" nativeButton={false} render={<a href="/trips" />}>View my trips</Button>
+        <Button variant="outline" nativeButton={false} render={<Link href="/trips" />}>View my trips</Button>
       </div>
       <p className="text-xs text-muted-foreground">Every session plans one destination — pick a new one and go again.</p>
     </div>
