@@ -37,12 +37,12 @@ const applyDayPackRef = makeFunctionReference<
   "mutation",
   { purchaseId: Id<"subscriptionPurchases"> },
   void
->("subscription_helpers/applyDayPack")
+>("subscription_helpers:applyDayPack")
 const getPurchaseForVerifyRef = makeFunctionReference<
   "query",
   { purchaseId: Id<"subscriptionPurchases">; ownerId: string },
   Doc<"subscriptionPurchases"> | null
->("subscription_helpers/getForVerify")
+>("subscription_helpers:getPurchaseForVerify")
 
 /**
  * Server-side enforcement used by content-creating mutations across the app.

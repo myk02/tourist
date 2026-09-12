@@ -19,12 +19,12 @@ const applyDayPackByChargeRef = makeFunctionReference<
   "mutation",
   { reference: string; email: string; amount: number; currency: string },
   { applied: boolean }
->("subscription_helpers/applyDayPackByCharge")
+>("subscription_helpers:applyDayPackByCharge")
 const markPaidByChargeRef = makeFunctionReference<
   "mutation",
   { reference: string; email: string; amount: number; currency: string },
   { applied: boolean }
->("payments_helpers/markPaidByCharge")
+>("payments_helpers:markPaidByCharge")
 
 const http = httpRouter()
 

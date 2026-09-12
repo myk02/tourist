@@ -12,12 +12,12 @@ const getForVerifyRef = makeFunctionReference<
   "query",
   { paymentId: Id<"payments">; ownerId: string },
   Doc<"payments"> | null
->("payments_helpers/getForVerify")
+>("payments_helpers:getForVerify")
 const markPaidRef = makeFunctionReference<
   "mutation",
   { paymentId: Id<"payments"> },
   void
->("payments_helpers/markPaid")
+>("payments_helpers:markPaid")
 
 const PAYSTACK_BASE = "https://api.paystack.co"
 

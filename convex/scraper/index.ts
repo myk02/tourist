@@ -30,7 +30,7 @@ const searchWithScrapeRef = makeFunctionReference<
   "action",
   { vertical: string },
   Record<string, unknown>
->("scraper/index/searchWithScrape")
+>("scraper/index:searchWithScrape")
 
 export const searchWithScrape = action({
   args: { vertical: v.string() },
