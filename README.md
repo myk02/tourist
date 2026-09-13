@@ -1,5 +1,10 @@
 # KenyaTrace
 
+[![Live app](https://img.shields.io/badge/live-kenyatrace.vercel.app-brightgreen)](https://kenyatrace.vercel.app)
+![Next.js](https://img.shields.io/badge/next.js-16-black)
+![Convex](https://img.shields.io/badge/backend-convex-orange)
+![M-Pesa](https://img.shields.io/badge/payments-M--Pesa-green)
+
 **Travel Kenya your way.**
 
 KenyaTrace is a Kenya-first travel companion: plan an itinerary, explore stays and things to do, pay with M-Pesa, share a live GPS trace with people at home, pin moments on the road, and open a recap when the trip is done.
@@ -118,3 +123,7 @@ python deploy.py "your commit message"
 ---
 
 KenyaTrace is built for travellers moving through Kenya — safaris, coast, highlands, and the city in between.
+
+---
+
+Built by [Mike Waitindi](https://mikeships.vercel.app).
