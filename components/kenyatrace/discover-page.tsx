@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils'
 import { toReplaceStopsPayload } from '@/lib/stop-fields'
 import { KenyaMap, toPoint } from './kenya-map'
 import { ListingImage, isLiveSource } from './shared'
-import { TaxiFareEstimator } from './taxi-fare-estimator'
 
 const NEAR_KM = 100
 
@@ -681,11 +680,6 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-5">
-          {/* Fare estimator — taxis only. Sits above the route cards. */}
-          {vertical === 'taxis' && (
-            <TaxiFareEstimator routes={(filteredItems ?? []).map(r => ({ _id: r._id, name: r.name, location: r.location }))} />
-          )}
-
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visible ? (
               visible.map(item => {
@@ -771,13 +765,12 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
             </Button>
           )}
 
-          {filteredItems && filteredItems.length === 0 && (
-            vertical === 'taxis' ? (
+          {filteredItems && filteredItems.length === 0 && (              vertical === 'taxis' ? (
               <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed py-12 text-center">
                 <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><Car className="size-6" /></span>
                 <div>
                   <p className="font-serif text-2xl font-semibold tracking-tight">No rides match your filters</p>
-                  <p className="mx-auto mt-1 text-sm text-muted-foreground">Try the fare estimator above, or clear your filters.</p>
+                  <p className="mx-auto mt-1 text-sm text-muted-foreground">Try clearing your filters, or browse rental cars instead.</p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button variant="outline" nativeButton={false} render={<Link href="/discover/cars" />}>Rent a car</Button>

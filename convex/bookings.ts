@@ -34,7 +34,18 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) throw new Error("Sign in required")
   await requireActiveAccess(ctx.db, identity.subject)
-  if (!["Stay", "Transport", "Experience", "Food", "Flight"].includes(args.type)) throw new Error("Invalid booking type")
+  // The listing page sends the vertical ("stays", "taxis", "attractions", …)
+  // while other flows send a kind ("Stay", "Flight", …). Normalize a known
+  // vertical to its booking kind so both shapes validate — the raw vertical
+  // was rejected as "Invalid booking type", breaking every reservation made
+  // from a listing page. Anything else still throws below.
+  const VERTICALS = ["stays", "flights", "attractions", "cars", "taxis"]
+  const type = ["Stay", "Transport", "Experience", "Food", "Flight"].includes(args.type)
+    ? args.type
+    : VERTICALS.includes(args.type)
+      ? kindFromVertical(args.type)
+      : args.type
+  if (!["Stay", "Transport", "Experience", "Food", "Flight"].includes(type)) throw new Error("Invalid booking type")
   if (args.guests !== undefined && (!Number.isInteger(args.guests) || args.guests < 1 || args.guests > 20)) throw new Error("Guests must be 1-20")
   if (!Number.isFinite(args.amount) || args.amount < 0 || args.amount > 10_000_000) throw new Error("Invalid amount")
   if (args.checkIn && !/^\d{4}-\d{2}-\d{2}$/.test(args.checkIn)) throw new Error("Invalid checkIn date")
@@ -47,9 +58,6 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
   const listing = await ctx.db.get(args.listingId as Id<"listings">)
   if (!listing) throw new Error("Listing not found")
   if (args.amount !== listing.price) throw new Error("Reservation price does not match the current listing price")
-  if (args.type !== kindFromVertical(listing.vertical) && !(args.type === "Food" && listing.vertical === "taxis")) {
-    // Allow but don't enforce strictly — vertical mapping is helper
-  }
   const reference = `KT-${crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`
 
   // When the reservation is linked to a trip, mirror it as a trip stop so it
@@ -91,7 +99,7 @@ export const create = mutation({ args: { listingId: v.string(), type: v.string()
     }
   }
 
-  await ctx.db.insert("bookings", { ...args, ownerId: identity.subject, status: "requested", paymentMethod: "not-collected", reference, stopId })
+  await ctx.db.insert("bookings", { ...args, type, ownerId: identity.subject, status: "requested", paymentMethod: "not-collected", reference, stopId })
   return reference
 }})
 
@@ -116,7 +124,11 @@ export const createFromEmail = mutation({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Sign in required")
     await requireActiveAccess(ctx.db, identity.subject)
-    if (!["Stay", "Transport", "Experience", "Flight", "Food"].includes(args.type)) throw new Error("Invalid booking type")
+    // "General" is the regex/AI parser's fallback for emails with no
+    // hotel/flight/transport keywords — it must be accepted here or the
+    // forward-a-confirmation dialog fails at save time (it maps to an
+    // Experience stop below).
+    if (!["Stay", "Transport", "Experience", "Flight", "Food", "General"].includes(args.type)) throw new Error("Invalid booking type")
     if (args.guests !== undefined && (!Number.isInteger(args.guests) || args.guests < 1 || args.guests > 20)) throw new Error("Guests must be 1-20")
     if (args.checkIn && (!/^\d{4}-\d{2}-\d{2}$/.test(args.checkIn) || Number.isNaN(Date.parse(args.checkIn)))) throw new Error("Invalid checkIn date")
     if (args.checkOut && (!/^\d{4}-\d{2}-\d{2}$/.test(args.checkOut) || Number.isNaN(Date.parse(args.checkOut)))) throw new Error("Invalid checkOut date")

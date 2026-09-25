@@ -7,7 +7,7 @@ import { SignInButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { CalendarClock, Camera, Copy, CopyPlus, FileDown, Images, LocateFixed, Map, MoreHorizontal, Printer, Route, Trash2, Users } from 'lucide-react'
+import { CalendarClock, CalendarPlus, Camera, Copy, CopyPlus, FileDown, Images, LocateFixed, Map, MoreHorizontal, Printer, Route, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,13 +26,17 @@ import { ItineraryEditor } from './itinerary-editor'
 import { KenyaMap } from './kenya-map'
 import { MomentAlbum } from './moment-album'
 import { BudgetDashboard } from './budget-dashboard'
+import { CalendarSyncDialog } from './calendar-sync'
+import { ExpenseLog } from './expense-log'
 import { ForwardBookingDialog } from './forward-booking'
+import { PackingChecklist } from './packing-checklist'
 import { ShareTripDialog } from './share-trip'
 import { BookingRow, BudgetBar, NotFound, useTripId } from './shared'
 import { RequireSubscription } from './paywall'
 import { TripBriefCard } from './trip-brief'
 import { TripChecklist } from './trip-checklist'
 import { TodayCard } from './today-card'
+import { WeatherStrip } from './weather-strip'
 import type { Stop } from './types'
 
 // ─── Trip stage: the hub reorders itself around where the traveller is ──────
@@ -76,6 +80,7 @@ export function TripDetail() {
   const enableTraceShare = useMutation(api.trips.enableTraceShare)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [inviteState, setInviteState] = useState<'idle' | 'accepting' | 'signin' | 'error'>('idle')
 
@@ -188,7 +193,9 @@ export function TripDetail() {
   }
 
   // Tabs persist in the URL so back-navigation and shared links land on the
-  // same view; past trips open on Moments for the owner.
+  // same view; past trips open on Moments for the owner. Weather, packing and
+  // expenses ride the itinerary/budget tabs respectively (matching Wanderlog,
+  // where forecast and packing live beside the plan).
   const TAB_IDS = ['itinerary', 'route', 'budget', 'bookings', 'moments']
   const defaultTab = stage === 'past' && isOwner ? 'moments' : 'itinerary'
   const requestedTab = params.get('tab')
@@ -424,6 +431,9 @@ export function TripDetail() {
                   <Camera />Moments
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem onClick={() => setCalendarOpen(true)}>
+                <CalendarPlus />Sync to calendar
+              </DropdownMenuItem>
               {myRole !== 'viewer' && (
                 <DropdownMenuItem onClick={() => setShareOpen(true)}>
                   <Users />Invite &amp; share
@@ -469,6 +479,11 @@ export function TripDetail() {
           isOwner={isOwner}
         />
       )}
+      {/* Per-day forecast for where the traveller actually plans to be —
+          shown whenever the trip has dated stops (planning + on the road). */}
+      {trip.stops.length > 0 && (
+        <WeatherStrip stops={trip.stops} startDate={trip.startDate} />
+      )}
       {stage === 'active' && trip.stops.length > 0 && trip.stops.every(s => s.completedAt) && (
         <Card className="border-primary/40 bg-primary/5">
           <CardContent className="flex flex-wrap items-center gap-3 p-4">
@@ -506,6 +521,7 @@ export function TripDetail() {
           <TabsTrigger value="itinerary">Itinerary</TabsTrigger>
           <TabsTrigger value="route">Route map</TabsTrigger>
           <TabsTrigger value="budget">Budget</TabsTrigger>
+          <TabsTrigger value="packing">Packing</TabsTrigger>
           {isOwner && <TabsTrigger value="bookings">Bookings</TabsTrigger>}
           {isOwner && <TabsTrigger value="moments">Moments</TabsTrigger>}
         </TabsList>
@@ -513,7 +529,13 @@ export function TripDetail() {
           <ItineraryEditor initial={stops} budget={trip.budget} title={trip.name} defaultMobileView={route.length > 0 ? 'map' : 'list'} onSave={canEdit ? handleSave : undefined} readOnly={!canEdit} />
         </TabsContent>
         <TabsContent value="route"><KenyaMap points={routeMapPoints} highlight={routeHighlight} route={route} destIds={routeDestIds} /></TabsContent>
-        <TabsContent value="budget"><BudgetDashboard stops={stops} budget={trip.budget} totalCost={trip.totalCost} tripId={tripId} initialTravelers={trip.travelers} canEdit={canEdit} /></TabsContent>
+        <TabsContent value="budget">
+          <div className="flex flex-col gap-5">
+            <BudgetDashboard stops={stops} budget={trip.budget} totalCost={trip.totalCost} tripId={tripId} initialTravelers={trip.travelers} canEdit={canEdit} />
+            <ExpenseLog tripId={tripId} plannedTotal={trip.totalCost} travelers={trip.travelers ?? 2} canEdit={canEdit} />
+          </div>
+        </TabsContent>
+        <TabsContent value="packing"><PackingChecklist tripId={tripId} canEdit={canEdit} /></TabsContent>
         {isOwner && (
           <TabsContent value="bookings">
             <div className="flex flex-col gap-3">
@@ -550,6 +572,7 @@ export function TripDetail() {
       {myRole !== 'viewer' && (
         <ShareTripDialog tripId={tripId} tripName={trip.name} myRole={myRole} isOwner={isOwner} open={shareOpen} onOpenChange={setShareOpen} />
       )}
+      <CalendarSyncDialog tripId={tripId} open={calendarOpen} onOpenChange={setCalendarOpen} />
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Delete this trip?</DialogTitle><DialogDescription>This removes the trip and its stops permanently. This can't be undone.</DialogDescription></DialogHeader>

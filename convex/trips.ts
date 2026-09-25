@@ -242,6 +242,11 @@ export const remove = mutation({ args: { id: v.id("trips") }, handler: async (ct
   await Promise.all(votes.map(v => ctx.db.delete(v._id)))
   const notes = await ctx.db.query("dayNotes").withIndex("by_trip_day", q => q.eq("tripId", id)).collect()
   await Promise.all(notes.map(n => ctx.db.delete(n._id)))
+  // Cascade: packing list + expense log otherwise orphaned with dangling tripId
+  const packingItems = await ctx.db.query("packingItems").withIndex("by_trip", q => q.eq("tripId", id)).collect()
+  await Promise.all(packingItems.map(item => ctx.db.delete(item._id)))
+  const expenses = await ctx.db.query("expenses").withIndex("by_trip", q => q.eq("tripId", id)).collect()
+  await Promise.all(expenses.map(e => ctx.db.delete(e._id)))
   await ctx.db.delete(id)
 }})
 
@@ -480,8 +485,9 @@ export const checkedStopCount = query({ args: {}, handler: async ctx => {
 // ─── Group layer: stop votes + per-day notes (no chat — Tripnotes-lite) ──────
 
 /** Cast or clear the current user's thumb on an itinerary stop. Editors and
- *  owners only — viewers get read-only counts. */
-export const setStopVote = mutation({ args: { stopId: v.id("tripStops"), vote: v.union(v.literal("up"), v.literal("down"), v.null()) }, handler: async (ctx, { stopId, vote }) => {
+ *  owners only — viewers get read-only counts. Thumbs-up only: the UI never
+ *  casts a down vote, so the old down literal was removed. */
+export const setStopVote = mutation({ args: { stopId: v.id("tripStops"), vote: v.union(v.literal("up"), v.null()) }, handler: async (ctx, { stopId, vote }) => {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) throw new Error("Sign in required")
   const stop = await ctx.db.get(stopId)

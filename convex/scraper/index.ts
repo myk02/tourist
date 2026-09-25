@@ -17,6 +17,11 @@ import { STALE_AFTER_MS } from "./constants"
  * - `clearAndRescrape` is a force-refresh for one vertical. It never clears
  *   before scraping — `upsertScraped` is insert-then-sweep, so a failed scrape
  *   leaves the old catalog intact instead of an empty vertical.
+ *
+ * The old built-in http scraper was removed (its Booking.com/Skyscanner
+ * regexes never matched real pages, so it only emitted fabricated "Estimated"
+ * rows). Firecrawl is now the only scrape source; curated seed data covers
+ * every vertical when no key is configured.
  */
 
 const VERTICALS = ["stays", "flights", "attractions", "cars", "taxis"] as const
@@ -62,25 +67,20 @@ export const searchWithScrape = action({
       return { status: "skipped", reason: "curated_data" }
     }
 
-    // Prefer Firecrawl (richer, LLM-extracted listings) when the key is set,
-    // and fall back to the built-in http scraper on any failure.
+    // Firecrawl (richer, LLM-extracted listings) is the only scrape source.
+    // Without FIRECRAWL_API_KEY there is nothing to run — curated seed data
+    // keeps every vertical populated instead of fabricated estimates.
     if (process.env.FIRECRAWL_API_KEY) {
       try {
         console.log(`[scraper] ${vertical}: starting Firecrawl scrape`)
         const result: Record<string, unknown> = await ctx.runAction(internal.scraper.firecrawl.scrapeVertical, { vertical })
         return { status: "completed", source: "firecrawl", ...result }
       } catch (error) {
-        console.error(`[scraper] ${vertical}: Firecrawl failed (${String(error)}), falling back to http scraper`)
+        console.error(`[scraper] ${vertical}: Firecrawl failed -`, error)
+        return { status: "failed", source: "firecrawl", error: String(error) }
       }
     }
-    console.log(`[scraper] ${vertical}: starting http scrape`)
-    try {
-      await ctx.runAction(internal.scraper.http_scraper.scrapeVertical, { vertical })
-      return { status: "completed", source: "http" }
-    } catch (error) {
-      console.error(`[scraper] ${vertical}: http scrape failed -`, error)
-      return { status: "failed", source: "http", error: String(error) }
-    }
+    return { status: "skipped", reason: "no_scrape_provider" }
   },
 })
 
@@ -115,16 +115,11 @@ export const clearAndRescrape = internalAction({
         const result: Record<string, unknown> = await ctx.runAction(internal.scraper.firecrawl.scrapeVertical, { vertical })
         return { status: "completed", source: "firecrawl", ...result }
       } catch (error) {
-        console.error(`[scraper] ${vertical}: Firecrawl failed (${String(error)}), falling back to http scraper`)
+        console.error(`[scraper] ${vertical}: Firecrawl failed -`, error)
+        return { status: "failed", source: "firecrawl", error: String(error) }
       }
     }
-    try {
-      await ctx.runAction(internal.scraper.http_scraper.scrapeVertical, { vertical })
-      return { status: "completed", source: "http" }
-    } catch (error) {
-      console.error(`[scraper] ${vertical}: http scrape failed -`, error)
-      return { status: "failed", source: "http", error: String(error) }
-    }
+    return { status: "skipped", reason: "no_scrape_provider" }
   },
 })
 

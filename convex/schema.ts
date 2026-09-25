@@ -3,7 +3,7 @@ import { v } from "convex/values"
 
 export default defineSchema({
   users: defineTable({ clerkId: v.string(), name: v.string(), email: v.optional(v.string()), emailVerified: v.optional(v.boolean()), image: v.optional(v.string()), trackingConsent: v.optional(v.boolean()), preferences: v.optional(v.object({ styles: v.array(v.string()), interests: v.array(v.string()), destinations: v.array(v.string()), pace: v.optional(v.string()), budget: v.optional(v.number()) })), momentsMediaTotal: v.optional(v.number()), momentsEarnedDays: v.optional(v.number()), createdAt: v.optional(v.number()), updatedAt: v.optional(v.number()) }).index("by_clerk", ["clerkId"]).index("by_email", ["email"]),
-  trips: defineTable({ ownerId: v.string(), name: v.string(), destination: v.string(), origin: v.optional(v.string()), traveler: v.optional(v.string()), startDate: v.string(), endDate: v.string(), budget: v.number(), totalCost: v.number(), status: v.string(), rating: v.optional(v.number()), review: v.optional(v.string()), sharedAt: v.optional(v.number()), coverImage: v.optional(v.string()), traceShareToken: v.optional(v.string()), aiBrief: v.optional(v.string()), travelMonth: v.optional(v.string()), travelers: v.optional(v.number()) }).index("by_owner", ["ownerId"]),
+  trips: defineTable({ ownerId: v.string(), name: v.string(), destination: v.string(), origin: v.optional(v.string()), traveler: v.optional(v.string()), startDate: v.string(), endDate: v.string(), budget: v.number(), totalCost: v.number(), status: v.string(), rating: v.optional(v.number()), review: v.optional(v.string()), sharedAt: v.optional(v.number()), coverImage: v.optional(v.string()), traceShareToken: v.optional(v.string()), aiBrief: v.optional(v.string()), travelMonth: v.optional(v.string()), travelers: v.optional(v.number()), calendarToken: v.optional(v.string()) }).index("by_owner", ["ownerId"]).index("by_calendar_token", ["calendarToken"]),
   tripStops: defineTable({ tripId: v.id("trips"), name: v.string(), place: v.string(), day: v.number(), time: v.string(), cost: v.number(), kind: v.string(), order: v.number(), lat: v.optional(v.number()), lng: v.optional(v.number()), locked: v.optional(v.boolean()), reason: v.optional(v.string()), verified: v.optional(v.boolean()), duration: v.optional(v.number()), source: v.optional(v.string()), listingId: v.optional(v.string()), vertical: v.optional(v.string()), unit: v.optional(v.string()),    image: v.optional(v.string()), travelKm: v.optional(v.number()), travelMins: v.optional(v.number()), travelRouted: v.optional(v.boolean()), completedAt: v.optional(v.number()) }).index("by_trip", ["tripId"]),
   bookings: defineTable({ ownerId: v.string(), tripId: v.optional(v.id("trips")), stopId: v.optional(v.id("tripStops")), listingId: v.string(), type: v.string(), amount: v.number(), status: v.string(), paymentMethod: v.string(), reference: v.string(), checkIn: v.optional(v.string()), checkOut: v.optional(v.string()), guests: v.optional(v.number()), paidAt: v.optional(v.number()), paymentReference: v.optional(v.string()), r48SentAt: v.optional(v.number()), r24SentAt: v.optional(v.number()) }).index("by_owner", ["ownerId"]).index("by_trip", ["tripId"]),
   payments: defineTable({ ownerId: v.string(), bookingId: v.id("bookings"), reference: v.string(), email: v.optional(v.string()), amount: v.number(), currency: v.string(), status: v.string(), createdAt: v.number(), paidAt: v.optional(v.number()) }).index("by_owner", ["ownerId"]).index("by_booking", ["bookingId"]).index("by_reference", ["reference"]).index("by_status", ["status"]),
@@ -17,11 +17,27 @@ export default defineSchema({
     role: v.string(),
     invitedAt: v.number(),
   }).index("by_trip", ["tripId"]).index("by_user", ["collaboratorId"]).index("by_token", ["token"]),
-  stopVotes: defineTable({ stopId: v.id("tripStops"), tripId: v.id("trips"), userId: v.string(), vote: v.union(v.literal("up"), v.literal("down")) }).index("by_stop", ["stopId"]).index("by_trip", ["tripId"]).index("by_stop_user", ["stopId", "userId"]),
+  stopVotes: defineTable({ stopId: v.id("tripStops"), tripId: v.id("trips"), userId: v.string(), vote: v.literal("up") }).index("by_stop", ["stopId"]).index("by_trip", ["tripId"]).index("by_stop_user", ["stopId", "userId"]),
   dayNotes: defineTable({ tripId: v.id("trips"), day: v.number(), authorId: v.string(), authorName: v.optional(v.string()), body: v.string(), createdAt: v.number() }).index("by_trip_day", ["tripId", "day"]),
   positions: defineTable({ tripId: v.id("trips"), ownerId: v.string(), lat: v.number(), lng: v.number(), accuracy: v.number(), recordedAt: v.number() }).index("by_trip_time", ["tripId", "recordedAt"]),
   moments: defineTable({ tripId: v.id("trips"), ownerId: v.string(), caption: v.string(), storageId: v.optional(v.id("_storage")), storageIds: v.optional(v.array(v.id("_storage"))), videoStorageIds: v.optional(v.array(v.id("_storage"))), stopName: v.optional(v.string()), location: v.optional(v.string()), lat: v.optional(v.number()), lng: v.optional(v.number()), best: v.optional(v.boolean()), createdAt: v.number(), public: v.boolean(), reactions: v.optional(v.array(v.object({ userId: v.string(), emoji: v.string() }))) }).index("by_trip", ["tripId"]),
   savedListings: defineTable({ ownerId: v.string(), listingId: v.id("listings"), savedAt: v.number(), priceAtSave: v.optional(v.number()) }).index("by_owner", ["ownerId"]).index("by_owner_listing", ["ownerId", "listingId"]),
+  packingItems: defineTable({
+    tripId: v.id("trips"),
+    label: v.string(),
+    category: v.string(),
+    packed: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_trip", ["tripId"]),
+  expenses: defineTable({
+    tripId: v.id("trips"),
+    ownerId: v.string(),
+    label: v.string(),
+    amount: v.number(),
+    kind: v.string(),
+    spentBy: v.optional(v.string()),
+    spentAt: v.number(),
+  }).index("by_trip", ["tripId"]),
   listings: defineTable({
     vertical: v.string(),
     name: v.string(),
