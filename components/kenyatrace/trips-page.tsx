@@ -32,6 +32,13 @@ type Trip = NonNullable<ReturnType<typeof useQuery<typeof api.trips.list>>>[numb
 function countdown(trip: Trip) {
   if (trip.status === 'completed') return 'Completed trip'
   const d = daysUntil(trip.startDate)
+  // Corrupt/missing dates must never render "NaN days" — fall back to the
+  // status label so the card stays readable.
+  if (!Number.isFinite(d)) {
+    if (trip.status === 'travelling') return 'In progress'
+    if (trip.status === 'booked') return 'Booked'
+    return 'Planning'
+  }
   const ago = Math.abs(d)
   if (d > 0) return `Starts in ${d} day${d === 1 ? '' : 's'}`
   if (d === 0) return 'Starts today'
@@ -49,7 +56,7 @@ function TripCard({ trip, onDuplicate, onCopyLink, onDelete, onLeave }: { trip: 
     <Card className="group overflow-hidden p-0 transition-colors hover:border-primary/40">
       <Link href={`/trips/${trip._id}`}>
         <div className="relative h-40 overflow-hidden">
-          <Image src={trip.coverImage || '/kenya-hero.png'} fill className="object-cover" alt="" sizes="(max-width: 768px) 100vw, 50vw" />
+          <Image src={trip.coverImage || '/kenya-hero.png'} fill className="object-cover" alt={`${trip.name} — ${trip.destination}`} sizes="(max-width: 768px) 100vw, 50vw" />
           <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
             <Badge className={cn(trip.status === 'completed' && 'bg-card text-card-foreground')}>{STATUS_LABEL[trip.status] ?? trip.status}</Badge>
             {!isOwner && <Badge className="bg-accent text-accent-foreground">Shared · {trip.role === 'editor' ? 'Editor' : 'Viewer'}</Badge>}

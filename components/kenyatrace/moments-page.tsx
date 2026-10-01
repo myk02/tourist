@@ -52,6 +52,23 @@ function getCoords(): Promise<{ lat: number; lng: number } | null> {
   })
 }
 
+// Phone videos can be gigabytes — an unbounded upload stalls on mobile data
+// and dies with a generic error. Reject early with a message that says why.
+const MAX_MOMENT_FILE_BYTES = 100 * 1024 * 1024
+
+function pickMomentFiles(list: FileList | null): { files: File[]; error?: string } {
+  const files = Array.from(list || []).slice(0, 8)
+  for (const f of files) {
+    if (!f.type.startsWith('image/') && !f.type.startsWith('video/')) {
+      return { files: [], error: `"${f.name}" is not a photo or video` }
+    }
+    if (f.size > MAX_MOMENT_FILE_BYTES) {
+      return { files: [], error: `"${f.name}" is over 100 MB — pick a smaller file` }
+    }
+  }
+  return { files }
+}
+
 export function Moments() {
   const params = useSearchParams()
   const trips = useQuery(api.trips.list)
@@ -64,8 +81,12 @@ export function Moments() {
   const urlTripRaw = params.get('trip')
   const urlTrip = urlTripRaw && isValidConvexId(urlTripRaw) ? (urlTripRaw as Id<'trips'>) : undefined
   const [selectedId, setSelectedId] = useState<Id<'trips'> | undefined>(undefined)
-  const selected = selectedId ?? urlTrip ?? trips?.[0]?._id
+  // Owned trips first: the picker below only lists owned trips, so defaulting
+  // to a shared trip left the dropdown blank with a disabled Add button and
+  // no way to switch. Shared ?trip= links stay viewable (read-only notice).
+  const selected = selectedId ?? urlTrip ?? ownedTrips[0]?._id ?? trips?.[0]?._id
   const selectedOwned = ownedTrips.some(t => t._id === selected)
+  const selectedTripName = trips?.find(t => t._id === selected)?.name
   const moments = useQuery(api.moments.list, selected ? { tripId: selected } : 'skip')
 
   const uploadUrl = useMutation(api.moments.generateUploadUrl)
@@ -185,7 +206,7 @@ export function Moments() {
   // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
   const mapPoints = (moments ?? []).filter(m => m.lat != null && m.lng != null).map(m => ({ id: m._id, name: m.caption, location: m.location || m.stopName || 'Somewhere in Kenya', lat: m.lat!, lng: m.lng! }))
 
-  const timelineGroups = (moments ?? []).reduce<Record<string, typeof moments>>((acc, m) => {
+  const timelineGroups = (moments ?? []).reduce<Record<string, NonNullable<typeof moments>>>((acc, m) => {
     const key = new Date(m.createdAt).toLocaleDateString()
     ;(acc[key] = acc[key] || []).push(m)
     return acc
@@ -200,11 +221,16 @@ export function Moments() {
             <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight">Moments</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {ownedTrips.length ? (
+            {selectedOwned && ownedTrips.length ? (
               <Select value={selected} onValueChange={v => setSelectedId(v as Id<'trips'>)}>
                 <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
                 <SelectContent>{ownedTrips.map(t => <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>)}</SelectContent>
               </Select>
+            ) : selected && !selectedOwned ? (
+              <span className="inline-flex max-w-52 items-center gap-1.5 truncate rounded-none border border-dashed px-3 py-1.5 text-sm text-muted-foreground" title={selectedTripName ?? 'Shared trip'}>
+                <Camera className="size-3.5 shrink-0" />
+                <span className="truncate">{selectedTripName ?? 'Shared trip'}</span>
+              </span>
             ) : null}
             <Button onClick={() => setAddOpen(true)} disabled={!ownedTrips.length || !selectedOwned}><Camera data-icon="inline-start" />Add a moment</Button>
           </div>
@@ -265,7 +291,7 @@ export function Moments() {
                     <div key={date}>
                       <h2 className="mb-3 font-serif text-xl font-semibold tracking-tight">{date}</h2>
                       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                        {group!.map(m => {
+                        {group.map(m => {
                           // Video-only moments get a real <video> tile — a
                           // generic placeholder read as "broken".
                           const firstVideo = !m.imageUrl ? m.videoUrls?.[0] : undefined
@@ -302,7 +328,12 @@ export function Moments() {
             <FieldGroup>
               <Field>
                 <FieldLabel>Photos & videos</FieldLabel>
-                <Input type="file" accept="image/*,video/*" multiple onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 8))} />
+                <Input type="file" accept="image/*,video/*" multiple onChange={e => {
+                  const { files: picked, error } = pickMomentFiles(e.target.files)
+                  e.target.value = ''
+                  if (error) { toast.error(error); return }
+                  setFiles(picked)
+                }} />
                 {files.length > 0 && <p className="mt-1 text-xs text-muted-foreground">{files.length} file{files.length === 1 ? '' : 's'} selected (up to 8)</p>}
               </Field>
               <Field>

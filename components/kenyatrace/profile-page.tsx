@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { UserButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
@@ -87,8 +87,18 @@ export function Profile() {
 
   const prefs = me?.preferences
 
+  // Sync Clerk identity into Convex once per signed-in user. The Clerk `user`
+  // object identity changes across re-renders, so an unguarded effect fires
+  // the mutation repeatedly — and a silent catch hid sync outages entirely.
+  const syncedUserRef = useRef<string | null>(null)
   useEffect(() => {
-    if (user) sync({ name: user.fullName || user.firstName || 'Traveller', email: user.primaryEmailAddress?.emailAddress, image: user.imageUrl }).catch(() => {})
+    const id = user?.id
+    if (!id || syncedUserRef.current === id) return
+    syncedUserRef.current = id
+    sync({ name: user.fullName || user.firstName || 'Traveller', email: user.primaryEmailAddress?.emailAddress, image: user.imageUrl }).catch(err => {
+      syncedUserRef.current = null
+      console.warn('[profile] account sync failed', err)
+    })
   }, [user, sync])
 
   useEffect(() => {
@@ -137,10 +147,13 @@ export function Profile() {
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
+    // The anchor must be in the DOM for Firefox to honour the download.
     const anchor = document.createElement('a')
     anchor.href = url
     anchor.download = 'kenyatrace-data.json'
+    document.body.appendChild(anchor)
     anchor.click()
+    anchor.remove()
     URL.revokeObjectURL(url)
     toast.success('Your data was exported')
   }
