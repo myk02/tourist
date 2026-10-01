@@ -49,12 +49,12 @@ function TripCard({ trip, onDuplicate, onCopyLink, onDelete, onLeave }: { trip: 
     <Card className="group overflow-hidden p-0 transition-colors hover:border-primary/40">
       <Link href={`/trips/${trip._id}`}>
         <div className="relative h-40 overflow-hidden">
-          <Image src={trip.coverImage || '/kenya-hero.png'} fill className="object-cover transition-transform duration-300 group-hover:scale-[1.03]" alt="" sizes="(max-width: 768px) 100vw, 50vw" />
+          <Image src={trip.coverImage || '/kenya-hero.png'} fill className="object-cover" alt="" sizes="(max-width: 768px) 100vw, 50vw" />
           <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
             <Badge className={cn(trip.status === 'completed' && 'bg-card text-card-foreground')}>{STATUS_LABEL[trip.status] ?? trip.status}</Badge>
             {!isOwner && <Badge className="bg-accent text-accent-foreground">Shared · {trip.role === 'editor' ? 'Editor' : 'Viewer'}</Badge>}
           </div>
-          <div className="absolute right-3 top-3 rounded-full bg-card/95 px-2.5 py-1 text-xs font-semibold shadow-soft backdrop-blur-sm">{formatKES(trip.totalCost)}</div>
+          <div className="absolute right-3 top-3 rounded-none bg-card/95 px-2.5 py-1 text-xs font-semibold shadow-soft">{formatKES(trip.totalCost)}</div>
         </div>
       </Link>
       <CardHeader>
@@ -150,10 +150,10 @@ export function Trips({ compact = false }: { compact?: boolean }) {
     }
   }
 
-  if (trips === undefined) return <PageLoading label="Loading trips" shimmerClassName="h-52 rounded-2xl" />
+  if (trips === undefined) return <PageLoading label="Loading trips" shimmerClassName="h-52 rounded-none" />
 
   const empty = (
-    <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
+    <div className="flex min-h-52 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center">
       <Compass className="size-8 text-primary" />
       <p className="mt-4 font-serif text-2xl">No saved trips yet</p>
       <p className="mt-2 max-w-md text-muted-foreground">Plan with AI or build your first route yourself.</p>
@@ -212,7 +212,7 @@ export function Trips({ compact = false }: { compact?: boolean }) {
           <Button nativeButton={false} render={<Link href="/plan" />}><Plus data-icon="inline-start" />New trip</Button>
         </div>
         {planningTrips.length > 0 && mostUrgentPlanning && daysUntil(mostUrgentPlanning.startDate) <= 14 && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-none border border-primary/25 bg-primary/5 p-4 shadow-soft">
             <div className="flex items-center gap-3">
               <BrandMark icon="compass" size="sm" />
               <div>

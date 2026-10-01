@@ -136,7 +136,7 @@ export function ForwardBookingDialog({ tripId }: { tripId: Id<'trips'> }) {
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           {parsed && edit && (
-            <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-soft">
+            <div className="flex flex-col gap-3 rounded-none border bg-card p-4 shadow-soft">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold">Check the details</p>
                 <Badge className={TYPE_STYLE[parsed.type] ?? 'bg-secondary text-muted-foreground'}>{parsed.type}</Badge>

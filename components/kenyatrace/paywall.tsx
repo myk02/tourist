@@ -69,21 +69,21 @@ export function PlanCard({
   return (
     <div
       className={cn(
-        'relative flex h-full flex-col items-center rounded-2xl border p-5 text-center transition-all duration-200',
+        'relative flex h-full flex-col items-center rounded-none border p-5 text-center transition-colors duration-200',
         isHero
           ? 'border-primary bg-primary/[0.06] shadow-lg shadow-primary/10 ring-1 ring-primary/40'
           : 'border-border bg-card hover:border-primary/30 hover:shadow-md',
       )}
     >
       {isHero && (
-        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground shadow-sm">
+        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-none bg-primary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground shadow-sm">
           Best value
         </span>
       )}
 
       <span
         className={cn(
-          'flex size-10 items-center justify-center rounded-full',
+          'flex size-10 items-center justify-center rounded-none',
           isHero ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary',
         )}
       >
@@ -99,7 +99,7 @@ export function PlanCard({
       <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
         <p className="text-xs font-semibold text-primary">Pay with M-Pesa · {plan.perDay}</p>
         {'savings' in plan && plan.savings && (
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">{plan.savings}</span>
+          <span className="rounded-none bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">{plan.savings}</span>
         )}
       </div>
 
@@ -108,7 +108,7 @@ export function PlanCard({
           <li key={benefit} className="flex items-start gap-2 text-sm text-foreground/90">
             <span
               className={cn(
-                'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full',
+                'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-none',
                 isHero ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary',
               )}
             >
@@ -255,7 +255,7 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
       </div>
 
       {hasValue && (
-        <div className="w-full rounded-2xl border bg-card p-4 text-left shadow-soft">
+        <div className="w-full rounded-none border bg-card p-4 text-left shadow-soft">
           <p className="text-sm font-semibold">What&apos;s waiting for you</p>
           {context!.upcomingTrip && (
             <p className="mt-1 text-sm text-muted-foreground">
@@ -266,13 +266,13 @@ function PaywallScreen({ status, compact = false }: { status: Status; compact?: 
           )}
           <div className="mt-2.5 flex flex-wrap gap-2">
             {context!.tripCount > 0 && (
-              <span className="flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium"><Compass className="size-3.5 text-primary" />{context!.tripCount} trip{context!.tripCount === 1 ? '' : 's'}</span>
+              <span className="flex items-center gap-1.5 rounded-none bg-secondary px-2.5 py-1 text-xs font-medium"><Compass className="size-3.5 text-primary" />{context!.tripCount} trip{context!.tripCount === 1 ? '' : 's'}</span>
             )}
             {context!.savedCount > 0 && (
-              <span className="flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium"><Heart className="size-3.5 text-primary" />{context!.savedCount} saved spot{context!.savedCount === 1 ? '' : 's'}</span>
+              <span className="flex items-center gap-1.5 rounded-none bg-secondary px-2.5 py-1 text-xs font-medium"><Heart className="size-3.5 text-primary" />{context!.savedCount} saved spot{context!.savedCount === 1 ? '' : 's'}</span>
             )}
             {context!.momentCount > 0 && (
-              <span className="flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium"><Camera className="size-3.5 text-primary" />{context!.momentCount} moment{context!.momentCount === 1 ? '' : 's'}</span>
+              <span className="flex items-center gap-1.5 rounded-none bg-secondary px-2.5 py-1 text-xs font-medium"><Camera className="size-3.5 text-primary" />{context!.momentCount} moment{context!.momentCount === 1 ? '' : 's'}</span>
             )}
           </div>
         </div>
@@ -298,7 +298,7 @@ export function PaywallDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <DialogDescription>Choose a day pack to continue planning</DialogDescription>
         </DialogHeader>
         {status === undefined ? (
-          <div className="kt-shimmer h-48 rounded-2xl" />
+          <div className="kt-shimmer h-48 rounded-none" />
         ) : status === null ? (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
             <p className="text-sm text-muted-foreground">Sign in to pick a day pack and continue planning.</p>
@@ -371,7 +371,7 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
   if (!isAuthenticated) {
     return (
       <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
-        <span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8" /></span>
+        <span className="flex size-16 items-center justify-center rounded-none bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8" /></span>
         <h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1>
         <p className="text-muted-foreground">Sign in to plan routes, save reservations, live traces and moments.</p>
         <Button size="lg" nativeButton={false} render={<Link href="/sign-in" />}>
@@ -396,12 +396,12 @@ export function RequireSubscription({ children, enabled = true }: { children: Re
         </div>
       )
     }
-    return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl" /></div>
+    return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-none" /></div>
   }
   // A brand-new signed-in user has no row yet — the trial-start mutation is
   // in flight, so keep showing the skeleton instead of flashing the paywall.
   if (status.mode === 'none' && trialPending) {
-    return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl" /></div>
+    return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-none" /></div>
   }
   if (!status.active) return <PaywallScreen status={status} />
   return (

@@ -106,12 +106,12 @@ export function InstallPrompt() {
   if (!showNative && !showIosTip) return null
 
   return (
-    <div className="fixed bottom-20 left-4 z-[700] w-[calc(100%-2rem)] max-w-sm rounded-2xl border bg-card p-4 shadow-pop md:bottom-6">
-      <button type="button" aria-label="Dismiss" onClick={dismiss} className="absolute right-1.5 top-1.5 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground">
+    <div className="fixed bottom-20 left-4 z-[700] w-[calc(100%-2rem)] max-w-sm rounded-none border bg-card p-4 shadow-pop md:bottom-6">
+      <button type="button" aria-label="Dismiss" onClick={dismiss} className="absolute right-1.5 top-1.5 flex min-h-11 min-w-11 items-center justify-center rounded-none text-muted-foreground transition-colors hover:text-foreground">
         <X className="size-4" />
       </button>
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs"><Navigation className="size-5" /></span>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-none bg-primary text-primary-foreground shadow-xs"><Navigation className="size-5" /></span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">Take KenyaTrace with you</p>
           {showNative ? (

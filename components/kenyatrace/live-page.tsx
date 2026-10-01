@@ -193,7 +193,7 @@ export function Track() {
           className="h-[calc(100svh-4rem)] rounded-none"
         />
         {usingCache && (
-          <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-100/95 px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm dark:bg-amber-500/90 dark:text-amber-950">
+          <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-none border border-amber-500/40 bg-amber-100/95 px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm dark:bg-amber-500/90 dark:text-amber-950">
             <WifiOff className="size-3.5" />
             Saved copy · synced {cached ? timeAgo(cached.at) : 'earlier'}
           </div>
@@ -204,7 +204,7 @@ export function Track() {
                 rejects non-owners server-side, so offering Start just misleads. */}
             {isViewer ? (
               <div className="flex items-center gap-4">
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary"><Navigation /></span>
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-none bg-secondary text-primary"><Navigation /></span>
                 <div className="flex-1">
                   <p className="font-semibold">Live route for this trip</p>
                   <p className="text-sm text-muted-foreground">Only the trip owner records this route — you&apos;re watching it live{viewRecorded?.length ? ` · ${viewRecorded.length} points so far` : ''}.</p>
@@ -222,7 +222,7 @@ export function Track() {
                     </p>
                   </div>
                 </div>
-                <label className="flex cursor-pointer items-center justify-between rounded-xl border p-3">
+                <label className="flex cursor-pointer items-center justify-between rounded-none border p-3">
                   <span className="text-sm font-medium">Allow location tracing for this trip</span>
                   <Switch
                     checked={localConsent}
@@ -238,7 +238,7 @@ export function Track() {
             ) : arrived ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-4">
-                  <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs"><Navigation /></span>
+                  <span className="flex size-12 shrink-0 items-center justify-center rounded-none bg-emerald-600 text-white shadow-xs"><Navigation /></span>
                   <div className="flex-1">
                     <p className="font-semibold">You&apos;ve arrived at {viewTrip.destination}</p>
                     <p className="text-sm text-muted-foreground">Live tracking detected your arrival — 100% of the way there.</p>
@@ -254,7 +254,7 @@ export function Track() {
               </div>
             ) : active ? (
               <div className="flex items-center gap-4">
-                <span className="flex size-12 shrink-0 animate-pulse items-center justify-center rounded-xl bg-red-500 text-white shadow-xs"><Square className="size-4" /></span>
+                <span className="flex size-12 shrink-0 animate-pulse items-center justify-center rounded-none bg-red-500 text-white shadow-xs"><Square className="size-4" /></span>
                 <div className="flex-1">
                   <p className="font-semibold">Live tracking in progress</p>
                   <p className="text-sm text-muted-foreground">
@@ -265,7 +265,7 @@ export function Track() {
                   <ProgressBar value={active.progressPct} label="Trip progress" className="mt-2 w-full max-w-sm" />
                   <p className="mt-1 text-xs text-muted-foreground">{active.progressPct}% of the way there</p>
                   {staleForMs > STALE_AFTER_MS && (
-                    <p className="mt-1.5 w-fit rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    <p className="mt-1.5 w-fit rounded-none border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
                       Weak GPS signal — last fix {Math.round(staleForMs / 60000)} min ago
                     </p>
                   )}
@@ -280,7 +280,7 @@ export function Track() {
               </div>
             ) : (
               <div className="flex items-center gap-4">
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-xs"><Navigation /></span>
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-none bg-primary text-white shadow-xs"><Navigation /></span>
                 <div className="flex-1">
                   <p className="font-semibold">Ready to trace your journey?</p>
                   <p className="text-sm text-muted-foreground">
@@ -291,7 +291,7 @@ export function Track() {
               </div>
             )}
             {consent && (
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/40 px-3.5 py-2.5">
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-none border border-border/70 bg-muted/40 px-3.5 py-2.5">
                 <span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
                   <ShieldOff className="size-4 shrink-0 text-primary" />
                   Location tracing is on for this trip — your route saves about every 5 seconds while you move, only while the app stays open.

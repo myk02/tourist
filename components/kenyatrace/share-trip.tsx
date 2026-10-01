@@ -164,13 +164,13 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
         </DialogHeader>
 
         <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-2.5 rounded-xl border bg-card p-4 shadow-soft">
+          <div className="flex flex-col gap-2.5 rounded-none border bg-card p-4 shadow-soft">
             <div className="flex items-center justify-between gap-3">
               <p className="flex items-center gap-2 text-sm font-semibold"><Link2 className="size-4 text-primary" /> Invite link</p>
               {!isOwner && <Badge variant="outline" className="text-[10px] text-muted-foreground">Visible to editors</Badge>}
             </div>
             {link && (
-              <p className="truncate rounded-lg bg-muted px-3 py-2 font-mono text-xs text-muted-foreground" title="Full link hidden — use Copy link">
+              <p className="truncate rounded-none bg-muted px-3 py-2 font-mono text-xs text-muted-foreground" title="Full link hidden — use Copy link">
                 {typeof window !== 'undefined' ? `${window.location.origin}/trips/${tripId}?invite=…${link.token.slice(-4)}` : `Invite link ending …${link.token.slice(-4)}`}
               </p>
             )}
@@ -206,7 +206,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
             </p>
           </div>
 
-          <div className="flex flex-col gap-2.5 rounded-xl border bg-card p-4 shadow-soft">
+          <div className="flex flex-col gap-2.5 rounded-none border bg-card p-4 shadow-soft">
             <p className="flex items-center gap-2 text-sm font-semibold"><Mail className="size-4 text-primary" /> Invite by email</p>
             <Input
               type="email"
@@ -243,9 +243,9 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
               <p className="text-sm text-muted-foreground">No one yet — share the invite link to add travel companions.</p>
             )}
             {shares?.collaborators.map(c => (
-              <div key={c.shareId} className={cn('flex items-center gap-3 rounded-xl border p-2.5', busy === c.shareId && 'opacity-60')}>
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold text-primary">
-                  {c.image ? <img src={c.image} alt={c.name} referrerPolicy="no-referrer" className="size-9 rounded-full object-cover" /> : <UserRound className="size-4" />}
+              <div key={c.shareId} className={cn('flex items-center gap-3 rounded-none border p-2.5', busy === c.shareId && 'opacity-60')}>
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-none bg-secondary text-xs font-bold text-primary">
+                  {c.image ? <img src={c.image} alt={c.name} referrerPolicy="no-referrer" className="size-9 rounded-none object-cover" /> : <UserRound className="size-4" />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{c.name}</p>
@@ -273,7 +273,7 @@ export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClas
         </div>
 
         {pendingRemove && (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+          <div className="rounded-none border border-destructive/30 bg-destructive/5 p-4">
             <p className="text-sm font-semibold">{pendingRemove.label === 'Invite link' ? 'Revoke the invite link?' : `Remove ${pendingRemove.label}?`}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {pendingRemove.label === 'Invite link'

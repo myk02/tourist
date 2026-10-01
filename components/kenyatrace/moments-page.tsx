@@ -211,13 +211,13 @@ export function Moments() {
         </div>
 
         {selected && !selectedOwned && (
-          <div className="rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
+          <div className="rounded-none border border-dashed px-4 py-3 text-sm text-muted-foreground">
             This is a trip shared with you — moments can only be added on trips you own.
           </div>
         )}
 
         {credit && (
-          <div className="flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-4 shadow-soft">
+          <div className="flex flex-wrap items-center gap-4 rounded-none border bg-card p-4 shadow-soft">
             <BrandMark icon="sparkles" size="sm" />
             <div className="min-w-0 flex-1">
               <p className="font-semibold">Your moments earn free days</p>
@@ -251,7 +251,7 @@ export function Moments() {
               mapPoints.length ? (
                 <KenyaMap points={mapPoints} className="h-[560px]" />
               ) : (
-                <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
+                <div className="flex min-h-52 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center">
                   <p className="font-serif text-2xl">No geotagged moments</p>
                   <p className="mt-2 max-w-md text-muted-foreground">Moments saved with your location will appear on the map. Allow location access when you upload.</p>
                 </div>
@@ -270,7 +270,7 @@ export function Moments() {
                           // generic placeholder read as "broken".
                           const firstVideo = !m.imageUrl ? m.videoUrls?.[0] : undefined
                           return (
-                            <div key={m._id} className="relative aspect-square overflow-hidden rounded-xl">
+                            <div key={m._id} className="relative aspect-square overflow-hidden rounded-none">
                               {m.imageUrl ? (
                                 <ListingImage src={m.imageUrl} fill alt={m.caption} className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
                               ) : firstVideo ? (
@@ -289,7 +289,7 @@ export function Moments() {
             )}
           </>
         ) : (
-          <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
+          <div className="flex min-h-52 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center">
             <p className="font-serif text-2xl">Moments belong to trips</p>
             <p className="mt-2 max-w-md text-muted-foreground">Plan your first trip and photos you add here will be tied to it.</p>
             <Button className="mt-4" variant="outline" nativeButton={false} render={<Link href="/plan" />}>Plan a trip</Button>

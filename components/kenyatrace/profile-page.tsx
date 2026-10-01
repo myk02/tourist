@@ -43,7 +43,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+        'rounded-none border px-3.5 py-1.5 text-sm font-medium transition-colors',
         active ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
       )}
     >
@@ -154,8 +154,8 @@ export function Profile() {
   return (
     <RequireAuth>
       <div className="mx-auto flex max-w-5xl flex-col gap-8 px-5 py-10">
-        <div className="flex flex-wrap items-center gap-4 rounded-2xl border bg-card px-5 py-4 shadow-soft">
-          {user?.imageUrl ? <Image src={user.imageUrl} width={48} height={48} className="rounded-full" alt="Profile" /> : <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-primary"><Compass /></span>}
+        <div className="flex flex-wrap items-center gap-4 rounded-none border bg-card px-5 py-4 shadow-soft">
+          {user?.imageUrl ? <Image src={user.imageUrl} width={48} height={48} className="rounded-none" alt="Profile" /> : <span className="flex size-12 items-center justify-center rounded-none bg-secondary text-primary"><Compass /></span>}
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold tracking-tight">{user?.fullName || 'Kenya traveller'}</h1>
             <p className="truncate text-sm text-muted-foreground">{user?.primaryEmailAddress?.emailAddress}</p>
@@ -232,7 +232,7 @@ export function Profile() {
             {bookings?.length ? (
               bookings.map(b => <BookingRow key={b._id} booking={b} onCancel={handleCancel} />)
             ) : (
-              <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
+              <div className="flex min-h-52 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center">
                 <AlertCircle className="size-8 text-primary" />
                 <p className="mt-4 font-serif text-2xl">No bookings yet</p>
                 <p className="mt-2 text-muted-foreground">Reservations you make will appear here.</p>
@@ -243,7 +243,7 @@ export function Profile() {
 
           <TabsContent value="saved">
             {drops?.length ? (
-              <div className="mb-5 flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
+              <div className="mb-5 flex items-center gap-3 rounded-none border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
                 <TrendingDown className="size-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
                 <p className="text-emerald-800 dark:text-emerald-200">
                   <strong>{drops.length}</strong> saved spot{drops.length === 1 ? '' : 's'} dropped in price — grab {drops.length === 1 ? 'it' : 'them'} while {drops.length === 1 ? "it's" : "they're"} low.
@@ -260,11 +260,11 @@ export function Profile() {
                   <Card key={listing._id} className="group overflow-hidden p-0 transition-colors hover:border-primary/40">
                     <div className="relative aspect-[4/3] overflow-hidden">
                       <Link href={`/discover/${listing.vertical}/${listing._id}`}>
-                        <ListingImage src={listing.image} fill className="object-cover transition-transform duration-300 group-hover:scale-[1.03]" alt={listing.name} sizes="(max-width: 768px) 100vw, 33vw" />
+                        <ListingImage src={listing.image} fill className="object-cover" alt={listing.name} sizes="(max-width: 768px) 100vw, 33vw" />
                       </Link>
                       <SourceBadge source={listing.source} className="absolute bottom-3 left-3" onClick={() => { const f = sourceToFilter(listing.source); if (f) router.push(`/discover/${listing.vertical}?source=${f}`) }} />
-                      {drop && <span className="absolute left-3 top-3 rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white shadow-sm">-{drop.dropPct}%</span>}
-                      <button aria-label="Remove from saved" onClick={() => handleRemoveSaved(listing._id)} className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-red-500 shadow-sm transition-transform hover:scale-110">
+                      {drop && <span className="absolute left-3 top-3 rounded-none bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white shadow-sm">-{drop.dropPct}%</span>}
+                      <button aria-label="Remove from saved" onClick={() => handleRemoveSaved(listing._id)} className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-none bg-card/90 text-red-500 shadow-sm">
                         <Heart className="size-4 fill-current" />
                       </button>
                     </div>
@@ -290,7 +290,7 @@ export function Profile() {
                 })}
               </div>
             ) : (
-              <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
+              <div className="flex min-h-52 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center">
                 <Heart className="size-8 text-primary" />
                 <p className="mt-4 font-serif text-2xl">Nothing saved yet</p>
                 <p className="mt-2 text-muted-foreground">Tap the heart on any place to keep it here.</p>
@@ -328,7 +328,7 @@ export function Profile() {
                   <label className="text-sm font-medium">Pace</label>
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     {PACES.map(p => (
-                      <button key={p.value} type="button" onClick={() => { setDirty(true); setPace(p.value) }} className={cn('rounded-xl border px-2 py-2 text-sm transition-colors', pace === p.value ? 'border-primary bg-primary text-primary-foreground shadow-xs' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-card')}>
+                      <button key={p.value} type="button" onClick={() => { setDirty(true); setPace(p.value) }} className={cn('rounded-none border px-2 py-2 text-sm transition-colors', pace === p.value ? 'border-primary bg-primary text-primary-foreground shadow-xs' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-card')}>
                         <span className="block font-medium">{p.label}</span>
                         <span className={cn('block text-[10px]', pace === p.value ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{p.hint}</span>
                       </button>

@@ -128,7 +128,7 @@ export function PackingChecklist({ tripId, canEdit }: { tripId: Id<'trips'>; can
                 aria-pressed={category === c}
                 onClick={() => setCategory(c)}
                 className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  'rounded-none border px-3 py-1 text-xs font-medium transition-colors',
                   category === c ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
                 )}
               >
@@ -137,7 +137,7 @@ export function PackingChecklist({ tripId, canEdit }: { tripId: Id<'trips'>; can
             ))}
           </div>
           {!hasAny && (
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/[0.03] p-3">
+            <div className="flex flex-wrap items-center gap-2 rounded-none border border-dashed border-primary/40 bg-primary/[0.03] p-3">
               <span className="text-xs font-medium text-muted-foreground">Start from a Kenya template:</span>
               <Button size="sm" variant="outline" className="h-8 gap-1.5" disabled={seeding} onClick={() => void seedTemplate('safari')}>
                 {seeding ? <Loader2 className="size-3.5 animate-spin" /> : <Backpack className="size-3.5" />} Safari
@@ -154,7 +154,7 @@ export function PackingChecklist({ tripId, canEdit }: { tripId: Id<'trips'>; can
       )}
 
       {items === undefined ? (
-        <div className="kt-shimmer h-24 rounded-xl" />
+        <div className="kt-shimmer h-24 rounded-none" />
       ) : !hasAny ? (
         <p className="py-4 text-center text-sm text-muted-foreground">Nothing on the list yet{canEdit ? ' — add items or start from a template above.' : '.'}</p>
       ) : (
@@ -171,12 +171,12 @@ export function PackingChecklist({ tripId, canEdit }: { tripId: Id<'trips'>; can
                       aria-pressed={item.packed}
                       onClick={() => setPacked({ id: item._id, packed: !item.packed }).catch(() => toast.error('Could not update the item'))}
                       className={cn(
-                        'flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors',
+                        'flex min-w-0 flex-1 items-center gap-2.5 rounded-none border px-3 py-2 text-left transition-colors',
                         item.packed ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/40',
                         !canEdit && 'cursor-default',
                       )}
                     >
-                      <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors', item.packed ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 text-transparent')}>
+                      <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-none border transition-colors', item.packed ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 text-transparent')}>
                         <Check className="size-3.5" />
                       </span>
                       <span className={cn('min-w-0 flex-1 truncate text-sm', item.packed && 'text-muted-foreground line-through')}>{item.label}</span>
@@ -186,7 +186,7 @@ export function PackingChecklist({ tripId, canEdit }: { tripId: Id<'trips'>; can
                         type="button"
                         aria-label={`Remove ${item.label}`}
                         onClick={() => remove({ id: item._id }).catch(() => toast.error('Could not remove the item'))}
-                        className="shrink-0 rounded-lg p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                        className="shrink-0 rounded-none p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
                       >
                         <Trash2 className="size-3.5" />
                       </button>

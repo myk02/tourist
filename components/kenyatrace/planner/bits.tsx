@@ -18,7 +18,7 @@ export function StarRating({ value, onChange }: { value: number; onChange: (n: n
           aria-checked={n === value}
           aria-label={`Rate ${n} star${n > 1 ? 's' : ''}`}
           onClick={() => onChange(n)}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-lg transition-transform hover:scale-110 focus-visible:outline-none"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-none transition-colors hover:bg-muted focus-visible:outline-none"
         >
           <Star className={cn('size-6', n <= value ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground')} />
         </button>
@@ -29,7 +29,7 @@ export function StarRating({ value, onChange }: { value: number; onChange: (n: n
 
 export function GenerationProgress({ active }: { active: number }) {
   return (
-    <div className="flex flex-col gap-2.5 rounded-2xl border bg-card p-4 shadow-soft">
+    <div className="flex flex-col gap-2.5 rounded-none border bg-card p-4 shadow-soft">
       <p className="flex items-center gap-2 text-sm font-semibold text-primary">
         <Sparkles className="size-4 animate-pulse" /> Planning your trip
       </p>
@@ -44,7 +44,7 @@ export function GenerationProgress({ active }: { active: number }) {
               ) : isActive ? (
                 <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
               ) : (
-                <span className="flex size-4 shrink-0 items-center justify-center"><span className="size-1.5 rounded-full bg-border" /></span>
+                <span className="flex size-4 shrink-0 items-center justify-center"><span className="size-1.5 rounded-none bg-border" /></span>
               )}
               <span className="truncate">{step}</span>
             </div>
@@ -70,7 +70,7 @@ export function PlannerProgress({ stage, planName }: { stage: Stage; planName?: 
       </span>
       <div className="flex flex-1 items-center gap-1.5">
         {STAGES.map((s, i) => (
-          <span key={s.id} aria-hidden className={cn('h-1.5 flex-1 rounded-full transition-colors', i < idx ? 'bg-primary/50' : i === idx ? 'bg-primary' : 'bg-border')} />
+          <span key={s.id} aria-hidden className={cn('h-1.5 flex-1 rounded-none transition-colors', i < idx ? 'bg-primary/50' : i === idx ? 'bg-primary' : 'bg-border')} />
         ))}
       </div>
       <span className="shrink-0 text-xs font-medium text-muted-foreground">{current.label} · {idx + 1}/{STAGES.length}</span>

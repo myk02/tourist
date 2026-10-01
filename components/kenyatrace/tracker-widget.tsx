@@ -136,7 +136,7 @@ export function TrackerWidget() {
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {lastAnnouncedRef.current}
       </div>
-      <div ref={cardRef} className="rounded-2xl border border-border/80 bg-card/95 p-3 shadow-pop backdrop-blur supports-backdrop-filter:bg-card/80">
+      <div ref={cardRef} className="rounded-none border border-border bg-card p-3 shadow-pop">
         <div
           title="Drag to move · double-click to reset"
           className="flex cursor-grab touch-none select-none items-center gap-2 active:cursor-grabbing"
@@ -144,8 +144,8 @@ export function TrackerWidget() {
           onClick={onHandleClick}
         >
           <GripVertical className="size-4 shrink-0 text-muted-foreground" />
-          <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-full text-white', arrived ? 'bg-emerald-600' : 'bg-primary')}>
-            {arrived ? <Check className="size-5" /> : <span className="size-2.5 animate-pulse rounded-full bg-white" />}
+          <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-none text-white', arrived ? 'bg-emerald-600' : 'bg-primary')}>
+            {arrived ? <Check className="size-5" /> : <span className="size-2.5 animate-pulse bg-white" />}
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">

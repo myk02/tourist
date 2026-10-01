@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { UserButton, useUser } from '@clerk/nextjs'
 import { useAction, useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { CalendarClock, Camera, CircleUserRound, Compass, Map, MapPin, Navigation, Sparkles, Wallet } from 'lucide-react'
+import { CalendarClock, Camera, CircleUserRound, Compass, Map, MapPin, Sparkles, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { BrandMark } from '@/components/ui/kt/brand-mark'
@@ -50,7 +50,7 @@ export function KenyaTraceShell({ children }: { children: React.ReactNode }) {
 function Brand() {
   return (
     <Link href="/" className="group flex shrink-0 items-center gap-2.5">
-      <span className="transition-transform group-hover:scale-[1.03]"><BrandMark icon="navigation" size="sm" /></span>
+      <BrandMark icon="navigation" size="sm" />
       <span className="font-serif text-xl font-semibold tracking-tight">KenyaTrace</span>
     </Link>
   )
@@ -75,17 +75,17 @@ function Header(){
   }, [user, sync])
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/80 backdrop-blur-lg supports-backdrop-filter:bg-background/70">
+    <header className="sticky top-0 z-40 border-b border-border bg-background">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 md:px-8">
         <Brand />
-        <nav aria-label="Main navigation" className="hidden items-center gap-1 rounded-full border border-border/70 bg-muted/40 p-1 md:flex">
+        <nav aria-label="Main navigation" className="hidden items-center gap-1 rounded-none border border-border bg-muted p-1 md:flex">
             {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={active
-                  ? 'inline-flex h-8 items-center gap-2 rounded-full bg-background px-3.5 text-sm font-semibold text-primary shadow-xs'
-                  : 'inline-flex h-8 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground'}
+                  ? 'inline-flex h-8 items-center gap-2 rounded-none bg-background px-3.5 text-sm font-semibold text-primary'
+                  : 'inline-flex h-8 items-center gap-2 rounded-none px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground'}
                 aria-current={active ? 'page' : undefined}
               >
                 <Icon className="size-4"/><span>{item.label}</span>
@@ -93,7 +93,7 @@ function Header(){
             )})}
           </nav>
         <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
-          <span className="hidden items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground xl:flex"><MapPin className="size-3.5 text-primary"/>Made for Kenya</span>
+          <span className="hidden items-center gap-1.5 rounded-none border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground xl:flex"><MapPin className="size-3.5 text-primary"/>Made for Kenya</span>
           <HeaderAccount />
           <ThemeToggle />
         </div>
@@ -156,7 +156,7 @@ function HeaderAccount() {
         <button
           type="button"
           onClick={() => setPlansOpen(true)}
-          className="hidden items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 sm:flex"
+          className="hidden items-center gap-1.5 rounded-none border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 sm:flex"
           aria-label="Open plans"
           suppressHydrationWarning
         >
@@ -279,7 +279,7 @@ function HeaderAccount() {
             <div className="flex flex-col gap-3">
               {statusLine && (
                 <div
-                  className="flex items-center gap-2.5 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm"
+                  className="flex items-center gap-2.5 rounded-none border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm"
                   suppressHydrationWarning
                 >
                   <CalendarClock className="size-4 shrink-0 text-primary" />
@@ -298,15 +298,15 @@ function HeaderAccount() {
 function MobileNav(){
   const pathname = usePathname()
   return (
-    <nav aria-label="Mobile navigation" className="fixed inset-x-4 bottom-3 z-40 flex h-16 items-center justify-around rounded-2xl border border-border/80 bg-background/90 shadow-lift backdrop-blur-lg supports-backdrop-filter:bg-background/75 md:hidden">
+    <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around rounded-none border-t border-border bg-background md:hidden">
       {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
         <Link
           key={item.href}
           href={item.href}
           aria-current={active ? 'page' : undefined}
           className={active
-            ? 'flex min-w-14 flex-col items-center gap-0.5 rounded-xl bg-primary/10 px-3 py-1.5 text-primary'
-            : 'flex min-w-14 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground'}
+            ? 'flex min-w-14 flex-col items-center gap-0.5 rounded-none bg-primary/10 px-3 py-1.5 text-primary'
+            : 'flex min-w-14 flex-col items-center gap-0.5 rounded-none px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground'}
         >
           <Icon className="size-5"/><span className="text-[11px] font-medium">{item.label}</span>
         </Link>

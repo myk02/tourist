@@ -77,7 +77,7 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
         <p className="text-sm text-muted-foreground">{summary}</p>
       </DialogHeader>
 
-      <KenyaMap points={mapData.points} route={mapData.route} className="h-[46vh] min-h-[300px] rounded-2xl" />
+      <KenyaMap points={mapData.points} route={mapData.route} className="h-[46vh] min-h-[300px] rounded-none" />
 
       <Tabs value={activeDay} onValueChange={setActiveDay}>
         <div className="flex flex-wrap items-center gap-2">
@@ -93,14 +93,14 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
           {days.map(([day, dayStops]) => (
             <div key={day} className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground shadow-xs">{day}</span>
+                <span className="flex size-7 items-center justify-center rounded-none bg-primary text-xs font-bold text-primary-foreground shadow-xs">{day}</span>
                 <h3 className="font-semibold">Day {day}</h3>
                 <span className="text-sm text-muted-foreground">· {formatKES(costs.byDay.find(([d]) => d === day)?.[1] ?? 0)}</span>
               </div>
               {dayStops.map((stop, i) => (
                 <Card key={`${stop.title}-${i}`} className="p-3">
                   <div className="flex items-start gap-3">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">{stop.time}</span>
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-none bg-primary/10 text-xs font-bold text-primary">{stop.time}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold">{stop.title}</p>
@@ -122,7 +122,7 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
             {dayStops.map((stop, i) => (
               <Card key={`${stop.title}-${i}`} className="p-3">
                 <div className="flex items-start gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">{stop.time}</span>
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-none bg-primary/10 text-xs font-bold text-primary">{stop.time}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{stop.title}</p>
@@ -150,7 +150,7 @@ export function SampleTraceBody({ onExplore }: { onExplore?: () => void }) {
             {costs.byKind.map(([kind, value]) => (
               <div key={kind} className="flex items-center gap-2 text-xs">
                 <span className="flex w-28 shrink-0 items-center gap-1.5">
-                  <span className={cn('size-2 rounded-full', KIND_DOT[kind] ?? 'bg-secondary')} />
+                  <span className={cn('size-2 rounded-none', KIND_DOT[kind] ?? 'bg-secondary')} />
                   {kind}
                 </span>
                 <Progress className="h-1.5 flex-1" value={Math.min((value / Math.max(costs.total, 1)) * 100, 100)} />

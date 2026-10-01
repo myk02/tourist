@@ -114,7 +114,7 @@ export function TripBriefCard({
     return (
       <Card className="border-dashed">
         <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
-          <span className="flex size-10 items-center justify-center rounded-2xl bg-secondary text-primary"><Sparkles className="size-5" /></span>
+          <span className="flex size-10 items-center justify-center rounded-none bg-secondary text-primary"><Sparkles className="size-5" /></span>
           <div>
             <p className="font-semibold">Trip brief</p>
             <p className="mt-0.5 max-w-md text-sm text-muted-foreground">A short, honest summary of this exact itinerary — highlights and a practical tip, grounded in your actual stops.</p>
@@ -147,7 +147,7 @@ export function TripBriefCard({
             </li>
           ))}
         </ul>
-        <p className="flex items-start gap-2 rounded-xl bg-primary/5 px-3 py-2.5 text-sm">
+        <p className="flex items-start gap-2 rounded-none bg-primary/5 px-3 py-2.5 text-sm">
           <Lightbulb className="mt-0.5 size-4 shrink-0 text-accent" />
           <span><span className="font-semibold">Tip: </span>{brief.tip}</span>
         </p>

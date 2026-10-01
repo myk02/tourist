@@ -97,12 +97,12 @@ export function TripChecklist({ tripId, stops, editable = true, collab = false, 
                         onClick={() => toggle(s._id, checked)}
                         aria-pressed={checked}
                         className={cn(
-                          'flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors',
+                          'flex min-w-0 flex-1 items-center gap-3 rounded-none border px-3 py-2.5 text-left transition-colors',
                           checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-card',
                           !editable && 'cursor-default',
                         )}
                       >
-                        <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors', checked ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 text-transparent')}>
+                        <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-none border transition-colors', checked ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 text-transparent')}>
                           <Check className="size-3.5" />
                         </span>
                         <span className="min-w-0 flex-1">
@@ -117,7 +117,7 @@ export function TripChecklist({ tripId, stops, editable = true, collab = false, 
                           onClick={() => void vote(s._id)}
                           aria-label={`Thumbs up ${s.name}`}
                           className={cn(
-                            'flex h-9 shrink-0 items-center gap-1 rounded-xl border px-2.5 text-xs font-semibold transition-colors',
+                            'flex h-9 shrink-0 items-center gap-1 rounded-none border px-2.5 text-xs font-semibold transition-colors',
                             myVotes.has(s._id) ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
                             !editable && 'cursor-default opacity-70',
                           )}

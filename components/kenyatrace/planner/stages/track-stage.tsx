@@ -27,7 +27,7 @@ export function TrackStage() {
       </div>
 
       {!draft.tripId ? (
-        <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed p-10 text-center">
+        <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-none border border-dashed p-10 text-center">
           <Navigation className="size-10 text-primary" />
           <h2 className="font-serif text-3xl">Save your plan to start tracking</h2>
           <p className="max-w-md text-muted-foreground">Your live location will be recorded on the map until you reach {plan?.destination ?? 'your destination'}.</p>
@@ -52,7 +52,7 @@ export function TrackStage() {
           <Card>
             <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
               {!tracking && activeSession?.status !== 'arrived' && consentPrompt && (
-                <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-2.5">
+                <div className="flex w-full items-center justify-between gap-3 rounded-none border border-primary/20 bg-primary/5 px-3.5 py-2.5">
                   <label htmlFor="kt-track-consent" className="text-sm text-muted-foreground">Record your route while you travel?</label>
                   <Switch
                     id="kt-track-consent"

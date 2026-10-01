@@ -120,15 +120,15 @@ function StayOptionCard({ alt, action, actionLabel, actionAria }: {
   actionAria: string
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-xl border bg-card">
+    <div className="group relative overflow-hidden rounded-none border bg-card">
       <Link href={`/discover/stays/${alt.id}`} className="block">
         <div className="relative aspect-[16/9] overflow-hidden">
-          <ListingImage src={alt.image} alt={alt.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="200px" />
-          <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 text-[11px] font-bold text-foreground shadow-sm">
+          <ListingImage src={alt.image} alt={alt.name} fill className="object-cover" sizes="200px" />
+          <span className="absolute left-2 top-2 rounded-none bg-white/95 px-2 py-0.5 text-[11px] font-bold text-foreground shadow-sm">
             {formatKES(alt.price)}<span className="font-medium text-muted-foreground"> / {alt.unit}</span>
           </span>
           {alt.rating > 0 && (
-            <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
+            <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-none bg-black/60 px-2 py-0.5 text-xs font-semibold text-white">
               <Star className="size-3 fill-amber-400 text-amber-400" />{alt.rating.toFixed(1)}
             </span>
           )}
@@ -229,11 +229,11 @@ export function WhereYouStay({ stops, listings, budgetPerDay, origin, destinatio
               <CardContent className="p-0">
                 <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
                   {s.image ? (
-                    <div className="relative h-40 w-full shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-44">
+                    <div className="relative h-40 w-full shrink-0 overflow-hidden rounded-none sm:h-28 sm:w-44">
                       <ListingImage src={s.image} alt={s.title} fill className="object-cover" sizes="176px" />
                     </div>
                   ) : (
-                    <div className="flex h-40 w-full shrink-0 items-center justify-center rounded-xl bg-muted sm:h-28 sm:w-44">
+                    <div className="flex h-40 w-full shrink-0 items-center justify-center rounded-none bg-muted sm:h-28 sm:w-44">
                       <BedDouble className="size-8 text-muted-foreground" />
                     </div>
                   )}
@@ -257,7 +257,7 @@ export function WhereYouStay({ stops, listings, budgetPerDay, origin, destinatio
                     <p className="mt-0.5 text-sm text-muted-foreground"><MapPin className="mr-1 inline size-3.5 align-[-2px]" />{s.place}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       {group.days.map(d => (
-                        <span key={d} className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-foreground">Night {d}</span>
+                        <span key={d} className="rounded-none bg-secondary px-2.5 py-1 text-[11px] font-semibold text-foreground">Night {d}</span>
                       ))}
                       {group.days.length > 1 && <span className="text-xs text-muted-foreground">{group.days.length} nights</span>}
                     </div>

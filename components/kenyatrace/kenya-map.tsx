@@ -279,5 +279,5 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
     })
   }, [livePath])
 
-  return <div ref={node} className={`overflow-hidden rounded-2xl border border-border/80 bg-card ring-1 ring-border/40 ${className}`} aria-label="Interactive map of Kenya" />
+  return <div ref={node} className={`overflow-hidden rounded-none border border-border bg-card ${className}`} aria-label="Interactive map of Kenya" />
 }

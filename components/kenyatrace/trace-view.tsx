@@ -40,8 +40,8 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
 
   const unavailable = (
     <div className="flex min-h-[100svh] items-center justify-center bg-background px-5">
-      <div className="flex max-w-md flex-col items-center gap-4 rounded-2xl border bg-card p-8 text-center shadow-soft">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-secondary text-primary"><Route className="size-6" /></span>
+      <div className="flex max-w-md flex-col items-center gap-4 rounded-none border bg-card p-8 text-center shadow-soft">
+        <span className="flex size-12 items-center justify-center rounded-none bg-secondary text-primary"><Route className="size-6" /></span>
         <h1 className="font-serif text-3xl font-semibold tracking-tight">This trace isn&apos;t available</h1>
         <p className="text-sm text-muted-foreground">The link may be wrong, or the traveller hasn&apos;t shared their trace yet.</p>
         <Button variant="outline" nativeButton={false} render={<Link href="/" />}>Back to KenyaTrace</Button>
@@ -68,11 +68,11 @@ export function TraceView({ tripId, token }: { tripId: string; token: string }) 
         className="h-[100svh] rounded-none"
       />
       <div className="absolute inset-x-4 bottom-5 mx-auto max-w-xl">
-        <div className="rounded-2xl border border-border/80 bg-card/95 p-5 shadow-pop backdrop-blur supports-backdrop-filter:bg-card/85">
+        <div className="rounded-none border border-border bg-card p-5 shadow-pop">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Live trip trace</p>
             {freshness && (
-              <span className="flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
+              <span className="flex items-center gap-1.5 rounded-none border border-primary/25 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
                 <Radio className="size-3 animate-pulse" /> Updated {freshness}
               </span>
             )}

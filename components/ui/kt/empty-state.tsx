@@ -15,7 +15,7 @@ export function EmptyState({ icon: Icon = MapPin, title, body, className }: {
   className?: string
 }) {
   return (
-    <div className={cn('flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center', className)}>
+    <div className={cn('flex min-h-52 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center', className)}>
       <Icon className="size-8 text-primary" />
       <p className="mt-4 font-serif text-2xl">{title}</p>
       {body && <p className="mt-2 max-w-md text-muted-foreground">{body}</p>}

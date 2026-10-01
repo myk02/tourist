@@ -62,7 +62,7 @@ export function sourceToFilter(source?: string | null): Exclude<SourceFilterValu
 export function SourceBadge({ source, className, onClick }: { source?: string | null; className?: string; onClick?: () => void }) {
   const meta = source ? SOURCE_META[source] : undefined
   if (!meta) return null
-  const classes = cn('inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white backdrop-blur-sm', className)
+  const classes = cn('inline-flex items-center gap-1.5 rounded-none bg-black/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white', className)
   if (onClick) {
     return (
       <button
@@ -71,14 +71,14 @@ export function SourceBadge({ source, className, onClick }: { source?: string | 
         onClick={onClick}
         className={cn(classes, 'cursor-pointer transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white')}
       >
-        <span className={cn('size-1.5 rounded-full', meta.dot)} />
+        <span className={cn('size-1.5 rounded-none', meta.dot)} />
         {meta.label}
       </button>
     )
   }
   return (
     <span className={classes}>
-      <span className={cn('size-1.5 rounded-full', meta.dot)} />
+      <span className={cn('size-1.5 rounded-none', meta.dot)} />
       {meta.label}
     </span>
   )
@@ -86,11 +86,11 @@ export function SourceBadge({ source, className, onClick }: { source?: string | 
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth()
-  if (isLoading) return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-2xl" /></div>
+  if (isLoading) return <div className="mx-auto max-w-6xl p-8"><div className="kt-shimmer h-48 rounded-none" /></div>
   if (!isAuthenticated) {
     return (
       <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
-        <span className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8" /></span>
+        <span className="flex size-16 items-center justify-center rounded-none bg-primary/10 text-primary ring-1 ring-primary/20"><CircleUserRound className="size-8" /></span>
         <h1 className="font-serif text-4xl tracking-tight">Your trip space is private</h1>
         <p className="text-muted-foreground">Sign in to save routes, reservations, live traces and moments.</p>
         <Button size="lg" nativeButton={false} render={<Link href="/sign-in" />}>Sign in to continue</Button>
@@ -171,7 +171,7 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
     .map(kind => ({ kind, total: stops.filter(s => s.kind === kind).reduce((a, s) => a + s.cost, 0) }))
     .filter(k => k.total > 0)
   return (
-    <div className={cn('rounded-2xl border bg-card p-4 shadow-soft', className)}>
+    <div className={cn('rounded-none border bg-card p-4 shadow-soft', className)}>
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="font-medium">Trip cost</span>
         <span className="font-semibold">
@@ -184,13 +184,13 @@ export function BudgetBar({ stops, budget, perDay, className }: { stops: { cost:
       <p className="mt-1 text-xs text-muted-foreground">{pct}% of your budget used{perDay != null ? ` · ≈ ${formatKES(perDay)} per day` : ''}</p>
       {kinds.length > 0 && (
         <div className="mt-3 border-t pt-3">
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div className="flex h-2 w-full overflow-hidden rounded-none bg-muted">
             {kinds.map(k => <div key={k.kind} style={{ width: `${(k.total / Math.max(total, 1)) * 100}%`, backgroundColor: kindHex(k.kind) }} />)}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
             {kinds.map(k => (
               <span key={k.kind} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="size-2.5 rounded-full" style={{ backgroundColor: kindHex(k.kind) }} />
+                <span className="size-2.5 rounded-none" style={{ backgroundColor: kindHex(k.kind) }} />
                 {k.kind} · {formatKES(k.total)}
               </span>
             ))}

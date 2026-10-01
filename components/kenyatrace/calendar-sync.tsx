@@ -76,7 +76,7 @@ export function CalendarSyncDialog({ tripId, open, onOpenChange }: {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="truncate rounded-lg bg-muted px-3 py-2 font-mono text-xs text-muted-foreground" title={feedUrl ?? ''}>
+            <p className="truncate rounded-none bg-muted px-3 py-2 font-mono text-xs text-muted-foreground" title={feedUrl ?? ''}>
               {feedUrl?.replace(token, '•'.repeat(8))}
             </p>
             {googleUrl && (

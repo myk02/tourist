@@ -17,11 +17,14 @@
   --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive); --color-border: var(--border); --color-input: var(--border); --color-ring: var(--ring);
-  --radius-sm: .25rem; --radius-md: .375rem; --radius-lg: .625rem; --radius-xl: .875rem; --radius-2xl: 1.125rem; --radius-3xl: 1.5rem;
+  /* Square-corner system: every radius token is 0. rounded-* utilities still
+     resolve but produce sharp corners, so legacy classes stay harmless. */
+  --radius-sm: 0rem; --radius-md: 0rem; --radius-lg: 0rem; --radius-xl: 0rem; --radius-2xl: 0rem; --radius-3xl: 0rem;
 
-  --shadow-soft: 0 1px 2px rgb(0 0 0 / .04), 0 10px 30px -12px rgb(0 0 0 / .14);
-  --shadow-lift: 0 2px 8px rgb(0 0 0 / .05), 0 24px 48px -20px rgb(0 0 0 / .22);
-  --shadow-pop: 0 8px 40px -8px rgb(0 0 0 / .28);
+  /* Flat-elevation shadows: single tight layer, no fog/glow. */
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / .06);
+  --shadow-lift: 0 1px 2px rgb(0 0 0 / .08);
+  --shadow-pop: 0 4px 12px rgb(0 0 0 / .12);
 }
 
 :root {
@@ -42,12 +45,13 @@
   --destructive: #d4443a;
   --border: #e4e9e3;
   --ring: #0e7a55;
-  --radius: .625rem;
+  --radius: 0rem;
 
   /* ─── KenyaTrace layout scale (Phase 2.3: single source) ───
      Pages: `kt-page` (max-w-6xl) · wide grids: `kt-page-wide` (max-w-7xl) ·
-     reading detail: `kt-page-narrow` (max-w-3xl). Cards stay `rounded-2xl`,
-     heroes `rounded-3xl`. Overlays: map popover < fab < tracker < nav < modal. */
+     reading detail: `kt-page-narrow` (max-w-3xl). Square-corner system: cards
+     and heroes share hard 0-radius edges, separated by borders not shadows.
+     Overlays: map popover < fab < tracker < nav < modal. */
   --kt-page: 72rem;
   --kt-page-wide: 80rem;
   --kt-page-narrow: 48rem;
@@ -80,7 +84,7 @@
   --destructive: #f07167;
   --border: #23342b;
   --ring: #35c992;
-  --radius: .625rem;
+  --radius: 0rem;
 }
 
 @layer base {
@@ -109,8 +113,6 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--foreground) 18%, transparent);
-  border: 2px solid transparent;
-  border-radius: 9999px;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--foreground) 32%, transparent); background-clip: content-box; }
@@ -153,7 +155,7 @@
   height: auto;
   padding: 0.35rem 0.65rem;
   border: 2px solid var(--primary);
-  border-radius: 9999px;
+  border-radius: 0.25rem;
   background: var(--card);
   color: var(--foreground);
   box-shadow: 0 3px 10px color-mix(in srgb, var(--foreground) 28%, transparent);
@@ -254,11 +256,11 @@
 }
 
 .maplibregl-popup-content {
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   background: var(--card);
   color: var(--card-foreground);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .06);
   font-family: inherit;
 }
 .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--card); }
@@ -269,10 +271,10 @@
 
 /* Map controls follow the app theme instead of maplibre's hard-coded white. */
 .maplibregl-ctrl-group {
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   background: var(--popover);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .06);
 }
 .maplibregl-ctrl-group button + button { border-top-color: var(--border); }
 .dark .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); }

@@ -435,17 +435,17 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6">
       {/* Hero — one attractive picture, category name, nothing else. */}
-      <div className="relative overflow-hidden rounded-2xl shadow-lift ring-1 ring-border">
+      <div className="relative overflow-hidden rounded-none shadow-soft">
         <div className="relative h-44 md:h-52">
           <ListingImage src={hero.image} alt={label} fill priority className="object-cover" sizes="100vw" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/35" />
+          <div className="absolute inset-0 bg-black/45" />
           <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-5 md:p-6">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-amber-300">Discover Kenya</p>
               <h1 className="mt-1 font-serif text-3xl font-semibold tracking-tight text-white md:text-4xl">{label}</h1>
               <p className="mt-1 text-sm text-white/85">{hero.tagline}</p>
             </div>
-            <span className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white backdrop-blur-sm">
+            <span className="rounded-none bg-white/90 px-3 py-1 text-sm font-semibold text-foreground">
               {filteredItems ? `${filteredItems.length} place${filteredItems.length === 1 ? '' : 's'}` : 'Loading places'}
             </span>
           </div>
@@ -459,7 +459,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
             key={c.id}
             href={`/discover/${c.id}`}
             className={cn(
-              'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+              'rounded-none border px-3.5 py-1.5 text-sm font-medium transition-colors',
               c.id === vertical ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
             )}
           >
@@ -494,7 +494,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               />
               {suggestListOpen && (
                 <div
-                  className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border bg-popover p-1 shadow-pop"
+                  className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-none border bg-popover p-1 shadow-pop"
                   id="discover-search-suggestions"
                   role="listbox"
                   aria-label="Search suggestions"
@@ -509,7 +509,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                       onMouseEnter={() => setActiveSuggestion(idx)}
                       onClick={() => pickSuggestion(idx)}
                       className={cn(
-                        'flex w-full items-baseline justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        'flex w-full items-baseline justify-between gap-3 rounded-none px-3 py-2 text-left text-sm transition-colors',
                         idx === activeSuggestion ? 'bg-secondary' : 'hover:bg-secondary/60',
                       )}
                     >
@@ -535,7 +535,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                 <SlidersHorizontal className="size-4" />
                 <span className="hidden sm:inline">Filters</span>
                 {activeFilterCount > 0 && (
-                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{activeFilterCount}</span>
+                  <span className="flex size-5 items-center justify-center rounded-none bg-primary text-[11px] font-semibold text-primary-foreground">{activeFilterCount}</span>
                 )}
               </Button>
             </div>
@@ -559,7 +559,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                       aria-pressed={active}
                       onClick={() => (option.kind === 'amenity' ? toggleAmenity(option.value) : setActiveFilter(option.value as QuickFilter))}
                       className={cn(
-                        'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+                        'flex items-center gap-1.5 rounded-none border px-3.5 py-1.5 text-sm font-medium transition-colors',
                         active
                           ? 'border-primary bg-primary text-primary-foreground'
                           : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
@@ -576,7 +576,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                   onClick={toggleNearMe}
                   disabled={locating}
                   className={cn(
-                    'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:opacity-60',
+                    'flex items-center gap-1.5 rounded-none border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:opacity-60',
                     nearMe
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
@@ -624,27 +624,27 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               {hasActiveFilters && (
                 <div className="flex flex-wrap items-center gap-2">
                   {rating > 0 && (
-                    <button onClick={() => setRating(0)} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                    <button onClick={() => setRating(0)} className="flex items-center gap-1.5 rounded-none bg-secondary px-3 py-1 text-sm font-medium">
                       Rating {rating.toFixed(1)}+ <X className="size-3.5" />
                     </button>
                   )}
                   {priceNarrowed && (
-                    <button onClick={() => setPriceRange(null)} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                    <button onClick={() => setPriceRange(null)} className="flex items-center gap-1.5 rounded-none bg-secondary px-3 py-1 text-sm font-medium">
                       {formatKES(activePrice[0])} – {formatKES(activePrice[1])} <X className="size-3.5" />
                     </button>
                   )}
                   {nearMe && (
-                    <button onClick={() => { setNearMe(false); setCoords(null) }} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                    <button onClick={() => { setNearMe(false); setCoords(null) }} className="flex items-center gap-1.5 rounded-none bg-secondary px-3 py-1 text-sm font-medium">
                       Near me <X className="size-3.5" />
                     </button>
                   )}
                   {activeSource && (
-                    <button onClick={() => setActiveSource('')} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                    <button onClick={() => setActiveSource('')} className="flex items-center gap-1.5 rounded-none bg-secondary px-3 py-1 text-sm font-medium">
                       {activeSource === 'firecrawl' ? 'AI-scraped' : activeSource === 'live' ? 'Live-scraped' : 'Curated'} <X className="size-3.5" />
                     </button>
                   )}
                   {amenities.map(value => (
-                    <button key={value} onClick={() => toggleAmenity(value)} className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+                    <button key={value} onClick={() => toggleAmenity(value)} className="flex items-center gap-1.5 rounded-none bg-secondary px-3 py-1 text-sm font-medium">
                       {value === 'freeCancellation' ? 'Free cancellation' : 'Instant confirmation'} <X className="size-3.5" />
                     </button>
                   ))}
@@ -666,9 +666,9 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
           <div className="flex gap-3 overflow-x-auto pb-2">
             {recommended.map(item => (
               <Link key={item._id} href={`/discover/${item.vertical}/${item._id}`} className="group w-40 shrink-0">
-                <div className="relative aspect-[3/2] overflow-hidden rounded-xl">
-                  <ListingImage src={item.image} alt={item.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="160px" />
-                  <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 text-[11px] font-bold text-foreground shadow-sm">{formatKES(item.price)}</span>
+                <div className="relative aspect-[3/2] overflow-hidden rounded-none">
+                  <ListingImage src={item.image} alt={item.name} fill className="object-cover" sizes="160px" />
+                  <span className="absolute left-2 top-2 rounded-none bg-white/95 px-2 py-0.5 text-[11px] font-bold text-foreground shadow-sm">{formatKES(item.price)}</span>
                 </div>
                 <p className="mt-1.5 truncate text-sm font-semibold">{item.name}</p>
                 <p className="truncate text-xs text-muted-foreground">{item.location}</p>
@@ -692,32 +692,32 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                     onMouseEnter={() => setHoveredId(item._id)}
                     onMouseLeave={() => setHoveredId(null)}
                     className={cn(
-                      'group relative overflow-hidden rounded-2xl border bg-card p-0 shadow-soft transition-shadow duration-200 hover:shadow-lift',
+                      'group relative overflow-hidden rounded-none border bg-card p-0 shadow-soft transition-shadow duration-200 hover:shadow-lift',
                       active && 'ring-2 ring-primary/40',
                     )}
                   >
                     <Link href={`/discover/${item.vertical}/${item._id}`} className="block">
-                      <div className="relative aspect-[3/2] overflow-hidden rounded-2xl">
+                      <div className="relative aspect-[3/2] overflow-hidden rounded-none">
                         <ListingImage
                           src={item.image}
                           alt={item.name}
                           fill
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          className="object-cover"
                           sizes="(min-width: 1280px) 33vw, (min-width: 640px) 50vw, 100vw"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/25" />
-                        <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-foreground shadow-sm">
+                        <div className="absolute inset-0 bg-black/40" />
+                        <span className="absolute left-3 top-3 rounded-none bg-white/95 px-2.5 py-1 text-xs font-bold text-foreground shadow-sm">
                           {formatKES(item.price)}
                           <span className="font-medium text-muted-foreground"> / {item.unit}</span>
                         </span>
                         {(item.freeCancellation || item.instantConfirm) && (
                           <div className="absolute left-3 top-12 flex flex-col items-start gap-1">
-                            {item.freeCancellation && <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">Free cancel</span>}
-                            {item.instantConfirm && <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">Instant confirm</span>}
+                            {item.freeCancellation && <span className="rounded-none bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">Free cancel</span>}
+                            {item.instantConfirm && <span className="rounded-none bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">Instant confirm</span>}
                           </div>
                         )}
                         {item.rating > 0 && (
-                          <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
+                          <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-none bg-black/60 px-2 py-0.5 text-xs font-semibold text-white">
                             <Star className="size-3 fill-amber-400 text-amber-400" />
                             {item.rating.toFixed(1)}
                           </span>
@@ -736,14 +736,14 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
                     <button
                       aria-label="Add to a trip"
                       onClick={e => { e.preventDefault(); openTripPicker(item._id) }}
-                      className="absolute right-12 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                      className="absolute right-12 top-3 z-10 flex size-9 items-center justify-center rounded-none bg-black/60 text-white transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                     >
                       <Plus className="size-4" />
                     </button>
                     <button
                       aria-label={saved ? 'Remove from saved' : 'Save to your list'}
                       onClick={e => { e.preventDefault(); toggleSave(item._id) }}
-                      className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                      className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-none bg-black/60 text-white transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                     >
                       <Heart className={cn('size-4 transition-colors', saved && 'fill-red-500 text-red-500')} />
                     </button>
@@ -752,8 +752,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
               })
             ) : (
               Array(PAGE_SIZE).fill(null).map((_, i) => (
-                <Card key={i} className="rounded-2xl border bg-card p-0">
-                  <Skeleton className="aspect-[3/2] w-full rounded-2xl" />
+                <Card key={i} className="rounded-none border bg-card p-0">
+                  <Skeleton className="aspect-[3/2] w-full rounded-none" />
                 </Card>
               ))
             )}
@@ -766,8 +766,8 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
           )}
 
           {filteredItems && filteredItems.length === 0 && (              vertical === 'taxis' ? (
-              <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed py-12 text-center">
-                <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20"><Car className="size-6" /></span>
+              <div className="flex flex-col items-center gap-4 rounded-none border border-dashed py-12 text-center">
+                <span className="flex size-12 items-center justify-center rounded-none bg-primary/10 text-primary ring-1 ring-primary/20"><Car className="size-6" /></span>
                 <div>
                   <p className="font-serif text-2xl font-semibold tracking-tight">No rides match your filters</p>
                   <p className="mx-auto mt-1 text-sm text-muted-foreground">Try clearing your filters, or browse rental cars instead.</p>
@@ -808,7 +808,7 @@ export function DiscoverPage({ vertical }: { vertical: Vertical }) {
       <button
         type="button"
         onClick={() => setMapOpen(true)}
-        className="fixed bottom-24 right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-lg transition-transform active:scale-95 lg:hidden"
+        className="fixed bottom-24 right-4 z-40 flex items-center gap-2 rounded-none bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-pop lg:hidden"
       >
         <Map className="size-4" /> Map
       </button>

@@ -53,7 +53,7 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
 
   const notFound = (
     <div className="flex min-h-[80svh] items-center justify-center px-5">
-      <div className="flex max-w-md flex-col items-center gap-4 rounded-2xl border bg-card p-8 text-center shadow-soft">
+      <div className="flex max-w-md flex-col items-center gap-4 rounded-none border bg-card p-8 text-center shadow-soft">
         <MapPin className="size-10 text-primary" />
         <h1 className="font-serif text-3xl font-semibold tracking-tight">Recap not found</h1>
         <p className="text-sm text-muted-foreground">This recap link isn&apos;t available.</p>
@@ -63,7 +63,7 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
   )
 
   if (!validTripId) return notFound
-  if (data === undefined) return <PageLoading label="Loading trip recap" className="mx-auto max-w-3xl px-5 py-10" shimmerClassName="aspect-square rounded-3xl" />
+  if (data === undefined) return <PageLoading label="Loading trip recap" className="mx-auto max-w-3xl px-5 py-10" shimmerClassName="aspect-square rounded-none" />
   if (!data) return notFound
 
   const { trip } = data
@@ -125,12 +125,12 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
             {moments.map((m, mi) => {
               const media = mediaOf(m)
               return (
-                <div key={m._id} className="group relative aspect-square overflow-hidden rounded-xl">
+                <div key={m._id} className="group relative aspect-square overflow-hidden rounded-none">
                   <button className="block size-full" onClick={() => setLightbox(mi)} aria-label={`View moment: ${m.caption}`}>
                     {media[0].type === 'video' ? (
-                      <video src={media[0].url} muted playsInline preload="metadata" className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      <video src={media[0].url} muted playsInline preload="metadata" className="size-full object-cover" />
                     ) : (
-                      <Image src={media[0].url} fill className="object-cover transition-transform duration-300 group-hover:scale-105" alt={m.caption} sizes="(max-width: 768px) 33vw, 320px" />
+                      <Image src={media[0].url} fill className="object-cover" alt={m.caption} sizes="(max-width: 768px) 33vw, 320px" />
                     )}
                   </button>
                   {m.best && <Badge className="absolute left-2 top-2 bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
@@ -139,7 +139,7 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
             })}
           </div>
 
-          <div className="rounded-2xl border bg-card p-5 shadow-soft">
+          <div className="rounded-none border bg-card p-5 shadow-soft">
             <p className="flex items-center gap-2 font-semibold"><Share2 className="size-4 text-primary" /> Share this recap</p>
             <p className="mt-1 text-sm text-muted-foreground">Send it anywhere — it works without an account.</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -159,7 +159,7 @@ export function RecapView({ tripId, token }: { tripId: string; token?: string })
         <DialogContent className="sm:max-w-2xl">
           {active && (
             <>
-              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-muted">
+              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-none bg-muted">
                 {mediaOf(active)[0].type === 'video' ? (
                   <video src={mediaOf(active)[0].url} controls autoPlay playsInline className="max-h-full w-full object-contain" />
                 ) : (

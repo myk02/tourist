@@ -111,7 +111,7 @@ export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTrave
           {breakdown.categories.map(({ kind, label, color, value }) => (
             <div key={kind} className="flex items-center gap-2 text-xs">
               <span className="flex w-28 shrink-0 items-center gap-1.5">
-                <span className={cn('size-2 rounded-full', color)} />
+                <span className={cn('size-2 rounded-none', color)} />
                 {label}
               </span>
               <Progress className="h-1.5 flex-1" value={pctOfBudget(value)} />
@@ -159,12 +159,12 @@ export function BudgetDashboard({ stops, budget, totalCost, tripId, initialTrave
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-border/60 bg-muted/60 p-4">
+            <div className="rounded-none border border-border/60 bg-muted/60 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Per person</p>
               <p className="mt-1 font-serif text-2xl font-semibold">{formatKES(perPerson)}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">split {travelers} way{travelers === 1 ? '' : 's'}</p>
             </div>
-            <div className="rounded-xl border border-border/60 bg-muted/60 p-4">
+            <div className="rounded-none border border-border/60 bg-muted/60 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Trip total</p>
               <p className="mt-1 font-serif text-2xl font-semibold">{formatKES(totalCost)}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">split {travelers} ways</p>

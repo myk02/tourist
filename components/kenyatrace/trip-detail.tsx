@@ -136,13 +136,13 @@ export function TripDetail() {
   // declarations, so handlers and JSX below use the guaranteed non-null id.
   if (id == null) return <NotFound />
   const tripId = id
-  if (trip === undefined) return <PageLoading label="Loading trip" className="mx-auto max-w-6xl p-8" shimmerClassName="h-72 rounded-2xl" />
+  if (trip === undefined) return <PageLoading label="Loading trip" className="mx-auto max-w-6xl p-8" shimmerClassName="h-72 rounded-none" />
   if (!trip) {
-    if (inviteState === 'accepting') return <PageLoading label="Accepting trip invite" className="mx-auto max-w-6xl p-8" shimmerClassName="h-72 rounded-2xl" />
+    if (inviteState === 'accepting') return <PageLoading label="Accepting trip invite" className="mx-auto max-w-6xl p-8" shimmerClassName="h-72 rounded-none" />
     if (inviteState === 'signin') {
       return (
         <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
-          <span className="flex size-16 items-center justify-center rounded-lg bg-secondary text-primary"><Copy /></span>
+          <span className="flex size-16 items-center justify-center rounded-none bg-secondary text-primary"><Copy /></span>
           <h1 className="font-serif text-4xl tracking-tight">You're invited to a trip</h1>
           <p className="text-muted-foreground">Sign in to join this shared itinerary.</p>
           <SignInButton mode="modal"><Button size="lg">Sign in to join</Button></SignInButton>
@@ -152,7 +152,7 @@ export function TripDetail() {
     if (inviteState === 'error') {
       return (
         <div className="mx-auto flex max-w-lg flex-col items-center gap-5 px-5 py-24 text-center">
-          <span className="flex size-16 items-center justify-center rounded-lg bg-secondary text-primary"><Trash2 /></span>
+          <span className="flex size-16 items-center justify-center rounded-none bg-secondary text-primary"><Trash2 /></span>
           <h1 className="font-serif text-4xl tracking-tight">Invite link expired</h1>
           <p className="text-muted-foreground">This invite link is no longer valid — ask the trip owner for a fresh one.</p>
           <Button nativeButton={false} render={<Link href="/trips" />}>Back to trips</Button>
@@ -547,17 +547,17 @@ export function TripDetail() {
                 const unpaid = bookings.filter(b => b.status !== 'paid' && b.status !== 'cancelled' && b.amount > 0)
                 const unpaidTotal = unpaid.reduce((s, b) => s + b.amount, 0)
                 return unpaid.length > 0 ? (
-                  <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-800 dark:text-amber-200">
+                  <p className="rounded-none border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-800 dark:text-amber-200">
                     <strong>{formatKES(unpaidTotal)}</strong> outstanding across {unpaid.length} reservation{unpaid.length === 1 ? '' : 's'} — pay below to lock {unpaid.length === 1 ? 'it' : 'them'} in.
                   </p>
                 ) : null
               })()}
               {bookings === undefined ? (
-                <div className="kt-shimmer h-28 rounded-xl" />
+                <div className="kt-shimmer h-28 rounded-none" />
               ) : bookings.length > 0 ? (
                 bookings.map(b => <BookingRow key={b._id} booking={b} onCancel={handleCancelBooking} />)
               ) : (
-                <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
+                <div className="flex min-h-52 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center">
                   <CalendarClock className="size-8 text-primary" />
                   <p className="mt-4 font-serif text-2xl">No reservations for this trip</p>
                   <p className="mt-2 max-w-md text-muted-foreground">When you request a reservation from a place page and link it to this trip, it will appear here — or use “Forward a confirmation” above to add one from a booking email.</p>

@@ -190,7 +190,7 @@ export function Detail({ id }: { id: string }) {
   if (item === undefined) {
     return (
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-6">
-        <div className="kt-shimmer h-64 rounded-2xl md:h-80" />
+        <div className="kt-shimmer h-64 rounded-none md:h-80" />
         <p role="status" className="text-sm text-muted-foreground">Loading listing</p>
       </div>
     )
@@ -201,10 +201,10 @@ export function Detail({ id }: { id: string }) {
     <>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-6">
         {/* Hero — one attractive picture with the essentials overlaid. */}
-        <div className="relative overflow-hidden rounded-2xl shadow-lift ring-1 ring-border">
+        <div className="relative overflow-hidden rounded-none shadow-soft">
           <div className="relative h-64 md:h-80">
             <ListingImage src={item?.image || '/kenya-hero.png'} alt={item?.name || 'Listing'} fill priority className="object-cover" sizes="100vw" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/30" />
+            <div className="absolute inset-0 bg-black/45" />
             <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2">
               <Badge className="bg-accent text-accent-foreground">{item?.vertical?.replace('-', ' ')?.toUpperCase()}</Badge>
               <SourceBadge source={item?.source} onClick={() => { const f = sourceToFilter(item?.source); if (f && item) router.push(`/discover/${item.vertical}?source=${f}`) }} />
@@ -215,12 +215,12 @@ export function Detail({ id }: { id: string }) {
                 <p className="mt-1 text-white/85"><MapPin className="mr-1 inline size-4 align-[-2px]" />{item?.location}</p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-2">
-                <span className="rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-foreground shadow-sm">
+                <span className="rounded-none bg-white/95 px-3 py-1.5 text-sm font-bold text-foreground shadow-sm">
                   {formatKES(item?.price || 0)}
                   <span className="font-medium text-muted-foreground"> / {item?.unit}</span>
                 </span>
                 {item?.rating ? (
-                  <span className="flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-sm font-semibold text-white backdrop-blur-sm">
+                  <span className="flex items-center gap-1 rounded-none bg-black/60 px-2.5 py-1 text-sm font-semibold text-white">
                     <Star className="size-4 fill-amber-400 text-amber-400" />{item.rating.toFixed(1)}{item.reviews ? ` (${item.reviews})` : ''}
                   </span>
                 ) : null}
@@ -243,13 +243,13 @@ export function Detail({ id }: { id: string }) {
                 <h2 className="font-serif text-2xl font-semibold tracking-tight">Good to know</h2>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {item?.tags?.map(tag => (
-                    <span key={tag} className="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-muted-foreground">{tag}</span>
+                    <span key={tag} className="rounded-none bg-secondary px-3 py-1 text-sm font-medium text-muted-foreground">{tag}</span>
                   ))}
                   {item?.freeCancellation && (
-                    <span className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium text-muted-foreground"><Check className="size-3.5 text-primary" />Free cancellation</span>
+                    <span className="flex items-center gap-1.5 rounded-none bg-secondary px-3 py-1 text-sm font-medium text-muted-foreground"><Check className="size-3.5 text-primary" />Free cancellation</span>
                   )}
                   {item?.instantConfirm && (
-                    <span className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium text-muted-foreground"><Check className="size-3.5 text-primary" />Instant confirmation</span>
+                    <span className="flex items-center gap-1.5 rounded-none bg-secondary px-3 py-1 text-sm font-medium text-muted-foreground"><Check className="size-3.5 text-primary" />Instant confirmation</span>
                   )}
                 </div>
               </section>
@@ -270,7 +270,7 @@ export function Detail({ id }: { id: string }) {
 
           {/* Sticky booking card */}
           <aside className="lg:sticky lg:top-20 lg:h-fit">
-            <Card className="shadow-soft">
+            <Card className="shadow-none">
               <CardContent className="flex flex-col gap-4 p-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -284,7 +284,7 @@ export function Detail({ id }: { id: string }) {
                   ) : null}
                 </div>
                 {savedEntry && item && savedEntry.priceAtSave != null && item.price < savedEntry.priceAtSave && (
-                  <p className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
+                  <p className="flex items-center gap-1.5 rounded-none border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
                     <TrendingDown className="size-3.5 shrink-0" />
                     Price dropped {formatKES(savedEntry.priceAtSave)} → {formatKES(item.price)} since you saved it.
                   </p>

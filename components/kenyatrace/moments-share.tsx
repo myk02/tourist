@@ -46,7 +46,7 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
 
   const notFound = <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-5 py-24 text-center"><MapPin className="size-10 text-primary" /><h1 className="font-serif text-4xl">Trip not found</h1><p className="text-muted-foreground">This share link is not available.</p></div>
   if (!validTripId) return notFound
-  if (data === undefined) return <PageLoading label="Loading shared moments" className="mx-auto max-w-6xl px-5 py-10" shimmerClassName="h-64 rounded-2xl" />
+  if (data === undefined) return <PageLoading label="Loading shared moments" className="mx-auto max-w-6xl px-5 py-10" shimmerClassName="h-64 rounded-none" />
   if (!data) return notFound
 
   const { trip, moments } = data
@@ -90,13 +90,13 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
           {moments.map((m, mi) => {
             const media = mediaOf(m)
             return (
-              <div key={m._id} className="group relative aspect-square overflow-hidden rounded-xl">
+              <div key={m._id} className="group relative aspect-square overflow-hidden rounded-none">
                 <button className="block size-full" onClick={() => setLightbox({ moment: mi, media: 0 })} aria-label={`View moment: ${m.caption}`}>
-                  <MediaTile media={media[0]} alt={m.caption} className="transition-transform duration-300 group-hover:scale-105" />
+                  <MediaTile media={media[0]} alt={m.caption} />
                 </button>
                 {media.length > 1 && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{media.length} media</Badge>}
                 {m.best && <Badge className="absolute left-2 top-2 bg-accent text-accent-foreground">Best moment</Badge>}
-                {m.location && <span className="absolute bottom-2 left-2 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white">{m.location}</span>}
+                {m.location && <span className="absolute bottom-2 left-2 rounded-none bg-black/50 px-2 py-0.5 text-xs text-white">{m.location}</span>}
               </div>
             )
           })}
@@ -104,7 +104,7 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
       )}
 
       {/* Recommend KenyaTrace */}
-      <div className="rounded-2xl border bg-card p-5 shadow-soft">
+      <div className="rounded-none border bg-card p-5 shadow-soft">
         <p className="flex items-center gap-2 font-semibold"><Share2 className="size-4 text-primary" /> Love this? Recommend KenyaTrace</p>
         <p className="mt-1 text-sm text-muted-foreground">Share this trip — it works without an account.</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -120,7 +120,7 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
         <DialogContent className="sm:max-w-3xl">
           {active && (
             <>
-              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-muted">
+              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-none bg-muted">
                 {activeMedia[activeIndex].type === 'video' ? (
                   <video src={activeMedia[activeIndex].url} controls autoPlay playsInline className="max-h-full w-full object-contain" />
                 ) : (
@@ -128,8 +128,8 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
                 )}
                 {activeMedia.length > 1 && (
                   <>
-                    <button aria-label="Previous media" onClick={() => setLightbox({ moment: lightbox!.moment, media: activeIndex === 0 ? activeMedia.length - 1 : activeIndex - 1 })} className="absolute left-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronLeft className="size-5" /></button>
-                    <button aria-label="Next media" onClick={() => setLightbox({ moment: lightbox!.moment, media: (activeIndex + 1) % activeMedia.length })} className="absolute right-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronRight className="size-5" /></button>
+                    <button aria-label="Previous media" onClick={() => setLightbox({ moment: lightbox!.moment, media: activeIndex === 0 ? activeMedia.length - 1 : activeIndex - 1 })} className="absolute left-3 flex size-9 items-center justify-center rounded-none bg-card/90 text-card-foreground shadow-sm"><ChevronLeft className="size-5" /></button>
+                    <button aria-label="Next media" onClick={() => setLightbox({ moment: lightbox!.moment, media: (activeIndex + 1) % activeMedia.length })} className="absolute right-3 flex size-9 items-center justify-center rounded-none bg-card/90 text-card-foreground shadow-sm"><ChevronRight className="size-5" /></button>
                   </>
                 )}
               </div>

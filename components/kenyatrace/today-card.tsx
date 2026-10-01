@@ -102,7 +102,7 @@ export function TodayCard({
     <Card className="border-primary/30 bg-primary/[0.04] shadow-soft">
       <CardContent className="flex flex-col gap-4 p-5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs"><CalendarDays className="size-4" /></span>
+          <span className="flex size-9 items-center justify-center rounded-none bg-primary text-primary-foreground shadow-xs"><CalendarDays className="size-4" /></span>
           <div className="min-w-0 flex-1">
             <p className="font-serif text-lg font-semibold tracking-tight">Today · Day {dayNumber}</p>
             <p className="text-xs text-muted-foreground">
@@ -137,12 +137,12 @@ export function TodayCard({
                       aria-pressed={done}
                       onClick={() => toggle(s._id, done)}
                       className={cn(
-                        'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors',
+                        'flex w-full items-center gap-3 rounded-none border px-3 py-2.5 text-left transition-colors',
                         done ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-card',
                         !editable && 'cursor-default',
                       )}
                     >
-                      <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-full border transition-colors', done ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 text-transparent')}>
+                      <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-none border transition-colors', done ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 text-transparent')}>
                         <Check className="size-4" />
                       </span>
                       <span className="min-w-0 flex-1">

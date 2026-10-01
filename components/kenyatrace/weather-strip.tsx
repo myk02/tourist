@@ -49,7 +49,7 @@ export function WeatherStrip({ stops, startDate }: {
   if (loading && days.length === 0) {
     return (
       <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Loading weather forecast">
-        {[0, 1, 2, 3].map(i => <div key={i} className="kt-shimmer h-24 w-32 shrink-0 rounded-xl" />)}
+        {[0, 1, 2, 3].map(i => <div key={i} className="kt-shimmer h-24 w-32 shrink-0 rounded-none" />)}
       </div>
     )
   }
@@ -68,7 +68,7 @@ export function WeatherStrip({ stops, startDate }: {
           <div
             key={d.day}
             role="listitem"
-            className={`flex w-36 shrink-0 flex-col gap-1 rounded-xl border p-3 ${rainy ? 'border-sky-500/30 bg-sky-500/5' : 'bg-card'}`}
+            className={`flex w-36 shrink-0 flex-col gap-1 rounded-none border p-3 ${rainy ? 'border-sky-500/30 bg-sky-500/5' : 'bg-card'}`}
           >
             <p className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
               Day {d.day}

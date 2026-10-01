@@ -108,7 +108,7 @@ export function ExpenseLog({ tripId, plannedTotal, travelers, canEdit }: {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/40 px-3.5 py-2.5 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-none border bg-muted/40 px-3.5 py-2.5 text-sm">
           <span className={cn('font-semibold', overPlanned ? 'text-destructive' : 'text-primary')}>
             {formatKES(actual)} spent
           </span>
@@ -123,7 +123,7 @@ export function ExpenseLog({ tripId, plannedTotal, travelers, canEdit }: {
             {byKind.map(([k, v]) => (
               <div key={k} className="flex items-center gap-2 text-xs">
                 <span className="flex w-24 shrink-0 items-center gap-1.5">
-                  <span className="size-2 rounded-full" style={{ backgroundColor: kindHex(k) }} />
+                  <span className="size-2 rounded-none" style={{ backgroundColor: kindHex(k) }} />
                   {k}
                 </span>
                 <Progress className="h-1.5 flex-1" value={actual > 0 ? (v / actual) * 100 : 0} />
@@ -133,20 +133,20 @@ export function ExpenseLog({ tripId, plannedTotal, travelers, canEdit }: {
           </div>
         )}
 
-        <div className="rounded-xl border border-border/60 bg-muted/60 p-4">
+        <div className="rounded-none border border-border/60 bg-muted/60 p-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Split across {travelers} traveller{travelers === 1 ? '' : 's'}</p>
           <p className="mt-1 font-serif text-2xl font-semibold">{formatKES(perPerson)} <span className="text-sm font-normal text-muted-foreground">per person</span></p>
         </div>
 
         {expenses === undefined ? (
-          <div className="kt-shimmer h-20 rounded-xl" />
+          <div className="kt-shimmer h-20 rounded-none" />
         ) : rows.length === 0 ? (
           <p className="py-2 text-center text-sm text-muted-foreground">No expenses logged yet{canEdit ? ' — add the first one above.' : '.'}</p>
         ) : (
           <div className="flex flex-col gap-1.5">
             {rows.map(r => (
-              <div key={r._id} className="group flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
-                <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: kindHex(r.kind) }} />
+              <div key={r._id} className="group flex items-center gap-2 rounded-none border px-3 py-2 text-sm">
+                <span className="size-2 shrink-0 rounded-none" style={{ backgroundColor: kindHex(r.kind) }} />
                 <span className="min-w-0 flex-1 truncate">{r.label}{r.spentBy ? <span className="text-muted-foreground"> · {r.spentBy}</span> : null}</span>
                 <span className="shrink-0 text-xs text-muted-foreground">{new Date(r.spentAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>
                 <strong className="shrink-0">{formatKES(r.amount)}</strong>
@@ -155,7 +155,7 @@ export function ExpenseLog({ tripId, plannedTotal, travelers, canEdit }: {
                     type="button"
                     aria-label={`Remove ${r.label}`}
                     onClick={() => remove({ id: r._id }).catch(() => toast.error('Could not remove the expense'))}
-                    className="shrink-0 rounded-lg p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                    className="shrink-0 rounded-none p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
                   >
                     <Trash2 className="size-3.5" />
                   </button>

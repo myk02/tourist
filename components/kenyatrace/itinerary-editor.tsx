@@ -98,7 +98,7 @@ function SortableStopRow({ stop, active, editing, readOnly, days, onEditingChang
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn('flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3 transition-colors', isDragging && 'z-10 opacity-80 shadow-lift', active && 'border-primary ring-2 ring-primary/20')}
+      className={cn('flex flex-wrap items-center gap-3 rounded-none border bg-card p-3 transition-colors', isDragging && 'z-10 opacity-80 shadow-lift', active && 'border-primary ring-2 ring-primary/20')}
     >
       {!readOnly && (
         <button
@@ -110,7 +110,7 @@ function SortableStopRow({ stop, active, editing, readOnly, days, onEditingChang
           <GripVertical className="size-4" />
         </button>
       )}
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">{stop.time}</span>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-none bg-primary/10 text-xs font-bold text-primary">{stop.time}</span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className={cn('font-semibold', stop.locked && 'opacity-60')}>{stop.title}</p>
@@ -173,7 +173,7 @@ function SortableStopRow({ stop, active, editing, readOnly, days, onEditingChang
               value={stop.day}
               onChange={e => onMoveDay(Number(e.target.value))}
               aria-label={`Move ${stop.title} to another day`}
-              className="h-9 max-w-24 rounded-lg border border-border bg-background px-1 text-xs text-muted-foreground"
+              className="h-9 max-w-24 rounded-none border border-border bg-background px-1 text-xs text-muted-foreground"
             >
               {days.map(d => <option key={d} value={d}>Day {d}</option>)}
             </select>
@@ -214,7 +214,7 @@ function TravelTime({ a, b }: { a: Stop; b: Stop }) {  // Prefer the real routed
       <Car className="size-3.5" />
       <span>{label}</span>
       {routed && (
-        <span className={cn('rounded-full px-1.5 py-px text-[10px] font-medium', b.travelRouted ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
+        <span className={cn('rounded-none px-1.5 py-px text-[10px] font-medium', b.travelRouted ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
           {b.travelRouted ? 'routing' : 'estimate'}
         </span>
       )}
@@ -560,7 +560,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     const hint = dayHints.get(day)
     if (!hint || dismissedHints.has(day)) return null
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+      <div className="flex flex-wrap items-center gap-2 rounded-none border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
         <TriangleAlert className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1">
           This day backtracks — reordering the stops makes it ~{Math.round(hint.savingsKm)} km ({Math.round(hint.savingsPct * 100)}%) shorter.
@@ -673,7 +673,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
                 {days.map(([day]) => (
                   <div key={day} className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground shadow-xs">{day}</span>
+                      <span className="flex size-7 items-center justify-center rounded-none bg-primary text-xs font-bold text-primary-foreground shadow-xs">{day}</span>
                       <h3 className="font-semibold">Day {day}</h3>
                       <DaySummary stops={stops.filter(s => s.day === day)} cost={dayTotals.get(day) ?? 0} travel={dayTravel.get(day)} />
                     </div>
@@ -758,7 +758,7 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
           {addTerm && (
             <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto">
               {results?.slice(0, 12).map(l => (
-                <div key={l._id} className="flex items-center gap-3 rounded-xl border p-2.5 transition-colors hover:border-primary/30">
+                <div key={l._id} className="flex items-center gap-3 rounded-none border p-2.5 transition-colors hover:border-primary/30">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{l.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{l.location} · {formatKES(l.price)}</p>

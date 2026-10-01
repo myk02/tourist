@@ -81,7 +81,7 @@ export function PlanStage() {
   if (!plan) {
     return (
       <div className="flex flex-col gap-6">
-        <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed p-10 text-center">
+        <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-none border border-dashed p-10 text-center">
           <Route className="size-10 text-primary" />
           <h2 className="font-serif text-3xl">Your plan isn&apos;t ready yet</h2>
           <p className="text-muted-foreground">Set your budget and we&apos;ll build it.</p>
@@ -100,7 +100,7 @@ export function PlanStage() {
         </p>
         <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight">{plan.name}</h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">{plan.summary}</p>
-        <p className="mt-3 rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-2.5 text-sm text-primary"><Sparkles className="mr-1 inline size-4 align-[-3px]" />{plan.originNote}</p>
+        <p className="mt-3 rounded-none border border-primary/25 bg-primary/5 px-3.5 py-2.5 text-sm text-primary"><Sparkles className="mr-1 inline size-4 align-[-3px]" />{plan.originNote}</p>
       </div>
 
       {/* Budget vs plan cost */}
@@ -152,7 +152,7 @@ export function PlanStage() {
                   <Card key={`${s.listingId ?? s.title}-${s.day}-${s.time}-${idx}`} className="p-4">
                     <div className="flex gap-3.5">
                       {s.image && (
-                        <div className="relative hidden size-16 shrink-0 overflow-hidden rounded-xl sm:block">
+                        <div className="relative hidden size-16 shrink-0 overflow-hidden rounded-none sm:block">
                           <ListingImage src={s.image} alt={s.title} fill className="object-cover" sizes="64px" />
                         </div>
                       )}
@@ -177,7 +177,7 @@ export function PlanStage() {
                           <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                             <Navigation className="size-3 shrink-0 text-primary" />
                             {s.travelKm} km · ~{formatMins(s.travelMins ?? 0)} from {stops[idx - 1]?.title}
-                            <span className={cn('rounded-full px-1.5 py-px text-[10px] font-medium', s.travelRouted ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
+                            <span className={cn('rounded-none px-1.5 py-px text-[10px] font-medium', s.travelRouted ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
                               {s.travelRouted ? 'routing' : 'estimate'}
                             </span>
                           </p>

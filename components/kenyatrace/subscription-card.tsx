@@ -33,9 +33,9 @@ export function SubscriptionSection() {
         </CardHeader>
         <CardContent>
           {status === undefined || status === null ? (
-            <div className="kt-shimmer h-20 rounded-xl" />
+            <div className="kt-shimmer h-20 rounded-none" />
           ) : status.active ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/25 bg-primary/5 p-4 shadow-soft">
+            <div className="flex flex-wrap items-center gap-3 rounded-none border border-primary/25 bg-primary/5 p-4 shadow-soft">
               <BrandMark icon="check" size="sm" />
               <div className="flex-1">
                 <p className="font-semibold">
@@ -60,7 +60,7 @@ export function SubscriptionSection() {
               <Badge className="bg-primary text-primary-foreground">Active</Badge>
             </div>
           ) : (
-            <p className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">Your access has ended.</p>
+            <p className="rounded-none border border-dashed p-4 text-sm text-muted-foreground">Your access has ended.</p>
           )}
         </CardContent>
       </Card>
@@ -80,12 +80,12 @@ export function SubscriptionSection() {
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {purchases === undefined ? (
-            <div className="kt-shimmer h-16 rounded-xl" />
+            <div className="kt-shimmer h-16 rounded-none" />
           ) : purchases.length === 0 ? (
             <p className="text-sm text-muted-foreground">No successful purchases yet.</p>
           ) : (
             purchases.map(p => (
-              <div key={p._id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-3 text-sm">
+              <div key={p._id} className="flex flex-wrap items-center justify-between gap-2 rounded-none border bg-card p-3 text-sm">
                 <div className="flex items-center gap-2">
                   <CalendarClock className="size-4 text-primary" />
                   <span className="font-medium">{p.days} days</span>

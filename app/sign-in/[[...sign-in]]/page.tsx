@@ -31,7 +31,7 @@ export default function SignInPage() {
                 {
                   variables: {
                     colorPrimary: '#0e7a55',
-                    borderRadius: '0.75rem',
+                    borderRadius: '0',
                   },
                   elements: {
                     rootBox: 'w-full',
@@ -41,19 +41,19 @@ export default function SignInPage() {
                     headerTitle: 'font-serif text-[26px] font-semibold tracking-tight text-center text-[#0f172a]',
                     headerSubtitle: 'text-sm text-muted-foreground text-center',
                     socialButtonsBlockButton:
-                      'h-[44px] rounded-lg border border-[#e5e7eb] bg-white hover:bg-[#f9fafb] text-[14px] font-medium text-[#111827] shadow-sm transition-colors',
+                      'h-[44px] rounded-none border border-[#e5e7eb] bg-white hover:bg-[#f9fafb] text-[14px] font-medium text-[#111827] shadow-none transition-colors',
                     socialButtonsBlockButtonText: 'font-medium',
                     socialButtonsProviderIcon: 'size-4',
                     dividerLine: 'bg-[#e5e7eb]',
                     dividerText: 'text-xs font-medium tracking-wide text-[#9ca3af] bg-white px-3',
                     formFieldLabel: 'text-[13px] font-medium text-[#111827]',
                     formFieldInput:
-                      'h-[44px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] placeholder:text-[#9ca3af] focus:border-[#0e7a55] focus:ring-2 focus:ring-[#0e7a55]/15',
+                      'h-[44px] rounded-none border border-[#e5e7eb] bg-white px-3 text-[14px] placeholder:text-[#9ca3af] focus:border-[#0e7a55] focus:ring-2 focus:ring-[#0e7a55]/15',
                     formButtonPrimary:
-                      'h-[44px] rounded-lg bg-[#0e7a55] hover:bg-[#0c6b4a] text-white text-[14px] font-semibold shadow-sm disabled:bg-[#f3f4f6] disabled:text-[#9ca3af] disabled:border disabled:border-[#e5e7eb] disabled:shadow-none',
-                    identityPreview: 'rounded-lg border border-[#e5e7eb] bg-[#f9fafb]',
+                      'h-[44px] rounded-none bg-[#0e7a55] hover:bg-[#0c6b4a] text-white text-[14px] font-semibold shadow-none disabled:bg-[#f3f4f6] disabled:text-[#9ca3af] disabled:border disabled:border-[#e5e7eb] disabled:shadow-none',
+                    identityPreview: 'rounded-none border border-[#e5e7eb] bg-[#f9fafb]',
                     formFieldAction: 'text-sm font-medium text-[#0e7a55] hover:underline',
-                    alert: 'rounded-lg',
+                    alert: 'rounded-none',
                     loaderIcon: 'text-[#0e7a55]',
                     logoBox: 'hidden',
                     footer: 'hidden',
@@ -96,7 +96,7 @@ export default function SignInPage() {
       </div>
 
       {/* Right — decorative */}
-      <div className="hidden lg:flex lg:w-[52%] relative overflow-hidden bg-[#fdfaf5] m-3 rounded-[28px] border border-black/[0.06] shadow-sm">
+      <div className="hidden lg:flex lg:w-[52%] relative overflow-hidden bg-[#fdfaf5] m-3 rounded-none border border-black/[0.06] shadow-none">
         <div className="absolute inset-x-0 top-0 h-[42%] bg-[#0e7a55] overflow-hidden">
           <div
             className="absolute inset-0 opacity-[0.18]"
@@ -120,7 +120,7 @@ export default function SignInPage() {
               fill="none"
             />
           </svg>
-          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#fdfaf5]/20 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-10 bg-[#fdfaf5]/15" />
         </div>
 
         <div className="absolute inset-0 flex items-center justify-center px-10 pointer-events-none">
@@ -140,7 +140,7 @@ export default function SignInPage() {
             return (
               <span
                 key={i}
-                className="size-[14px] rounded-full"
+                className="size-[14px] rounded-none"
                 style={{
                   backgroundColor: isGreen ? '#0e7a55' : isOrange ? '#e09a12' : isMuted ? '#9ca3af' : '#c8d5cf',
                   opacity: isGreen ? 0.95 : isOrange ? 1 : isMuted ? 0.35 : 0.45,
@@ -150,7 +150,7 @@ export default function SignInPage() {
           })}
         </div>
 
-        <div className="absolute bottom-0 left-0 h-[36%] w-[44%] overflow-hidden rounded-tr-[24px] bg-[#dbeafe] border-t border-r border-white/60">
+        <div className="absolute bottom-0 left-0 h-[36%] w-[44%] overflow-hidden rounded-none bg-[#dbeafe] border-t border-r border-white/60">
           <div
             className="absolute inset-0 opacity-[0.32]"
             style={{
@@ -158,25 +158,25 @@ export default function SignInPage() {
               backgroundSize: '18px 18px',
             }}
           />
-          <div className="absolute inset-0 bg-gradient-to-tr from-[#0e7a55]/10 to-transparent" />
-          <div className="absolute bottom-0 right-0 flex h-[84px] w-[148px] items-center justify-center bg-[#e09a12] rounded-tl-[12px] shadow-sm">
+          <div className="absolute inset-0 bg-[#0e7a55]/5" />
+          <div className="absolute bottom-0 right-0 flex h-[84px] w-[148px] items-center justify-center bg-[#e09a12] rounded-none shadow-none">
             <div className="relative size-10">
-              <span className="absolute left-1/2 top-1/2 h-10 w-[6px] -translate-x-1/2 -translate-y-1/2 bg-white/95 rounded-full" />
-              <span className="absolute left-1/2 top-1/2 h-[6px] w-10 -translate-x-1/2 -translate-y-1/2 bg-white/95 rounded-full" />
+              <span className="absolute left-1/2 top-1/2 h-10 w-[6px] -translate-x-1/2 -translate-y-1/2 bg-white/95" />
+              <span className="absolute left-1/2 top-1/2 h-[6px] w-10 -translate-x-1/2 -translate-y-1/2 bg-white/95" />
             </div>
-            <span className="absolute right-3 top-3 size-2 rounded-full bg-white/30" />
+            <span className="absolute right-3 top-3 size-2 bg-white/30" />
           </div>
         </div>
 
-        <div className="absolute bottom-0 right-0 h-[44%] w-[38%] overflow-hidden rounded-tl-[20px] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.18)] border-t border-l border-white/70">
+        <div className="absolute bottom-0 right-0 h-[44%] w-[38%] overflow-hidden rounded-none bg-white border-t border-l border-white/70">
           <img src="/naivasha-lake.png" alt="Lake Naivasha, Kenya" className="h-full w-full object-cover" loading="eager" />
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/15 to-transparent" />
-          <div className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-[#0e7a55] shadow-sm backdrop-blur">
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-black/10" />
+          <div className="absolute left-3 top-3 rounded-none bg-white/90 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-[#0e7a55] shadow-none">
             Kenya · Naivasha
           </div>
         </div>
 
-        <div className="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-white/60" />
+        <div className="pointer-events-none absolute inset-0 rounded-none ring-1 ring-white/60" />
       </div>
     </div>
   )

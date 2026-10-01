@@ -87,7 +87,7 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
     }
   }
 
-  if (moments === undefined) return <div className="grid grid-cols-2 gap-4 md:grid-cols-3"><div className="kt-shimmer aspect-square rounded-xl" /><div className="kt-shimmer aspect-square rounded-xl" /><div className="kt-shimmer aspect-square rounded-xl" /></div>
+  if (moments === undefined) return <div className="grid grid-cols-2 gap-4 md:grid-cols-3"><div className="kt-shimmer aspect-square rounded-none" /><div className="kt-shimmer aspect-square rounded-none" /><div className="kt-shimmer aspect-square rounded-none" /></div>
 
   const active = lightbox ? moments[lightbox.moment] : null
   const activeMedia = active ? mediaOf(active) : []
@@ -117,7 +117,7 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
   return (
     <div>
       {moments.length === 0 ? (
-        <div className="flex min-h-44 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
+        <div className="flex min-h-44 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center">
           <p className="font-serif text-2xl">No moments yet</p>
           {onUploadClick && <Button className="mt-4" variant="outline" onClick={onUploadClick}>Add your first memory</Button>}
         </div>
@@ -136,10 +136,10 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
               const { counts } = reactionState(m)
               const reactionTotal = [...counts.values()].reduce((a, b) => a + b, 0)
               return (
-                <div key={m._id} className="group relative aspect-square overflow-hidden rounded-xl">
+                <div key={m._id} className="group relative aspect-square overflow-hidden rounded-none">
                   <button className="block size-full" onClick={() => setLightbox({ moment: mi, media: 0 })} aria-label={`Open moment: ${m.caption}`}>
                     {media[0].type === 'video' ? (
-                      <video src={media[0].url} muted playsInline preload="metadata" className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      <video src={media[0].url} muted playsInline preload="metadata" className="size-full object-cover" />
                     ) : (
                       <Image
                           src={media[0].url}
@@ -147,7 +147,7 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                           fill
                           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                           unoptimized
-                          className="object-cover transition-transform duration-300 group-hover:scale-105"
+                          className="object-cover"
                         />
                     )}
                   </button>
@@ -155,20 +155,20 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                   {m.best && <Badge className="absolute right-2 top-2 bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
                   {/* Controls stay visible on touch (no hover there); desktop
                       reveals them on hover to keep tiles clean. */}
-                  <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-black/55 p-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                     {reactionTotal > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {[...counts.entries()].map(([emoji, n]) => (
-                          <span key={emoji} className="rounded-full bg-card/90 px-1.5 py-0.5 text-[11px] font-semibold text-card-foreground">{emoji} {n}</span>
+                          <span key={emoji} className="rounded-none bg-card/90 px-1.5 py-0.5 text-[11px] font-semibold text-card-foreground">{emoji} {n}</span>
                         ))}
                       </div>
                     )}
                     <div className="flex items-end justify-between gap-2">
                       <p className="line-clamp-2 text-sm text-white">{m.caption}</p>
                       <div className="flex shrink-0 gap-1">
-                        <button aria-label="Toggle best moment" onClick={() => toggleBest(m)} className={cn('flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground transition-colors', m.best && 'text-accent')}><Star className={cn('size-4', m.best && 'fill-current')} /></button>
-                        <button aria-label="Toggle visibility" onClick={() => togglePublic(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground">{m.public ? <Globe className="size-4" /> : <Lock className="size-4" />}</button>
-                        <button aria-label="Delete moment" onClick={() => setPendingDelete(m)} className="flex size-8 items-center justify-center rounded-full bg-card/90 text-card-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+                        <button aria-label="Toggle best moment" onClick={() => toggleBest(m)} className={cn('flex size-8 items-center justify-center rounded-none bg-card/90 text-card-foreground transition-colors', m.best && 'text-accent')}><Star className={cn('size-4', m.best && 'fill-current')} /></button>
+                        <button aria-label="Toggle visibility" onClick={() => togglePublic(m)} className="flex size-8 items-center justify-center rounded-none bg-card/90 text-card-foreground">{m.public ? <Globe className="size-4" /> : <Lock className="size-4" />}</button>
+                        <button aria-label="Delete moment" onClick={() => setPendingDelete(m)} className="flex size-8 items-center justify-center rounded-none bg-card/90 text-card-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
                       </div>
                     </div>
                   </div>
@@ -189,7 +189,7 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                   {active.best && <Badge className="bg-accent text-accent-foreground"><Star className="size-3 fill-current" />Best</Badge>}
                 </DialogTitle>
               </DialogHeader>
-              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-muted">
+              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-none bg-muted">
                 {activeMedia[activeIndex].type === 'video' ? (
                   <video src={activeMedia[activeIndex].url} controls autoPlay playsInline className="max-h-full w-full object-contain" />
                 ) : (
@@ -204,8 +204,8 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                 )}
                 {activeMedia.length > 1 && (
                   <>
-                    <button aria-label="Previous media" onClick={() => setLightbox({ moment: lightbox!.moment, media: activeIndex === 0 ? activeMedia.length - 1 : activeIndex - 1 })} className="absolute left-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronLeft className="size-5" /></button>
-                    <button aria-label="Next media" onClick={() => setLightbox({ moment: lightbox!.moment, media: (activeIndex + 1) % activeMedia.length })} className="absolute right-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-card-foreground shadow-sm"><ChevronRight className="size-5" /></button>
+                    <button aria-label="Previous media" onClick={() => setLightbox({ moment: lightbox!.moment, media: activeIndex === 0 ? activeMedia.length - 1 : activeIndex - 1 })} className="absolute left-3 flex size-9 items-center justify-center rounded-none bg-card/90 text-card-foreground shadow-sm"><ChevronLeft className="size-5" /></button>
+                    <button aria-label="Next media" onClick={() => setLightbox({ moment: lightbox!.moment, media: (activeIndex + 1) % activeMedia.length })} className="absolute right-3 flex size-9 items-center justify-center rounded-none bg-card/90 text-card-foreground shadow-sm"><ChevronRight className="size-5" /></button>
                   </>
                 )}
               </div>
@@ -226,7 +226,7 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
                         onClick={() => void toggleReaction(active, emoji)}
                         aria-pressed={mine === emoji}
                         className={cn(
-                          'flex h-8 items-center gap-1 rounded-full border px-2.5 text-sm transition-colors',
+                          'flex h-8 items-center gap-1 rounded-none border px-2.5 text-sm transition-colors',
                           mine === emoji ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40',
                         )}
                       >

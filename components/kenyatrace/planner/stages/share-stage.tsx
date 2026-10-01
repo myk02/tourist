@@ -43,7 +43,7 @@ export function ShareStage() {
       </div>
 
       {!draft.tripId ? (
-        <div className="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed p-10 text-center">
+        <div className="flex min-h-56 flex-col items-center justify-center gap-4 rounded-none border border-dashed p-10 text-center">
           <Camera className="size-10 text-primary" />
           <h2 className="font-serif text-3xl">Save your trip first</h2>
           <p className="max-w-md text-muted-foreground">Share this trip&apos;s photos, videos and rating.</p>
@@ -51,7 +51,7 @@ export function ShareStage() {
         </div>
       ) : draft.published ? (
         <div className="flex flex-col gap-5">
-          <div className="flex items-center gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-5 shadow-soft">
+          <div className="flex items-center gap-4 rounded-none border border-primary/25 bg-primary/5 p-5 shadow-soft">
             <BrandMark icon="check" />
             <div>
               <p className="font-semibold">Your experience is live</p>
@@ -88,7 +88,7 @@ export function ShareStage() {
               <div>
                 <p className="text-sm font-medium">Photos & videos</p>
                 <div className="mt-2">
-                  <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-8 text-center transition-colors hover:border-primary/40 hover:bg-primary/5">
+                  <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-none border-2 border-dashed p-8 text-center transition-colors hover:border-primary/40 hover:bg-primary/5">
                     <Camera className="size-8 text-primary" />
                     <span className="text-sm font-medium">Tap to add photos or videos</span>
                     <span className="text-xs text-muted-foreground">Up to 8 files · JPG, PNG, MP4</span>
@@ -98,7 +98,7 @@ export function ShareStage() {
                 {files.length > 0 && (
                   <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
                     {files.map((f, i) => (
-                      <div key={i} className="relative aspect-square overflow-hidden rounded-xl border">
+                      <div key={i} className="relative aspect-square overflow-hidden rounded-none border">
                         {f.video ? (
                           <video src={fileUrls.get(f.file) ?? ''} className="size-full object-cover" muted playsInline />
                         ) : (
@@ -108,7 +108,7 @@ export function ShareStage() {
                           type="button"
                           aria-label={`Remove ${f.file.name}`}
                           onClick={() => removeFile(i)}
-                          className="absolute right-1 top-1 flex size-8 items-center justify-center rounded-full bg-black/60 text-white after:absolute after:-inset-2 after:content-['']"
+                          className="absolute right-1 top-1 flex size-8 items-center justify-center rounded-none bg-black/60 text-white after:absolute after:-inset-2 after:content-['']"
                         >
                           <X className="size-4" />
                         </button>
@@ -123,7 +123,7 @@ export function ShareStage() {
                 <Input className="mt-1" value={caption} onChange={e => setCaption(e.target.value)} placeholder="The story behind this trip…" />
               </div>
 
-              <div className="rounded-xl border bg-card p-4">
+              <div className="rounded-none border bg-card p-4">
                 <p className="text-sm font-medium">Rate your experience</p>
                 <div className="mt-2"><StarRating value={draft.rating} onChange={n => setDraft(d => ({ ...d, rating: n }))} /></div>
                 <p className="mt-1 text-xs text-muted-foreground">{draft.rating ? `${draft.rating}/5 — ${draft.rating >= 4 ? 'glad you loved it' : draft.rating === 3 ? 'worthwhile trip' : 'thanks for the honest review'}` : 'Tap a star to rate'}</p>
@@ -153,7 +153,7 @@ export function DoneStage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 py-6 text-center">
-      <BrandMark icon="flag" size="lg" className="rounded-full shadow-pop" />
+      <BrandMark icon="flag" size="lg" className="shadow-pop" />
       <h1 className="font-serif text-4xl font-semibold tracking-tight">Session complete</h1>
       <p className="max-w-md text-muted-foreground">
         {plan ? `You planned ${plan.destination} from ${draft.origin} over ${draft.days} day${draft.days === 1 ? '' : 's'} on a ${formatKES(draft.budget)} budget${draft.rating ? `, and rated it ${draft.rating}/5` : ''}.` : 'Your Kenya journey is complete.'}
