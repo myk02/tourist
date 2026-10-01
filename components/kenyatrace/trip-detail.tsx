@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { GradientHero } from '@/components/ui/kt/gradient-hero'
 import { PageLoading } from '@/components/ui/kt/loading'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -489,7 +489,7 @@ export function TripDetail() {
           <CardContent className="flex flex-wrap items-center gap-3 p-4">
             <Images className="size-4 shrink-0 text-primary" />
             <p className="min-w-0 flex-1 text-sm font-medium">Every stop checked off — your trace is ready to relive.</p>
-            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/recap/${tripId}`} />}>View recap</Button>
+            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={(trip as { traceShareToken?: string }).traceShareToken ? `/recap/${tripId}?t=${(trip as { traceShareToken?: string }).traceShareToken}` : `/recap/${tripId}`} />}>View recap</Button>
           </CardContent>
         </Card>
       )}

@@ -72,7 +72,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   let trip: TripDoc | null
   try {
     trip = await resolveToken({ query }, token)
-  } catch {
+  } catch (err) {
+    console.error('[calendar] token resolve failed', err)
     return new Response('Calendar temporarily unavailable', { status: 503 })
   }
   if (!trip || !isValidConvexId(trip._id)) return new Response('Not found', { status: 404 })
@@ -83,8 +84,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   try {
     stops = ((await query('trips:listStops', { tripId })) as StopDoc[]) ?? []
     bookings = ((await query('bookings:forTrip', { tripId })) as BookingDoc[]) ?? []
-  } catch {
+  } catch (err) {
     // Stops/bookings failing must not kill the whole feed — the trip window still renders.
+    console.error('[calendar] stops/bookings partial feed', err)
   }
 
   const events: IcsEvent[] = []

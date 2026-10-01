@@ -94,8 +94,8 @@ function normalize(raw: any[], vertical: string, now: number): any[] {
     .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
     .map(item => ({
       vertical,
-      name: String(item.name ?? "Unknown").slice(0, 200),
-      location: String(item.location ?? "Kenya").slice(0, 200),
+      name: String(item.name ?? "").trim().slice(0, 200),
+      location: String(item.location ?? "").trim().slice(0, 200),
       price: toNumber(item.price, 0),
       unit: String(item.unit ?? "person").slice(0, 40),
       rating: Math.min(Math.max(toNumber(item.rating, 4.5), 0), 5),
@@ -103,11 +103,14 @@ function normalize(raw: any[], vertical: string, now: number): any[] {
       image: wikimediaThumb(typeof item.image === "string" ? item.image : ""),
       tags: Array.isArray(item.tags) ? item.tags.map(String).slice(0, 6) : [],
       description: String(item.description ?? "").slice(0, 600),
-      lat: toNumber(item.lat, 0),
-      lng: toNumber(item.lng, 0),
+      lat: toNumber(item.lat, NaN),
+      lng: toNumber(item.lng, NaN),
       scrapedAt: now,
       source: "firecrawl",
     }))
+    // Drop LLM hallucinations: unnamed rows or equator/null-island coords
+    // (0,0) would pin listings in the Gulf of Guinea instead of Kenya.
+    .filter(item => item.name.length >= 2 && Number.isFinite(item.lat) && Number.isFinite(item.lng) && !(item.lat === 0 && item.lng === 0))
 }
 
 export const scrapeVertical = internalAction({

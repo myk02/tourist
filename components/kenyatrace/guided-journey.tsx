@@ -50,11 +50,16 @@ export function GuidedJourney() {
   // sessionStorage is loaded after mount so the server and client first
   // renders match (hydration-safe); the saved journey appears a tick later.
   const [draft, setDraft] = useState<Draft>(emptyDraft)
-
+  // Live trip doc for the share token: every trip gets a secret
+  // traceShareToken on create — the public moments/recap link only works
+  // with ?t=token, so the planner must include it (Wanderlog-style sharing
+  // is link-first and must never 404).
+  const draftTripId = draft.tripId
+  const savedTrip = useQuery(api.trips.get, draftTripId ? { id: draftTripId } : 'skip')
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(DRAFT_KEY)
-      if (raw) setDraft(prev => ({ ...emptyDraft(), ...JSON.parse(raw) }))
+      if (raw) setDraft({ ...emptyDraft(), ...JSON.parse(raw) })
     } catch { /* ignore */ }
   }, [])
 
@@ -630,7 +635,7 @@ export function GuidedJourney() {
 
   async function copyShareLink() {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/moments/${draft.tripId}`)
+      await navigator.clipboard.writeText(shareLink)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -641,7 +646,8 @@ export function GuidedJourney() {
   // ─── Derived ──────────────────────────────────────────────────────────────
 
   const siteOrigin = typeof window !== 'undefined' ? window.location.origin : ''
-  const shareLink = `${siteOrigin}/moments/${draft.tripId}`
+  const shareToken = (savedTrip as { traceShareToken?: string } | null)?.traceShareToken
+  const shareLink = `${siteOrigin}/moments/${draft.tripId}${shareToken ? `?t=${shareToken}` : ''}`
   const shareText = plan
     ? `I just explored ${plan.destination} with KenyaTrace${draft.rating ? ` and rated it ${draft.rating}/5` : ''}. Plan your own trip: ${shareLink}`
     : 'Plan your own Kenya trip with KenyaTrace'

@@ -28,7 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Car, Clock, GripVertical, Lock, LockOpen, Pencil, Plus, RefreshCw, Route, Search, TriangleAlert, Wallet, X } from 'lucide-react'
+import { Car, GripVertical, Lock, LockOpen, Pencil, Plus, RefreshCw, Route, Search, TriangleAlert, Wallet, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatKES } from '@/lib/kenya-data'
 import { KIND_CHIP, kindChip } from '@/lib/kind'
@@ -363,7 +363,6 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
     const filtered = day === null ? stops : stops.filter(s => s.day === day)
     // Preserve the on-screen order (day-major, then the user's arrangement).
     const ordered = [...filtered].sort((a, b) => a.day - b.day)
-    const dayIndex = new Map<number, number>()
     const points: { id: string; name: string; location: string; lat: number; lng: number }[] = []
     const route: [number, number][] = []
     // Point ids are the stop's stable key — identical to the DOM row ids
@@ -503,7 +502,6 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
       const dayStops = stops.filter(s => s.day === day)
       const next = await onReplanDay(day, dayStops)
       setStops(prev => {
-        const kept = dayStops.filter(s => s.locked)
         const result: Stop[] = []
         let newIdx = 0
         for (const old of dayStops) {

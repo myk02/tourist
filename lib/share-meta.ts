@@ -57,7 +57,8 @@ export async function shareMeta(kind: 'trace' | 'recap' | 'moments', tripId: str
       description: `${data.trip.destination ?? 'Kenya'}${data.trip.startDate ? ` · ${prettyDate(data.trip.startDate)} → ${data.trip.endDate ? prettyDate(data.trip.endDate) : ''}` : ''}. Made with KenyaTrace.`,
       image: firstImage || '/kenya-hero.png',
     }
-  } catch {
+  } catch (err) {
+    console.warn('[share-meta] meta query failed, using fallback', err)
     return FALLBACK[kind]
   } finally {
     // ConvexHttpClient has no close() — it's a stateless request client and

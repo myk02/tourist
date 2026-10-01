@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils'
  * Pass `open` + `onOpenChange` for controlled mode (e.g. opened from a
  * dropdown menu item) — the default trigger button is then not rendered.
  */
-export function ShareTripDialog({ tripId, tripName, myRole, isOwner, triggerClassName, open: controlledOpen, onOpenChange }: { tripId: Id<'trips'>; tripName: string; myRole: string; isOwner: boolean; triggerClassName?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+export function ShareTripDialog({ tripId, tripName, myRole: _myRole, isOwner, triggerClassName, open: controlledOpen, onOpenChange }: { tripId: Id<'trips'>; tripName: string; myRole: string; isOwner: boolean; triggerClassName?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const [open, setOpenState] = useState(false)
   // Controlled mode (open prop) skips the built-in trigger entirely — the
   // parent owns when the dialog is shown.

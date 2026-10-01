@@ -80,13 +80,13 @@ export default function SignInPage() {
             </p>
             <p className="mt-6 text-center text-[11px] leading-relaxed text-[#9ca3af]">
               By signing in, you agree to our{' '}
-              <a href={`${process.env.NEXT_PUBLIC_APP_URL ?? ''}/terms`} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-[#0e7a55]">
+              <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-[#0e7a55]">
                 Terms of Service
-              </a>{' '}
+              </Link>{' '}
               and{' '}
-              <a href={`${process.env.NEXT_PUBLIC_APP_URL ?? ''}/privacy`} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-[#0e7a55]">
+              <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-[#0e7a55]">
                 Privacy Policy
-              </a>
+              </Link>
               .
             </p>
           </div>

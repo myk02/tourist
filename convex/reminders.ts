@@ -1,6 +1,7 @@
 import { action, internalAction, internalMutation, internalQuery } from "./_generated/server"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
+import type { Id } from "./_generated/dataModel"
 import { checkInMs } from "../lib/dates"
 import { EMAIL_FROM, resend } from "../lib/resend"
 import { buildReminderEmail, type ReminderDue } from "../lib/reminder-email"
@@ -71,7 +72,7 @@ export const sweep = action({ args: {}, handler: async ctx => {
     try {
       const { error } = await resend.emails.send({ from: EMAIL_FROM, to: d.to, subject, html })
       if (error) throw new Error(error.message)
-      await ctx.runMutation(internal.reminders.markSent, { id: d.bookingId as never, which: d.which })
+      await ctx.runMutation(internal.reminders.markSent, { id: d.bookingId as Id<"bookings">, which: d.which })
       sent++
     } catch (e) {
       console.error("[reminders] send failed:", e)
@@ -127,7 +128,7 @@ export const sweepAll = internalAction({
         try {
           const { error } = await resend.emails.send({ from: EMAIL_FROM, to: d.to, subject, html })
           if (error) throw new Error(error.message)
-          await ctx.runMutation(internal.reminders.markSent, { id: d.bookingId as never, which: d.which })
+          await ctx.runMutation(internal.reminders.markSent, { id: d.bookingId as Id<"bookings">, which: d.which })
           sent++
         } catch (e) {
           console.error("[reminders] cron send failed:", e)

@@ -69,7 +69,7 @@ export const publicForTrip = query({ args: { tripId: v.id("trips"), token: v.opt
     const imageUrls = await Promise.all(ids.map(id => ctx.storage.getUrl(id)))
     const videoUrls = await Promise.all((moment.videoStorageIds ?? []).map(id => ctx.storage.getUrl(id)))
     // Reactions are collaborator-internal — never exposed on public pages.
-    const { reactions, ...rest } = moment
+    const { reactions: _reactions, ...rest } = moment
     return { ...rest, imageUrl: imageUrls[0] ?? null, imageUrls: imageUrls.filter((x): x is string => !!x), videoUrls: videoUrls.filter((x): x is string => !!x) }
   }))
   return {

@@ -138,7 +138,7 @@ export function TripChecklist({ tripId, stops, editable = true, collab = false, 
 }
 
 /** One lightweight thread per day — short notes, no chat. */
-function DayNotes({ tripId, day, notes, canPost, isOwner, myId }: { tripId: string; day: number; notes: ReturnType<typeof useQuery<typeof api.trips.dayNotesForTrip>> | undefined; canPost: boolean; isOwner: boolean; myId?: string }) {
+function DayNotes({ tripId, day, notes, canPost, isOwner, myId }: { tripId: Id<'trips'>; day: number; notes: ReturnType<typeof useQuery<typeof api.trips.dayNotesForTrip>> | undefined; canPost: boolean; isOwner: boolean; myId?: string }) {
   const addNote = useMutation(api.trips.addDayNote)
   const removeNote = useMutation(api.trips.removeDayNote)
   const [body, setBody] = useState('')
@@ -151,7 +151,7 @@ function DayNotes({ tripId, day, notes, canPost, isOwner, myId }: { tripId: stri
     if (!text) return
     setPosting(true)
     try {
-      await addNote({ tripId: tripId as never, day, body: text })
+      await addNote({ tripId, day, body: text })
       setBody('')
     } catch {
       toast.error('Could not add the note')
@@ -162,7 +162,7 @@ function DayNotes({ tripId, day, notes, canPost, isOwner, myId }: { tripId: stri
 
   async function remove(id: string) {
     try {
-      await removeNote({ noteId: id as never })
+      await removeNote({ noteId: id as Id<'dayNotes'> })
     } catch {
       toast.error('Could not remove the note')
     }

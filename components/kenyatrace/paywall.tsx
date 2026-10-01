@@ -171,7 +171,7 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
               method: 'POST',
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify({ reference, email }),
-            }).catch(() => {})
+            }).catch(err => console.warn('[paywall] payment-recovery flag failed', err))
             toast.error('Payment could not be confirmed — we\'ve flagged your reference for support. If you were charged, you won\'t lose out.')
           }
         } catch {
@@ -181,7 +181,7 @@ export function DayPackCheckout({ onPurchased }: { onPurchased?: (days: number) 
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ reference, email }),
-          }).catch(() => {})
+          }).catch(err => console.warn('[paywall] payment-recovery flag failed', err))
           toast.error('Could not confirm the payment — we\'ve flagged your reference for support')
         } finally {
           busyRef.current = false
