@@ -279,6 +279,18 @@ export const ItineraryEditor = forwardRef<ItineraryEditorHandle, {
   useEffect(() => {
     setMounted(true)
   }, [])
+  // Resync when the trip reloads (collaborator edits / refetch) — local edits
+  // made after mount win, a fresh `initial` identity replaces stale rows.
+  const initialSig = useRef<string>('')
+  useEffect(() => {
+    let sig: string
+    try { sig = JSON.stringify(initial.map(s => [s.day, s.time, s.title, s.place, s.cost, s.listingId])) } catch { sig = '' }
+    if (!mounted) { initialSig.current = sig; return }
+    if (sig && sig !== initialSig.current) {
+      initialSig.current = sig
+      setStops(ensureKeys(initial))
+    }
+  }, [initial, mounted])
   useEffect(() => {
     if (!mounted) return
     onChangeRef.current?.(stops)

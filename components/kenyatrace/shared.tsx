@@ -150,7 +150,7 @@ export function BookingRow({ booking, onCancel }: { booking: Doc<'bookings'>; on
               {confirming ? 'Checking' : 'Check status'}
             </Button>
           )}
-          {(booking.status === 'requested' || booking.status === 'pending') && booking.amount > 0 && booking.listingId && <PayNowButton booking={booking} />}
+          {(booking.status === 'requested' || booking.status === 'pending') && booking.amount > 0 && <PayNowButton booking={booking} />}
           {booking.status !== 'cancelled' && booking.status !== 'paid' && <Button variant="outline" size="sm" onClick={() => onCancel(booking._id)}>Cancel</Button>}
         </div>
       </CardContent>

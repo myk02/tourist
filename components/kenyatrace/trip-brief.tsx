@@ -32,6 +32,7 @@ function parseBrief(raw?: string): Brief | null {
   try {
     const b = JSON.parse(raw) as Brief
     if (typeof b.summary !== 'string' || !Array.isArray(b.highlights)) return null
+    if (typeof b.tip !== 'string') return { summary: b.summary, highlights: b.highlights, tip: '' }
     return b
   } catch {
     return null
@@ -147,10 +148,12 @@ export function TripBriefCard({
             </li>
           ))}
         </ul>
-        <p className="flex items-start gap-2 rounded-none bg-primary/5 px-3 py-2.5 text-sm">
-          <Lightbulb className="mt-0.5 size-4 shrink-0 text-accent" />
-          <span><span className="font-semibold">Tip: </span>{brief.tip}</span>
-        </p>
+        {brief.tip ? (
+          <p className="flex items-start gap-2 rounded-none bg-primary/5 px-3 py-2.5 text-sm">
+            <Lightbulb className="mt-0.5 size-4 shrink-0 text-accent" />
+            <span><span className="font-semibold">Tip: </span>{brief.tip}</span>
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   )

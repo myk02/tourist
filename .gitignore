@@ -23,5 +23,9 @@ tsconfig.tsbuildinfo
 # Logs
 error-log.txt
 
+# Playwright regression artifacts
+playwright-report/
+test-results/
+
 # Local tool cache
 .freebuff/

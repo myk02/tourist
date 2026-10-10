@@ -35,6 +35,7 @@ import { BookingRow, BudgetBar, NotFound, useTripId } from './shared'
 import { RequireSubscription } from './paywall'
 import { TripBriefCard } from './trip-brief'
 import { TripChecklist } from './trip-checklist'
+import { TripEssentials } from './trip-essentials'
 import { TodayCard } from './today-card'
 import { WeatherStrip } from './weather-strip'
 import type { Stop } from './types'
@@ -196,7 +197,7 @@ export function TripDetail() {
   // same view; past trips open on Moments for the owner. Weather, packing and
   // expenses ride the itinerary/budget tabs respectively (matching Wanderlog,
   // where forecast and packing live beside the plan).
-  const TAB_IDS = ['itinerary', 'route', 'budget', 'bookings', 'moments']
+  const TAB_IDS = ['itinerary', 'route', 'budget', 'bookings', 'moments', 'packing', 'essentials']
   const defaultTab = stage === 'past' && isOwner ? 'moments' : 'itinerary'
   const requestedTab = params.get('tab')
   const activeTab = requestedTab != null && TAB_IDS.includes(requestedTab) ? requestedTab : defaultTab
@@ -522,6 +523,7 @@ export function TripDetail() {
           <TabsTrigger value="route">Route map</TabsTrigger>
           <TabsTrigger value="budget">Budget</TabsTrigger>
           <TabsTrigger value="packing">Packing</TabsTrigger>
+          <TabsTrigger value="essentials">Essentials</TabsTrigger>
           {isOwner && <TabsTrigger value="bookings">Bookings</TabsTrigger>}
           {isOwner && <TabsTrigger value="moments">Moments</TabsTrigger>}
         </TabsList>
@@ -536,6 +538,13 @@ export function TripDetail() {
           </div>
         </TabsContent>
         <TabsContent value="packing"><PackingChecklist tripId={tripId} canEdit={canEdit} /></TabsContent>
+        <TabsContent value="essentials">
+          <TripEssentials
+            tripName={trip.name}
+            stops={trip.stops.map(s => ({ name: s.name, place: s.place, lat: s.lat, lng: s.lng, day: s.day, time: s.time }))}
+            traceUrl={(trip as { traceShareToken?: string }).traceShareToken ? `/trace/${tripId}?t=${(trip as { traceShareToken?: string }).traceShareToken}` : `/trips/${tripId}/track`}
+          />
+        </TabsContent>
         {isOwner && (
           <TabsContent value="bookings">
             <div className="flex flex-col gap-3">

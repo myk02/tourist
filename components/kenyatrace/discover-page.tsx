@@ -57,10 +57,10 @@ function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
 
 /** Hero photo + one-line tagline per category. Local assets only — no hotlinks. */
 const VERTICAL_HERO: Record<string, { image: string; tagline: string }> = {
-  stays: { image: 'https://upload.wikimedia.org/wikipedia/commons/7/72/PIC_0106.JPG', tagline: 'Wake up by the coast or in the wild' },
-  flights: { image: 'https://upload.wikimedia.org/wikipedia/commons/d/d4/Nairobi_Skyline_Savannah_Kenya_May19_R1600687.jpg', tagline: 'City to savannah in an hour' },
-  attractions: { image: 'https://upload.wikimedia.org/wikipedia/commons/c/c2/Masai_Mara_landscape.jpg', tagline: 'Tours, parks, and the places Kenya is famous for' },
-  cars: { image: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Lake_Naivasha%2C_Kenya_%2845636345554%29.jpg', tagline: 'Drive Kenya your own way' },
+  stays: { image: '/diani-beach.png', tagline: 'Wake up by the coast or in the wild' },
+  flights: { image: '/kenya-hero.png', tagline: 'City to savannah in an hour' },
+  attractions: { image: '/kenya-hero.png', tagline: 'Tours, parks, and the places Kenya is famous for' },
+  cars: { image: '/naivasha-lake.png', tagline: 'Drive Kenya your own way' },
   // Taxis are city rides — the generic Kenya hero, not a Mara landscape dup.
   taxis: { image: '/kenya-hero.png', tagline: 'City rides and airport runs' },
 }

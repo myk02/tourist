@@ -6,9 +6,11 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: '/',
+        allow: ['/', '/moments/', '/trace/', '/recap/'],
         // Private trip space, token calendar feeds and APIs are never crawled.
-        disallow: ['/api/', '/trips/', '/moments/', '/profile', '/trace/', '/recap/'],
+        // Public share pages (/moments/[tripId], /trace/[id], /recap/[tripId])
+        // stay crawlable so shared trips can index.
+        disallow: ['/api/', '/trips', '/profile'],
       },
     ],
     sitemap: `${base}/sitemap.xml`,

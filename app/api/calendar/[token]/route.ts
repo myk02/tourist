@@ -7,7 +7,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/calendar/[token].ics
+ * GET /api/calendar/[token]
  *
  * TripIt-style calendar sync: the traveller subscribes to this URL once in
  * Google/Apple/Outlook Calendar and every itinerary stop + paid booking
@@ -50,7 +50,7 @@ interface Client {
 }
 
 async function resolveToken(client: Client, token: string): Promise<TripDoc | null> {
-  return (await client.query('trips:byCalendarToken', { token })) as TripDoc | null
+  return (await client.query('calendar:byCalendarToken', { token })) as TripDoc | null
 }
 
 /** Day N (1-based) of the trip as a YYYY-MM-DD calendar date. */
@@ -63,7 +63,10 @@ function dayDate(startDate: string, day: number): string {
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const url = process.env.NEXT_PUBLIC_CONVEX_URL
-  if (!url || !token || token.length > 64 || !/^[a-zA-Z0-9_-]+$/.test(token)) {
+  if (!url) {
+    return new Response('Calendar temporarily unavailable', { status: 503 })
+  }
+  if (!token || token.length > 64 || !/^[a-zA-Z0-9_-]+$/.test(token)) {
     return new Response('Not found', { status: 404 })
   }
 
@@ -82,7 +85,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   let stops: StopDoc[] = []
   let bookings: BookingDoc[] = []
   try {
-    stops = ((await query('trips:listStops', { tripId })) as StopDoc[]) ?? []
+    stops = ((await query('calendar:listStops', { tripId })) as StopDoc[]) ?? []
+    // Unauthenticated feed: bookings:forTrip requires auth so it returns []
+    // here — stops still render. Paid bookings appear once the owner opens
+    // the trip (authenticated) and re-syncs; never fail the whole feed.
     bookings = ((await query('bookings:forTrip', { tripId })) as BookingDoc[]) ?? []
   } catch (err) {
     // Stops/bookings failing must not kill the whole feed — the trip window still renders.

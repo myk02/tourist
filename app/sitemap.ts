@@ -5,7 +5,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date()
   // Public-only: authenticated trip space (/trips, /moments, /profile) must
   // never be crawled — it 404s/redirects for bots and dilutes SEO.
-  const routes = ['', '/plan', '/discover', '/discover/stays', '/discover/flights', '/discover/attractions', '/discover/cars', '/discover/taxis', '/terms', '/privacy']
+  // Note: /discover is a redirect to /discover/stays — never list redirects.
+  const routes = ['', '/plan', '/discover/stays', '/discover/flights', '/discover/attractions', '/discover/cars', '/discover/taxis', '/terms', '/privacy']
   return routes.map(r => ({
     url: `${base}${r || '/'}`,
     lastModified: now,

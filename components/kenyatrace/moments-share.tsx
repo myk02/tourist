@@ -94,8 +94,9 @@ export function MomentsShare({ tripId, token }: { tripId: string; token?: string
                 <button className="block size-full" onClick={() => setLightbox({ moment: mi, media: 0 })} aria-label={`View moment: ${m.caption}`}>
                   <MediaTile media={media[0]} alt={m.caption} />
                 </button>
-                {media.length > 1 && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{media.length} media</Badge>}
+                {media.length > 1 && !m.best && <Badge className="absolute left-2 top-2 bg-card/90 text-card-foreground">+{media.length} media</Badge>}
                 {m.best && <Badge className="absolute left-2 top-2 bg-accent text-accent-foreground">Best moment</Badge>}
+                {m.best && media.length > 1 && <Badge className="absolute bottom-2 right-2 bg-card/90 text-card-foreground">+{media.length} media</Badge>}
                 {m.location && <span className="absolute bottom-2 left-2 rounded-none bg-black/50 px-2 py-0.5 text-xs text-white">{m.location}</span>}
               </div>
             )

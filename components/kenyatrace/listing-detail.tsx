@@ -158,8 +158,14 @@ export function Detail({ id }: { id: string }) {
 
   async function reserveThis() {
     if (!item) return
+    if (!checkIn) { toast.error('Pick a date first'); return }
+    if (!isOneWayTransport && checkOut && checkOut < checkIn) { toast.error('Check-out must be after check-in'); return }
     try {
-      const reference = await reserve({ listingId: item._id, type: item.vertical, amount: item.price, checkIn, checkOut, guests, tripId: reserveTripId ?? undefined })
+      // One-way transport books a single date — sending a stay-style
+      // check-out range makes the server reject valid taxi/flight bookings.
+      const reference = await reserve(isOneWayTransport
+        ? { listingId: item._id, type: item.vertical, amount: item.price, checkIn, guests, tripId: reserveTripId ?? undefined }
+        : { listingId: item._id, type: item.vertical, amount: item.price, checkIn, checkOut, guests, tripId: reserveTripId ?? undefined })
       toast.success(`Reserved — ${reference}`, {
         action: { label: 'View bookings', onClick: () => router.push('/profile?tab=bookings') },
       })

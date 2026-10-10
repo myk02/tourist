@@ -532,7 +532,10 @@ export function GuidedJourney() {
     if (!navigator.geolocation) { toast.error('Location is not supported'); return }
     // lat 0 is the equator (it runs through Kenya) — null-check, not truthiness.
     if (destinationStop?.lat == null || destinationStop?.lng == null) { toast.error('This trip has no destination coordinates'); return }
-    if (me?.trackingConsent !== true) {
+    // Accept the optimistic local flip too — the server value lags a beat
+    // after the user enables the switch, and gating on it alone dead-ends
+    // the flow with no visible control.
+    if (me?.trackingConsent !== true && !localConsent) {
       toast.error('Location tracing needs your consent — enable it below')
       return
     }

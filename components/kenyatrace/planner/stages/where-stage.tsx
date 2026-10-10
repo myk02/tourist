@@ -102,9 +102,9 @@ export function WhereStage() {
         <ListingImage src={wikimediaThumb(JOURNEY_HERO)} alt="Kenya" fill priority className="object-cover" sizes="100vw" />
         <div className="absolute inset-0 bg-black/45" />
         <div className="relative flex h-full flex-col justify-end p-6 md:p-10">
-          <p className="text-xs font-semibold uppercase tracking-widest text-amber-300">Plan a Kenya trip</p>
-          <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight md:text-5xl">Where are you right now?</h1>
-          <p className="mt-3 max-w-xl text-white/85">We plan the best of Kenya around your exact spot.</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-amber-300">KenyaTrace — Travel Kenya your way</p>
+          <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight md:text-5xl">Discover, plan, book and trace Kenya</h1>
+          <p className="mt-3 max-w-xl text-white/85">AI-built day-by-day itineraries from your exact location, verified stays and experiences in KSh, M-Pesa checkout, live GPS trace and shareable moments.</p>
         </div>
       </div>
 

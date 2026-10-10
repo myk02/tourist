@@ -41,6 +41,10 @@ export async function POST(request: Request) {
     console.error('[caption] error', error)
     const raw = error instanceof Error ? error.message : 'Could not suggest a caption'
     const message = raw.includes('OPENROUTER') || raw.includes('Bearer') ? 'Caption service is temporarily unavailable' : raw
-    return Response.json({ error: message }, { status: 400 })
+    // Config errors are 503 (don't retry blindly); provider 5xx/timeouts are
+    // 502 so clients can retry. Only validation stays 400.
+    const isConfig = /not configured/i.test(raw)
+    const isTransient = /timeout|timed out|500|502|503|rate/i.test(raw) || message === 'Caption service is temporarily unavailable'
+    return Response.json({ error: message }, { status: isConfig ? 503 : isTransient ? 502 : 400 })
   }
 }

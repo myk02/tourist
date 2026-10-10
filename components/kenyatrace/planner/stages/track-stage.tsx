@@ -85,7 +85,7 @@ export function TrackStage() {
               </div>
               <Button
                 variant={tracking ? 'destructive' : 'default'}
-                onClick={tracking ? stopTracking : activeSession?.status === 'arrived' ? () => router.push(`/trips/${draft.tripId}/track`) : startTracking}
+                onClick={tracking ? stopTracking : activeSession?.status === 'arrived' ? () => goTo('share') : startTracking}
                 disabled={!draft.tripId}
               >
                 {tracking ? 'Stop tracking' : activeSession?.status === 'arrived' ? 'Continue' : 'Start tracking'}

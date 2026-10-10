@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { Loader2, Plus, Trash2, Wallet } from 'lucide-react'
+import { Loader2, Plus, Trash2, Wallet, Scale, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatKES } from '@/lib/kenya-data'
 import { kindHex } from '@/lib/kind'
 import { cn } from '@/lib/utils'
+import { computeSettlement, settlementMessage } from '@/lib/settle'
 
 const KINDS = ['Stay', 'Transport', 'Experience', 'Food', 'Other'] as const
 type Kind = (typeof KINDS)[number]
@@ -37,6 +38,7 @@ export function ExpenseLog({ tripId, plannedTotal, travelers, canEdit }: {
   const [kind, setKind] = useState<Kind>('Food')
   const [spentBy, setSpentBy] = useState('')
   const [saving, setSaving] = useState(false)
+  const [settleCopied, setSettleCopied] = useState(false)
 
   async function submit() {
     if (saving) return
@@ -60,6 +62,21 @@ export function ExpenseLog({ tripId, plannedTotal, travelers, canEdit }: {
 
   const rows = expenses ?? []
   const actual = rows.reduce((s, x) => s + x.amount, 0)
+  const settlement = useMemo(
+    () => computeSettlement(rows.map(r => ({ amount: r.amount, spentBy: r.spentBy })), Math.max(travelers, 1)),
+    [rows, travelers],
+  )
+
+  async function copySettlement() {
+    try {
+      await navigator.clipboard.writeText(settlementMessage(settlement))
+      setSettleCopied(true)
+      toast.success('Settle-up plan copied — paste into WhatsApp')
+      setTimeout(() => setSettleCopied(false), 2_000)
+    } catch {
+      toast.error('Could not copy the plan')
+    }
+  }
   const byKind = useMemo(() => {
     const map = new Map<Kind, number>()
     for (const k of KINDS) map.set(k, 0)
@@ -137,6 +154,39 @@ export function ExpenseLog({ tripId, plannedTotal, travelers, canEdit }: {
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Split across {travelers} traveller{travelers === 1 ? '' : 's'}</p>
           <p className="mt-1 font-serif text-2xl font-semibold">{formatKES(perPerson)} <span className="text-sm font-normal text-muted-foreground">per person</span></p>
         </div>
+
+        {rows.length > 0 && (
+          <div className="rounded-none border border-primary/25 bg-primary/5 p-4">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+              <Scale className="size-3.5" /> Who owes whom
+            </p>
+            {settlement.transfers.length === 0 ? (
+              <p className="mt-1.5 text-sm text-muted-foreground">All settled up — everyone paid their share.</p>
+            ) : (
+              <ul className="mt-1.5 flex flex-col gap-1 text-sm">
+                {settlement.transfers.map(t => (
+                  <li key={`${t.from}-${t.to}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <strong>{t.from}</strong>
+                    <span className="text-muted-foreground">→</span>
+                    <strong>{t.to}</strong>
+                    <span className="font-semibold text-primary">{formatKES(t.amount)}</span>
+                    <a
+                      href="tel:*334%23"
+                      className="text-xs font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                      title="Settle via M-Pesa"
+                    >
+                      via M-Pesa
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button variant="outline" size="sm" onClick={() => void copySettlement()} className="mt-2.5 gap-1.5">
+              {settleCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {settleCopied ? 'Copied!' : 'Copy settle-up plan'}
+            </Button>
+          </div>
+        )}
 
         {expenses === undefined ? (
           <div className="kt-shimmer h-20 rounded-none" />

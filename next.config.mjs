@@ -5,6 +5,8 @@ const projectDir = path.dirname(fileURLToPath(import.meta.url))
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Playwright regression runs on 127.0.0.1 — allow its HMR origin in dev.
+  allowedDevOrigins: ['127.0.0.1'],
   // Pin the workspace root so Turbopack doesn't infer it from a stray
   // ancestor lockfile (e.g. C:\Users\ADMIN\package-lock.json).
   turbopack: {

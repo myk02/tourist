@@ -32,6 +32,7 @@ function mediaOf(m: Moment): Media[] {
 export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; onUploadClick?: () => void }) {
   const { user } = useUser()
   const moments = useQuery(api.moments.list, { tripId })
+  const trip = useQuery(api.trips.get, { id: tripId })
   const setBest = useMutation(api.moments.setBest)
   const setPublic = useMutation(api.moments.setPublic)
   const removeMoment = useMutation(api.moments.remove)
@@ -95,8 +96,9 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
 
   async function share() {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/moments/${tripId}`)
-      toast.success('Share link copied')
+      const token = (trip as { traceShareToken?: string } | null)?.traceShareToken
+      await navigator.clipboard.writeText(`${window.location.origin}/moments/${tripId}${token ? `?t=${token}` : ''}`)
+      toast.success(token ? 'Share link copied' : 'Share link copied — publish the trip trace to make it public')
     } catch {
       toast.error('Could not copy share link')
     }
@@ -106,7 +108,8 @@ export function MomentAlbum({ tripId, onUploadClick }: { tripId: Id<'trips'>; on
   // link isn't shared and then found empty.
   async function recap() {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/recap/${tripId}`)
+      const token = (trip as { traceShareToken?: string } | null)?.traceShareToken
+      await navigator.clipboard.writeText(`${window.location.origin}/recap/${tripId}${token ? `?t=${token}` : ''}`)
       const publicCount = (moments ?? []).filter(m => m.public).length
       toast.success(publicCount === 0 ? 'Recap link copied — make some moments public to fill it' : publicCount < 9 ? 'Recap link copied — up to 9 public moments will appear' : 'Recap link copied')
     } catch {

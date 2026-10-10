@@ -78,10 +78,12 @@ export function buildIcsFeed(opts: { tripName: string; events: IcsEvent[] }): st
     const allDay = /^\d{4}-\d{2}-\d{2}$/.test(e.start)
     if (allDay) {
       lines.push(`DTSTART;VALUE=DATE:${icsDate(e.start)}`)
-      lines.push(`DTEND;VALUE=DATE:${icsDate(e.end ?? e.start)}`)
+      // RFC 5545: DTEND is exclusive — same-day would be a zero-day event
+      // that Google/Apple may hide. Default to the next day.
+      lines.push(`DTEND;VALUE=DATE:${icsDate(e.end && e.end > e.start ? e.end : nextDay(e.start))}`)
     } else {
       lines.push(`DTSTART:${icsDate(e.start)}`)
-      const end = e.end ?? addHour(e.start)
+      const end = e.end && e.end > e.start ? e.end : addHour(e.start)
       lines.push(`DTEND:${icsDate(end)}`)
     }
     lines.push(`SUMMARY:${icsEscape(e.summary)}`)
@@ -97,6 +99,22 @@ export function buildIcsFeed(opts: { tripName: string; events: IcsEvent[] }): st
 function addHour(dt: string): string {
   const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(dt)
   if (!m) return dt
-  const h = Math.min(parseInt(m[2], 10) + 1, 23)
+  const h = parseInt(m[2], 10) + 1
+  // 23:xx + 1h rolls to the next day 00:mm instead of a zero-length event.
+  if (h > 23) {
+    const base = Date.parse(`${m[1]}T00:00:00Z`)
+    if (Number.isFinite(base)) {
+      const next = new Date(base + 86_400_000).toISOString().slice(0, 10)
+      return `${next}T00:${m[3]}`
+    }
+    return dt
+  }
   return `${m[1]}T${String(h).padStart(2, '0')}:${m[3]}`
+}
+
+/** Next calendar day "YYYY-MM-DD" for exclusive all-day DTEND. */
+function nextDay(day: string): string {
+  const base = Date.parse(`${day}T00:00:00Z`)
+  if (!Number.isFinite(base)) return day
+  return new Date(base + 86_400_000).toISOString().slice(0, 10)
 }

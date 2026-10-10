@@ -78,6 +78,8 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
   liveCoordsRef.current = live ?? null
   const liveTraceRef = useRef<[number, number][]>([])
   liveTraceRef.current = livePath ?? []
+  const routeRef = useRef<[number, number][]>([])
+  routeRef.current = route ?? []
   const followLiveRef = useRef(false)
   followLiveRef.current = followLive
   const mapRef = useRef<import('maplibre-gl').Map | null>(null)
@@ -93,6 +95,11 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
       const isChip = el.classList.contains('kenya-map-marker-price')
       el.style.transform = active ? (isChip ? 'scale(1.12)' : 'scale(1.35)') : ''
     })
+  }
+
+  // Escape listing text before injecting into a MapLibre popup (setHTML).
+  function escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
   }
 
   useEffect(() => { applyHover() }, [hoveredId])
@@ -153,7 +160,7 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
         element.addEventListener('mouseleave', () => onMarkerLeave?.())
         element.addEventListener('click', () => onMarkerSelect?.(point.id))
         markerEls.current.set(point.id, element)
-        const popup = new maplibregl.Popup({ offset: 20 }).setHTML(`<strong>${point.name}</strong><br/><span>${point.location}</span>`)
+        const popup = new maplibregl.Popup({ offset: 20 }).setHTML(`<strong>${escapeHtml(point.name)}</strong><br/><span>${escapeHtml(point.location)}</span>`)
         markers.push(new maplibregl.Marker({ element }).setLngLat([point.lng, point.lat]).setPopup(popup).addTo(map!))
       })
       applyHover()
@@ -228,7 +235,9 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
     }
   }, [points, route, highlight, destIds, focus, labelMode])
 
-  // Theme toggle without tearing the map down — swap basemap style in place.
+  // Theme toggle without tearing the map down — swap basemap style in place,
+  // then re-add our route + live-trace layers (setStyle removes all custom
+  // sources/layers in MapLibre).
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -239,6 +248,27 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
       if ((isDark && current.includes('dark')) || (!isDark && current.includes('liberty'))) return
     } catch { /* ignore */ }
     try {
+      const routeCoords = smoothRoute((routeRef.current ?? []) as [number, number][])
+      const liveCoords = [...(liveTraceRef.current ?? [])]
+      const dark = isDark
+      const reAdd = () => {
+        try {
+          if (!map.getSource('live-path')) {
+            map.addSource('live-path', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: liveCoords } } })
+            map.addLayer({ id: 'live-path', type: 'line', source: 'live-path', paint: { 'line-color': dark ? '#fbbf24' : '#f59e0b', 'line-width': 4, 'line-opacity': 0.85, 'line-dasharray': [1.5, 2] } })
+            livePathSourceRef.current = map.getSource('live-path') as unknown as { setData: (data: unknown) => void }
+          }
+          if (routeCoords.length >= 2 && !map.getSource('route-main')) {
+            const casingColor = dark ? '#0a100d' : '#ffffff'
+            const routeColor = dark ? '#35c992' : '#0e7a55'
+            map.addSource('route-main', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: routeCoords } } })
+            map.addLayer({ id: 'route-casing', type: 'line', source: 'route-main', paint: { 'line-color': casingColor, 'line-width': 9, 'line-opacity': dark ? 0.85 : 0.9 } })
+            map.addLayer({ id: 'route-main', type: 'line', source: 'route-main', paint: { 'line-color': routeColor, 'line-width': 4.5, 'line-opacity': 0.9 } })
+          }
+        } catch { /* ignore — map torn down mid-toggle */ }
+      }
+      // styledata fires when the new basemap is ready for custom layers.
+      map.once('styledata', reAdd)
       map.setStyle(style)
     } catch { /* ignore */ }
   }, [isDark])
@@ -272,11 +302,13 @@ export function KenyaMap({ points = [], route = [], live, livePath, followLive =
 
   // Redraw the live trace into the persistent source — no map rebuild.
   useEffect(() => {
-    livePathSourceRef.current?.setData({
-      type: 'Feature',
-      properties: {},
-      geometry: { type: 'LineString', coordinates: (livePath ?? []).filter(p => p.length === 2) },
-    })
+    try {
+      livePathSourceRef.current?.setData({
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: (livePath ?? []).filter(p => p.length === 2) },
+      })
+    } catch { /* ignore — source removed during theme swap, re-added on styledata */ }
   }, [livePath])
 
   return <div ref={node} className={`overflow-hidden rounded-none border border-border bg-card ${className}`} aria-label="Interactive map of Kenya" />

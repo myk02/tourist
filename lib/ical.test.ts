@@ -73,7 +73,12 @@ describe('buildIcsFeed', () => {
   })
 
   it('defaults a missing end to one hour after the start', () => {
-    const minimal = buildIcsFeed({ tripName: 't', events: [{ uid: 'u', start: '2026-08-18T23:00', summary: 'x' }] })
-    expect(minimal).toContain('DTEND:20260818T230000')
+    const minimal = buildIcsFeed({ tripName: 't', events: [{ uid: 'u', start: '2026-08-18T09:00', summary: 'x' }] })
+    expect(minimal).toContain('DTEND:20260818T100000')
+  })
+
+  it('rolls a 23:xx start over to the next day instead of a zero-length event', () => {
+    const late = buildIcsFeed({ tripName: 't', events: [{ uid: 'u', start: '2026-08-18T23:00', summary: 'x' }] })
+    expect(late).toContain('DTEND:20260819T000000')
   })
 })

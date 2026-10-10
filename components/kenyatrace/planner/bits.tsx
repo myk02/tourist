@@ -62,18 +62,19 @@ export function GenerationProgress({ active }: { active: number }) {
  */
 export function PlannerProgress({ stage, planName }: { stage: Stage; planName?: string }) {
   const idx = STAGES.findIndex(s => s.id === stage)
-  const current = STAGES[idx]
+  const safeIdx = idx >= 0 ? idx : 0
+  const current = STAGES[safeIdx]
   return (
-    <div className="flex items-center gap-3" aria-label={`Planner step ${idx + 1} of ${STAGES.length}: ${current.label}`}>
+    <div className="flex items-center gap-3" aria-label={`Planner step ${safeIdx + 1} of ${STAGES.length}: ${current.label}`}>
       <span className="truncate text-xs font-semibold uppercase tracking-widest text-primary">
         {planName ? `Planning: ${planName}` : 'Plan a Kenya trip'}
       </span>
       <div className="flex flex-1 items-center gap-1.5">
         {STAGES.map((s, i) => (
-          <span key={s.id} aria-hidden className={cn('h-1.5 flex-1 rounded-none transition-colors', i < idx ? 'bg-primary/50' : i === idx ? 'bg-primary' : 'bg-border')} />
+          <span key={s.id} aria-hidden className={cn('h-1.5 flex-1 rounded-none transition-colors', i < safeIdx ? 'bg-primary/50' : i === safeIdx ? 'bg-primary' : 'bg-border')} />
         ))}
       </div>
-      <span className="shrink-0 text-xs font-medium text-muted-foreground">{current.label} · {idx + 1}/{STAGES.length}</span>
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">{current.label} · {safeIdx + 1}/{STAGES.length}</span>
     </div>
   )
 }

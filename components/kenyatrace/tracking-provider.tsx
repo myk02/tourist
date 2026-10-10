@@ -218,7 +218,11 @@ export function TrackingProvider({ children }: { children: React.ReactNode }) {
           // persisted with the session so reloads don't reset the bar.
           const base = prev.startDistance ?? distance
           const last = prev.path[prev.path.length - 1]
-          const path: [number, number][] = last && last[0] === lng && last[1] === lat ? prev.path : [...prev.path, [lng, lat]]
+          // GPS jitter means exact float equality almost never dedupes — use
+          // a ~5m threshold instead, and cap the path so long hikes don't
+          // blow up localStorage (persisted every few seconds below).
+          const dupe = last ? distanceMeters(last[1], last[0], lat, lng) < 5 : false
+          const path: [number, number][] = dupe ? prev.path : [...prev.path, [lng, lat] as [number, number]].slice(-5000)
           const next: TrackingSession = {
             ...prev,
             startDistance: base,

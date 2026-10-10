@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { UserButton, useUser } from '@clerk/nextjs'
 import { useAction, useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { CalendarClock, Camera, CircleUserRound, Compass, Map, MapPin, Sparkles, Wallet } from 'lucide-react'
+import { CalendarClock, Camera, CircleUserRound, Compass, LifeBuoy, Map, MapPin, Sparkles, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { BrandMark } from '@/components/ui/kt/brand-mark'
@@ -18,7 +18,7 @@ import { PLANS, DayPackCheckout, PlanCard } from './paywall'
 // The home page IS the AI planner — labelled "Plan", while real discovery
 // lives at /discover as "Explore". Before this rename the two most important
 // destinations were effectively mislabelled.
-const nav = [{href:'/',label:'Plan',icon:Sparkles},{href:'/discover',label:'Explore',icon:Compass},{href:'/trips',label:'Trips',icon:Map},{href:'/moments',label:'Moments',icon:Camera},{href:'/profile',label:'Profile',icon:CircleUserRound}]
+const nav = [{href:'/',label:'Plan',icon:Sparkles},{href:'/discover',label:'Explore',icon:Compass},{href:'/trips',label:'Trips',icon:Map},{href:'/essentials',label:'Essentials',icon:LifeBuoy},{href:'/moments',label:'Moments',icon:Camera},{href:'/profile',label:'Profile',icon:CircleUserRound}]
 
 function isActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href)
