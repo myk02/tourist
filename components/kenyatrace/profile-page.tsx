@@ -8,7 +8,7 @@ import { UserButton, useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { AlertCircle, Camera, Compass, Download, Heart, Sparkles, TrendingDown } from 'lucide-react'
+import { AlertCircle, CalendarDays, Camera, Compass, CreditCard, Download, Heart, LayoutDashboard, Settings2, SlidersHorizontal, Sparkles, TrendingDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -43,7 +43,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'rounded-none border px-3.5 py-1.5 text-sm font-medium transition-colors',
+        'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
         active ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
       )}
     >
@@ -166,15 +166,26 @@ export function Profile() {
 
   return (
     <RequireAuth>
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 px-5 py-10">
-        <div className="flex flex-wrap items-center gap-4 rounded-none border bg-card px-5 py-4 shadow-soft">
-          {user?.imageUrl ? <Image src={user.imageUrl} width={48} height={48} className="rounded-none" alt="Profile" /> : <span className="flex size-12 items-center justify-center rounded-none bg-secondary text-primary"><Compass /></span>}
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold tracking-tight">{user?.fullName || 'Kenya traveller'}</h1>
-            <p className="truncate text-sm text-muted-foreground">{user?.primaryEmailAddress?.emailAddress}</p>
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-7 sm:gap-8 sm:px-6 sm:py-10">
+        <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Your account</p>
+            <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">Your travel profile</h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">Personalise how KenyaTrace plans, tracks, and remembers your trips.</p>
           </div>
-          <UserButton />
-        </div>
+          <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-soft sm:max-w-sm">
+            {user?.imageUrl ? (
+              <Image src={user.imageUrl} width={48} height={48} className="size-12 shrink-0 rounded-full object-cover ring-2 ring-primary/10" alt="Profile" />
+            ) : (
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Compass className="size-5" /></span>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{user?.fullName || 'Kenya traveller'}</p>
+              <p className="truncate text-xs text-muted-foreground">{user?.primaryEmailAddress?.emailAddress}</p>
+            </div>
+            <UserButton />
+          </div>
+        </header>
 
         <Tabs
           value={tab}
@@ -187,13 +198,13 @@ export function Profile() {
             router.replace(url.pathname + url.search, { scroll: false })
           }}
         >
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="bookings">Bookings</TabsTrigger>
-            <TabsTrigger value="saved">Saved</TabsTrigger>
-            <TabsTrigger value="preferences">Preferences</TabsTrigger>
-            <TabsTrigger value="subscription">Subscription</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsList className="h-auto w-full max-w-full shrink-0 justify-start gap-1 overflow-x-auto rounded-xl p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TabsTrigger value="overview" className="min-h-10 min-w-max flex-none gap-2 rounded-lg px-3"><LayoutDashboard className="size-4" aria-hidden="true" /><span>Overview</span></TabsTrigger>
+            <TabsTrigger value="bookings" className="min-h-10 min-w-max flex-none gap-2 rounded-lg px-3"><CalendarDays className="size-4" aria-hidden="true" /><span>Bookings</span></TabsTrigger>
+            <TabsTrigger value="saved" className="min-h-10 min-w-max flex-none gap-2 rounded-lg px-3"><Heart className="size-4" aria-hidden="true" /><span>Saved</span></TabsTrigger>
+            <TabsTrigger value="preferences" className="min-h-10 min-w-max flex-none gap-2 rounded-lg px-3"><SlidersHorizontal className="size-4" aria-hidden="true" /><span>Preferences</span></TabsTrigger>
+            <TabsTrigger value="subscription" className="min-h-10 min-w-max flex-none gap-2 rounded-lg px-3"><CreditCard className="size-4" aria-hidden="true" /><span>Subscription</span></TabsTrigger>
+            <TabsTrigger value="settings" className="min-h-10 min-w-max flex-none gap-2 rounded-lg px-3"><Settings2 className="size-4" aria-hidden="true" /><span>Settings</span></TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="flex flex-col gap-7">
@@ -245,7 +256,7 @@ export function Profile() {
             {bookings?.length ? (
               bookings.map(b => <BookingRow key={b._id} booking={b} onCancel={handleCancel} />)
             ) : (
-              <div className="flex min-h-52 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center">
+              <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
                 <AlertCircle className="size-8 text-primary" />
                 <p className="mt-4 font-serif text-2xl">No bookings yet</p>
                 <p className="mt-2 text-muted-foreground">Reservations you make will appear here.</p>
@@ -256,7 +267,7 @@ export function Profile() {
 
           <TabsContent value="saved">
             {drops?.length ? (
-              <div className="mb-5 flex items-center gap-3 rounded-none border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
+              <div className="mb-5 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
                 <TrendingDown className="size-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
                 <p className="text-emerald-800 dark:text-emerald-200">
                   <strong>{drops.length}</strong> saved spot{drops.length === 1 ? '' : 's'} dropped in price — grab {drops.length === 1 ? 'it' : 'them'} while {drops.length === 1 ? "it's" : "they're"} low.
@@ -277,7 +288,7 @@ export function Profile() {
                       </Link>
                       <SourceBadge source={listing.source} className="absolute bottom-3 left-3" onClick={() => { const f = sourceToFilter(listing.source); if (f) router.push(`/discover/${listing.vertical}?source=${f}`) }} />
                       {drop && <span className="absolute left-3 top-3 rounded-none bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white shadow-sm">-{drop.dropPct}%</span>}
-                      <button aria-label="Remove from saved" onClick={() => handleRemoveSaved(listing._id)} className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-none bg-card/90 text-red-500 shadow-sm">
+                      <button aria-label="Remove from saved" onClick={() => handleRemoveSaved(listing._id)} className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-card/90 text-red-500 shadow-sm transition-transform hover:scale-105">
                         <Heart className="size-4 fill-current" />
                       </button>
                     </div>
@@ -303,7 +314,7 @@ export function Profile() {
                 })}
               </div>
             ) : (
-              <div className="flex min-h-52 flex-col items-center justify-center rounded-none border border-dashed p-8 text-center">
+              <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center">
                 <Heart className="size-8 text-primary" />
                 <p className="mt-4 font-serif text-2xl">Nothing saved yet</p>
                 <p className="mt-2 text-muted-foreground">Tap the heart on any place to keep it here.</p>
@@ -341,7 +352,7 @@ export function Profile() {
                   <label className="text-sm font-medium">Pace</label>
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     {PACES.map(p => (
-                      <button key={p.value} type="button" onClick={() => { setDirty(true); setPace(p.value) }} className={cn('rounded-none border px-2 py-2 text-sm transition-colors', pace === p.value ? 'border-primary bg-primary text-primary-foreground shadow-xs' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-card')}>
+                      <button key={p.value} type="button" onClick={() => { setDirty(true); setPace(p.value) }} className={cn('rounded-xl border px-2 py-2 text-sm transition-colors', pace === p.value ? 'border-primary bg-primary text-primary-foreground shadow-xs' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-card')}>
                         <span className="block font-medium">{p.label}</span>
                         <span className={cn('block text-[10px]', pace === p.value ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{p.hint}</span>
                       </button>
