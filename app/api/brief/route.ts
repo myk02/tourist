@@ -2,6 +2,7 @@ import { chatJSON } from '@/lib/ai'
 import { seasonGuidance } from '@/lib/seasons'
 import { z } from 'zod'
 import { rateLimit, getClientKey } from '@/lib/rate-limit'
+import { classifyAiApiError } from '@/lib/ai-api-error'
 
 export const maxDuration = 60
 
@@ -56,8 +57,13 @@ export async function POST(request: Request) {
     if (!rl.ok) {
       return Response.json({ error: 'Too many requests — try again shortly.' }, { status: 429 })
     }
-    const body = await request.json()
-    const input = requestSchema.parse(body)
+    const body = await request.json().catch(() => null)
+    const parsed = requestSchema.safeParse(body)
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0]
+      return Response.json({ error: issue ? `${issue.path.join('.') || 'request'}: ${issue.message}` : 'Invalid request' }, { status: 400 })
+    }
+    const input = parsed.data
     if (!process.env.OPENROUTER_API_KEY) {
       return Response.json({ error: 'Trip brief service is temporarily unavailable — try again shortly.' }, { status: 503 })
     }
@@ -82,9 +88,7 @@ export async function POST(request: Request) {
     return Response.json(brief)
   } catch (error) {
     console.error('[brief] error', error)
-    const raw = error instanceof Error ? error.message : 'Could not generate the trip brief'
-    const message = raw.includes('OPENROUTER') || raw.includes('Bearer') ? 'Trip brief service is temporarily unavailable' : raw
-    const isConfig = /OPENROUTER_API_KEY is not configured/i.test(raw)
-    return Response.json({ error: message }, { status: isConfig ? 503 : 400 })
+    const failure = classifyAiApiError(error, 'Trip brief')
+    return Response.json({ error: failure.message }, { status: failure.status })
   }
 }

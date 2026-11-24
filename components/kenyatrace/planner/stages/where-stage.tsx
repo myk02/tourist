@@ -122,7 +122,8 @@ export function WhereStage() {
         <Card className="flex-1">
           <CardContent className="flex flex-col gap-5 p-6">
             <div>
-              <p className="text-sm font-medium">Your exact location</p>
+              <p className="text-sm font-medium">Where are you starting?</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Use your location or enter a city. Visiting Kenya from abroad? Choose “Foreigner abroad” and include the country.</p>
               <div className="mt-3">
                 {!draft.origin ? (
                   <div className="flex flex-col gap-3">
@@ -139,7 +140,7 @@ export function WhereStage() {
                         value={manualArea}
                         onChange={e => setManualArea(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') void resolveArea() }}
-                        placeholder="Type your area, e.g. Westlands, Nairobi"
+                        placeholder={draft.traveler === 'foreigner' ? 'Type your city and country, e.g. London, UK' : 'Type your area, e.g. Westlands, Nairobi'}
                       />
                       <Button variant="outline" onClick={() => void resolveArea()} disabled={!manualArea.trim() || resolvingArea}>
                         {resolvingArea ? '…' : 'Set'}

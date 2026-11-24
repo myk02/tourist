@@ -2,6 +2,7 @@ import { generateText, Output } from 'ai'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { z } from 'zod'
 import { rateLimit, getClientKey } from '@/lib/rate-limit'
+import { classifyAiApiError } from '@/lib/ai-api-error'
 
 export const maxDuration = 60
 const requestSchema = z.object({
@@ -46,12 +47,7 @@ export async function POST(request: Request) {
     return Response.json(output)
   } catch (error) {
     console.error('[caption] error', error)
-    const raw = error instanceof Error ? error.message : 'Could not suggest a caption'
-    const message = raw.includes('OPENROUTER') || raw.includes('Bearer') ? 'Caption service is temporarily unavailable' : raw
-    // Config errors are 503 (don't retry blindly); provider 5xx/timeouts are
-    // 502 so clients can retry. Only validation stays 400.
-    const isConfig = /not configured/i.test(raw)
-    const isTransient = /timeout|timed out|500|502|503|rate/i.test(raw) || message === 'Caption service is temporarily unavailable'
-    return Response.json({ error: message }, { status: isConfig ? 503 : isTransient ? 502 : 400 })
+    const failure = classifyAiApiError(error, 'Caption')
+    return Response.json({ error: failure.message }, { status: failure.status })
   }
 }

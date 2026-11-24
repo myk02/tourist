@@ -77,6 +77,22 @@ test('seo + 404 surfaces', async ({ page }) => {
 test('planner API validates bad input (no crash, no 500)', async ({ request }) => {
   const res = await request.post('/api/plan', { data: { origin: '', budget: -5 } })
   expect([400, 422, 429]).toContain(res.status())
+
+  // International travellers can plan from their actual location abroad.
+  // An invalid catalog ID stops before any AI generation, so this is a safe
+  // schema check without spending provider tokens.
+  const abroad = await request.post('/api/plan', {
+    data: {
+      origin: 'San Francisco, CA',
+      originLat: 37.7749,
+      originLng: -122.4194,
+      traveler: 'foreigner',
+      budget: 120000,
+      days: 5,
+      candidates: [{ id: 'not-a-real-listing' }],
+    },
+  })
+  expect(abroad.status()).not.toBe(400)
 })
 
 test('API routes validate input and keep email/payment endpoints private', async ({ request }) => {

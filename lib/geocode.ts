@@ -27,14 +27,16 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
 }
 
 /**
- * Geocodes a typed area name into exact coordinates (restricted to Kenya).
+ * Geocodes a typed area name into coordinates. Kenya is the default scope;
+ * international trip origins can omit it and provide a city plus country.
  * Returns null when no match is found, so the typed text still works as-is.
  */
-export async function geocodeArea(text: string): Promise<{ lat: number; lng: number } | null> {
+export async function geocodeArea(text: string, options: { countryCode?: string } = { countryCode: 'ke' }): Promise<{ lat: number; lng: number } | null> {
   const q = text?.trim().slice(0, 200)
   if (!q) return null
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ke&q=${encodeURIComponent(q)}`, {
+    const country = options.countryCode ? `&countrycodes=${encodeURIComponent(options.countryCode)}` : ''
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1${country}&q=${encodeURIComponent(q)}`, {
       headers: GEO_HEADERS,
       signal: AbortSignal.timeout(GEO_TIMEOUT),
     })

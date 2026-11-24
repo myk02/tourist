@@ -278,7 +278,7 @@ export function GuidedJourney() {
     setResolvingArea(true)
     setLocError(null)
     try {
-      const coords = await geocodeArea(text)
+      const coords = await geocodeArea(text, { countryCode: draft.traveler === 'foreigner' ? undefined : 'ke' })
       if (coords) {
         const label = (await reverseGeocode(coords.lat, coords.lng)) || text
         setDraft(d => ({ ...d, origin: label, originLat: coords.lat, originLng: coords.lng }))

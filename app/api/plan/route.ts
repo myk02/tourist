@@ -5,6 +5,7 @@ import { mapWithConcurrency, drivingLeg } from '@/lib/travel'
 import { resolvePlannerCandidates, type PlannerCandidate } from '@/lib/plan-catalog'
 import { ConvexHttpClient } from 'convex/browser'
 import { api } from '@/convex/_generated/api'
+import { classifyAiApiError } from '@/lib/ai-api-error'
 import { rateLimit, getClientKey } from '@/lib/rate-limit'
 import { z } from 'zod'
 
@@ -21,8 +22,10 @@ const candidateSchema = z.object({ id: z.string().min(1).max(128) })
 
 const requestSchema = z.object({
   origin: z.string().min(2).max(120),
-  originLat: z.number().min(-5).max(5).optional(),
-  originLng: z.number().min(33).max(42).optional(),
+  // The origin can be outside Kenya for an international traveller starting
+  // abroad; constrain valid geographic coordinates, not Kenya's borders.
+  originLat: z.number().min(-90).max(90).optional(),
+  originLng: z.number().min(-180).max(180).optional(),
   traveler: z.enum(['citizen', 'tourist', 'foreigner']),
   budget: z.number().positive().max(10_000_000),
   days: z.number().int().min(1).max(30),
@@ -427,13 +430,18 @@ export async function POST(request: Request) {
     if (!rl.ok) {
       return Response.json({ error: 'Too many trip requests — please wait a minute and try again.' }, { status: 429 })
     }
-    if (!process.env.OPENROUTER_API_KEY) {
-      return Response.json({ error: 'Trip planner is temporarily unavailable — try again shortly.' }, { status: 503 })
-    }
-    const body = await request.json()
+    const body = await request.json().catch(() => null)
 
     if (body?.mode === 'day') {
-      const input = replanSchema.parse(body)
+      const parsed = replanSchema.safeParse(body)
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0]
+        return Response.json({ error: issue ? `${issue.path.join('.') || 'request'}: ${issue.message}` : 'Invalid request' }, { status: 400 })
+      }
+      const input = parsed.data
+      if (!process.env.OPENROUTER_API_KEY) {
+        return Response.json({ error: 'Trip planner is temporarily unavailable — try again shortly.' }, { status: 503 })
+      }
       const candidates = await loadTrustedCandidates(input.candidates.map(c => c.id))
       const catalogById = new Map(candidates.map(c => [c.id, c]))
       const profile = TRAVELER[input.traveler].replace('{origin}', input.origin)
@@ -472,7 +480,15 @@ export async function POST(request: Request) {
       return Response.json({ stops: plan.stops })
     }
 
-    const input = requestSchema.parse(body)
+    const parsed = requestSchema.safeParse(body)
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0]
+      return Response.json({ error: issue ? `${issue.path.join('.') || 'request'}: ${issue.message}` : 'Invalid request' }, { status: 400 })
+    }
+    const input = parsed.data
+    if (!process.env.OPENROUTER_API_KEY) {
+      return Response.json({ error: 'Trip planner is temporarily unavailable — try again shortly.' }, { status: 503 })
+    }
     const candidates = await loadTrustedCandidates(input.candidates.map(c => c.id))
     const catalogById = new Map(candidates.map(c => [c.id, c]))
     const profile = TRAVELER[input.traveler].replace('{origin}', input.origin)
@@ -504,23 +520,10 @@ export async function POST(request: Request) {
       return Response.json(plan)
   } catch (error) {
     console.error('[plan] error', error)
-    // A ZodError's .message is a long multi-line dump — collapse it to the
-    // first issue so the 400 body stays human-readable (e.g. a traveller
-    // geolocated outside Kenya).
-    if (error instanceof z.ZodError) {
-      const first = error.issues[0]
-      return Response.json(
-        { error: first ? `${first.path.join('.') || 'request'}: ${first.message}` : 'Invalid request' },
-        { status: 400 },
-      )
-    }
     if (error instanceof PlannerCatalogError) {
       return Response.json({ error: error.message }, { status: 503 })
     }
-    const raw = error instanceof Error ? error.message : 'Unable to build a plan'
-    const message = raw.includes('OPENROUTER') || raw.includes('Bearer') ? 'Trip planner is temporarily unavailable — try again shortly.' : raw
-    // Surface provider config errors as 503, not 400, so clients don't retry blindly.
-    const isConfig = /OPENROUTER_API_KEY is not configured/i.test(raw)
-    return Response.json({ error: message }, { status: isConfig ? 503 : 400 })
+    const failure = classifyAiApiError(error, 'Trip plan')
+    return Response.json({ error: failure.message }, { status: failure.status })
   }
 }
