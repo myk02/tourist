@@ -75,17 +75,17 @@ function Header(){
   }, [user, sync])
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background">
+    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 md:px-8">
         <Brand />
-        <nav aria-label="Main navigation" className="hidden items-center gap-1 rounded-none border border-border bg-muted p-1 md:flex">
+        <nav aria-label="Main navigation" className="hidden items-center gap-1 rounded-full border border-border/80 bg-muted/80 p-1 md:flex">
             {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={active
-                  ? 'inline-flex h-8 items-center gap-2 rounded-none bg-background px-3.5 text-sm font-semibold text-primary'
-                  : 'inline-flex h-8 items-center gap-2 rounded-none px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground'}
+                  ? 'inline-flex h-9 items-center gap-2 rounded-full bg-background px-3.5 text-sm font-semibold text-primary shadow-sm'
+                  : 'inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground'}
                 aria-current={active ? 'page' : undefined}
               >
                 <Icon className="size-4"/><span>{item.label}</span>
@@ -93,7 +93,7 @@ function Header(){
             )})}
           </nav>
         <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
-          <span className="hidden items-center gap-1.5 rounded-none border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground xl:flex"><MapPin className="size-3.5 text-primary"/>Made for Kenya</span>
+          <span className="hidden items-center gap-1.5 rounded-full border border-border bg-muted/80 px-3 py-1.5 text-xs font-medium text-muted-foreground xl:flex"><MapPin className="size-3.5 text-primary"/>Made for Kenya</span>
           <HeaderAccount />
           <ThemeToggle />
         </div>
@@ -298,17 +298,18 @@ function HeaderAccount() {
 function MobileNav(){
   const pathname = usePathname()
   return (
-    <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around rounded-none border-t border-border bg-background md:hidden">
+    <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-center justify-around gap-0.5 rounded-t-2xl border-t border-border/80 bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgb(20_33_26_/_0.06)] backdrop-blur supports-[backdrop-filter]:bg-background/90 md:hidden">
       {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
         <Link
           key={item.href}
           href={item.href}
           aria-current={active ? 'page' : undefined}
+          title={item.label}
           className={active
-            ? 'flex min-w-14 flex-col items-center gap-0.5 rounded-none bg-primary/10 px-3 py-1.5 text-primary'
-            : 'flex min-w-14 flex-col items-center gap-0.5 rounded-none px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground'}
+            ? 'flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl bg-primary/10 px-0.5 py-1.5 text-primary'
+            : 'flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'}
         >
-          <Icon className="size-5"/><span className="text-[11px] font-medium">{item.label}</span>
+          <Icon className="size-5 shrink-0"/><span className="max-w-full truncate text-[10px] font-medium leading-tight">{item.label}</span>
         </Link>
       )})}
     </nav>
