@@ -71,7 +71,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   }
 
   const client = new ConvexHttpClient(url)
-  const query = client.query as unknown as (name: string, args: Record<string, unknown>) => Promise<unknown>
+  // Keep the client as `this`: ConvexHttpClient.query delegates through its
+  // instance's queryInner method, so passing it around unbound breaks feeds.
+  const query = client.query.bind(client) as unknown as (name: string, args: Record<string, unknown>) => Promise<unknown>
   let trip: TripDoc | null
   try {
     trip = await resolveToken({ query }, token)

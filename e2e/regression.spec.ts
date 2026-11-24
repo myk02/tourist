@@ -78,3 +78,21 @@ test('planner API validates bad input (no crash, no 500)', async ({ request }) =
   const res = await request.post('/api/plan', { data: { origin: '', budget: -5 } })
   expect([400, 422, 429]).toContain(res.status())
 })
+
+test('API routes validate input and keep email/payment endpoints private', async ({ request }) => {
+  const [brief, caption, booking, invite, recovery, calendar] = await Promise.all([
+    request.post('/api/brief', { data: { stops: [], doneCount: 0 } }),
+    request.post('/api/caption', { data: { imageData: 'not-an-image' } }),
+    request.post('/api/parse-booking', { data: { text: '' } }),
+    request.post('/api/send-invite', { data: {} }),
+    request.post('/api/payment-recovery', { data: {} }),
+    request.get('/api/calendar/invalid-token'),
+  ])
+
+  expect(brief.status()).toBe(400)
+  expect(caption.status()).toBe(400)
+  expect(booking.status()).toBe(400)
+  expect(invite.status()).toBe(401)
+  expect(recovery.status()).toBe(401)
+  expect(calendar.status()).toBe(404)
+})

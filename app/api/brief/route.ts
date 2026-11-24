@@ -28,8 +28,8 @@ const requestSchema = z.object({
   origin: z.string().min(2).max(120).optional(),
   destination: z.string().max(120).optional(),
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
-  stops: z.array(stopSchema).max(40),
-  doneCount: z.number().int().min(0),
+  stops: z.array(stopSchema).min(1).max(40),
+  doneCount: z.number().int().min(0).max(40),
 })
 
 const briefSchema = z.object({
@@ -56,11 +56,11 @@ export async function POST(request: Request) {
     if (!rl.ok) {
       return Response.json({ error: 'Too many requests — try again shortly.' }, { status: 429 })
     }
+    const body = await request.json()
+    const input = requestSchema.parse(body)
     if (!process.env.OPENROUTER_API_KEY) {
       return Response.json({ error: 'Trip brief service is temporarily unavailable — try again shortly.' }, { status: 503 })
     }
-    const body = await request.json()
-    const input = requestSchema.parse(body)
     const stopsText = input.stops
       .map(s => {
         const travel = s.travelKm != null ? ` (${s.travelKm} km ~${s.travelMins ?? '?'} min from previous)` : ''

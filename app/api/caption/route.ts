@@ -4,6 +4,11 @@ import { z } from 'zod'
 import { rateLimit, getClientKey } from '@/lib/rate-limit'
 
 export const maxDuration = 60
+const requestSchema = z.object({
+  // Keep JSON under Vercel's request body cap; the client sends a downsized
+  // JPEG, so valid photos normally stay well below this limit.
+  imageData: z.string().max(4_000_000).regex(/^data:image\/(?:jpeg|png|webp);base64,/i),
+})
 
 function getOpenRouter() {
   const key = process.env.OPENROUTER_API_KEY
@@ -17,14 +22,16 @@ export async function POST(request: Request) {
     if (!rl.ok) {
       return Response.json({ error: 'Too many caption requests — try again in a minute.' }, { status: 429 })
     }
+    const body = await request.json().catch(() => null)
+    const parsed = requestSchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json({ error: 'A valid JPEG, PNG, or WebP image under 3 MB is required' }, { status: 400 })
+    }
     const openrouter = getOpenRouter()
     if (!openrouter) {
       return Response.json({ error: 'Caption service is not configured' }, { status: 503 })
     }
-    const { imageData } = await request.json()
-    if (!imageData || typeof imageData !== 'string' || !imageData.startsWith('data:image/') || imageData.length > 15_000_000) {
-      return Response.json({ error: 'A valid image is required' }, { status: 400 })
-    }
+    const { imageData } = parsed.data
     const { output } = await generateText({
       model: openrouter('openai/gpt-4o-mini'),
       output: Output.object({ schema: z.object({ caption: z.string(), location: z.string() }) }),

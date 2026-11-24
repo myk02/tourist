@@ -2,6 +2,9 @@ import { chatRaw, extractJson } from '@/lib/ai'
 import { budgetTierPrompt, validatePlanBudget, validateReplanDayCost } from '@/lib/budget'
 import { seasonGuidance } from '@/lib/seasons'
 import { mapWithConcurrency, drivingLeg } from '@/lib/travel'
+import { resolvePlannerCandidates, type PlannerCandidate } from '@/lib/plan-catalog'
+import { ConvexHttpClient } from 'convex/browser'
+import { api } from '@/convex/_generated/api'
 import { rateLimit, getClientKey } from '@/lib/rate-limit'
 import { z } from 'zod'
 
@@ -12,21 +15,9 @@ export const maxDuration = 300
 
 // ─── Request schemas ─────────────────────────────────────────────────────────
 
-const candidateSchema = z.object({
-  id: z.string(),
-  vertical: z.string(),
-  name: z.string(),
-  location: z.string(),
-  price: z.number(),
-  unit: z.string(),
-  rating: z.number(),
-  reviews: z.number(),
-  tags: z.array(z.string()),
-  description: z.string(),
-  lat: z.number(),
-  lng: z.number(),
-  image: z.string(),
-})
+// The browser supplies listing IDs only. All names, prices, coordinates, and
+// verification badges are resolved from Convex below.
+const candidateSchema = z.object({ id: z.string().min(1).max(128) })
 
 const requestSchema = z.object({
   origin: z.string().min(2).max(120),
@@ -52,7 +43,28 @@ const replanSchema = requestSchema.extend({
   keptStops: z.array(z.object({ title: z.string(), place: z.string() })).max(30),
 })
 
-type Candidate = z.infer<typeof candidateSchema>
+type Candidate = PlannerCandidate
+
+class PlannerCatalogError extends Error {}
+
+async function loadTrustedCandidates(ids: string[]): Promise<Candidate[]> {
+  const url = process.env.NEXT_PUBLIC_CONVEX_URL
+  if (!url) throw new PlannerCatalogError('The travel catalog is temporarily unavailable. Try again shortly.')
+
+  let listings
+  try {
+    const client = new ConvexHttpClient(url)
+    listings = await client.query(api.listings.list, {})
+  } catch {
+    throw new PlannerCatalogError('Could not load verified travel listings. Try again shortly.')
+  }
+
+  const resolved = resolvePlannerCandidates(ids, listings)
+  if (resolved.length === 0) {
+    throw new PlannerCatalogError('No current listings were found. Refresh the page and try again.')
+  }
+  return resolved
+}
 
 const KINDS = ['Stay', 'Transport', 'Experience', 'Food'] as const
 
@@ -422,7 +434,8 @@ export async function POST(request: Request) {
 
     if (body?.mode === 'day') {
       const input = replanSchema.parse(body)
-      const catalogById = new Map(input.candidates.map(c => [c.id, c]))
+      const candidates = await loadTrustedCandidates(input.candidates.map(c => c.id))
+      const catalogById = new Map(candidates.map(c => [c.id, c]))
       const profile = TRAVELER[input.traveler].replace('{origin}', input.origin)
       const coordsLine = input.originLat != null && input.originLng != null ? ` They are EXACTLY at latitude ${input.originLat}, longitude ${input.originLng}.` : ''
       const allowance = Math.round(input.budget / input.days)
@@ -435,7 +448,7 @@ export async function POST(request: Request) {
           `LOCKED stops that must stay fixed: ${input.keptStops.length ? input.keptStops.map(s => `"${s.title}" (${s.place})`).join('; ') : 'none'}.`,
           input.extra ? `Notes: ${input.extra}` : '',
           `Return ONLY the stops for day ${input.day}, each with day: ${input.day}, choosing from the CATALOG by id where possible (at most 2 gap stops with "source":"gap").`,
-          catalogPrompt(input.candidates),
+          catalogPrompt(candidates),
         ].filter(Boolean).join(' '),
         3000,
         raw => {
@@ -460,7 +473,8 @@ export async function POST(request: Request) {
     }
 
     const input = requestSchema.parse(body)
-    const catalogById = new Map(input.candidates.map(c => [c.id, c]))
+    const candidates = await loadTrustedCandidates(input.candidates.map(c => c.id))
+    const catalogById = new Map(candidates.map(c => [c.id, c]))
     const profile = TRAVELER[input.traveler].replace('{origin}', input.origin)
     const coordsLine = input.originLat != null && input.originLng != null ? ` They are EXACTLY at latitude ${input.originLat}, longitude ${input.originLng} (place: ${input.origin}).` : ''
     const allowance = Math.round(input.budget / input.days)
@@ -475,7 +489,7 @@ export async function POST(request: Request) {
         input.month ? seasonGuidance(input.month) : '',
         input.extra ? `Anything else: ${input.extra}` : '',
         'Build a day-by-day itinerary choosing real places from the CATALOG by id (at most 2 gap stops with "source":"gap").',
-        catalogPrompt(input.candidates),
+        catalogPrompt(candidates),
       ].filter(Boolean).join(' '),
         5000,
         raw => buildPlan(raw, input.origin, input.days, input.interests, catalogById),
@@ -499,6 +513,9 @@ export async function POST(request: Request) {
         { error: first ? `${first.path.join('.') || 'request'}: ${first.message}` : 'Invalid request' },
         { status: 400 },
       )
+    }
+    if (error instanceof PlannerCatalogError) {
+      return Response.json({ error: error.message }, { status: 503 })
     }
     const raw = error instanceof Error ? error.message : 'Unable to build a plan'
     const message = raw.includes('OPENROUTER') || raw.includes('Bearer') ? 'Trip planner is temporarily unavailable — try again shortly.' : raw
