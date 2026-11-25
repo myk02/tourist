@@ -44,7 +44,7 @@ function BookingReminderSweep() {
 }
 
 export function KenyaTraceShell({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-background text-foreground"><BookingReminderSweep/><Header/><main className="pb-32 md:pb-8">{children}</main><MobileNav/><InstallPrompt/></div>
+  return <div className="min-h-screen bg-background text-foreground"><BookingReminderSweep/><Header/><main className="pb-32 xl:pb-8">{children}</main><MobileNav/><InstallPrompt/></div>
 }
 
 function Brand() {
@@ -78,14 +78,14 @@ function Header(){
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 md:px-8">
         <Brand />
-        <nav aria-label="Main navigation" className="hidden items-center gap-1 rounded-full border border-border/80 bg-muted/80 p-1 md:flex">
+        <nav aria-label="Main navigation" className="hidden items-center gap-1 rounded-full border border-border/80 bg-muted/80 p-1 xl:flex">
             {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={active
-                  ? 'inline-flex h-9 items-center gap-2 rounded-full bg-background px-3.5 text-sm font-semibold text-primary shadow-sm'
-                  : 'inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground'}
+                  ? 'inline-flex h-9 items-center gap-1.5 rounded-full bg-background px-2.5 xl:gap-2 xl:px-3.5 text-sm font-semibold text-primary shadow-sm'
+                  : 'inline-flex h-9 items-center gap-1.5 rounded-full px-2.5 xl:gap-2 xl:px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground'}
                 aria-current={active ? 'page' : undefined}
               >
                 <Icon className="size-4"/><span>{item.label}</span>
@@ -180,7 +180,7 @@ function HeaderAccount() {
             <Button
               variant="ghost"
               size="sm"
-              className="hidden md:inline-flex"
+              className="hidden xl:inline-flex"
               nativeButton={false}
               render={<Link href="/sign-in" />}
               suppressHydrationWarning
@@ -204,7 +204,7 @@ function HeaderAccount() {
             <Button
               variant="ghost"
               size="sm"
-              className="hidden md:inline-flex"
+              className="hidden xl:inline-flex"
               nativeButton={false}
               render={<Link href="/sign-in" />}
               suppressHydrationWarning
@@ -298,7 +298,7 @@ function HeaderAccount() {
 function MobileNav(){
   const pathname = usePathname()
   return (
-    <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-center justify-around gap-0.5 rounded-t-2xl border-t border-border/80 bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgb(20_33_26_/_0.06)] backdrop-blur supports-[backdrop-filter]:bg-background/90 md:hidden">
+    <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-center justify-around gap-0.5 rounded-t-2xl border-t border-border/80 bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgb(20_33_26_/_0.06)] backdrop-blur supports-[backdrop-filter]:bg-background/90 xl:hidden">
       {nav.map(item=>{const Icon=item.icon;const active=isActive(pathname,item.href);return (
         <Link
           key={item.href}
